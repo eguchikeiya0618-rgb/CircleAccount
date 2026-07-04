@@ -388,7 +388,24 @@ struct ActivitiesView: View {
 
                         return Attendance(memberId: memberId, status: status)
                     }
+                    let usedTicketsArray = data["usedTickets"] as? [[String: Any]] ?? []
 
+                    let usedTickets = usedTicketsArray.compactMap { item -> UsedTicket? in
+                        guard
+                            let memberId = item["memberId"] as? String,
+                            let ticketType = item["ticketType"] as? String,
+                            let usedAt = item["usedAt"] as? Timestamp
+                        else {
+                            return nil
+                        }
+
+                        return UsedTicket(
+                            memberId: memberId,
+                            ticketType: ticketType,
+                            usedAt: usedAt.dateValue()
+                        )
+                    }
+                    
                     return Activity(
                         id: document.documentID,
                         title: data["title"] as? String ?? "",
@@ -405,7 +422,7 @@ struct ActivitiesView: View {
                         attendance: attendance,
                         paidMembers: data["paidMembers"] as? [String] ?? [],
                         pointGranted: data["pointGranted"] as? Bool ?? false,
-                        pointGrantedAt: (data["pointGrantedAt"] as? Timestamp)?.dateValue()
+                        pointGrantedAt: (data["pointGrantedAt"] as? Timestamp)?.dateValue(),usedTickets: usedTickets,
                     )
                 } ?? []
             }
@@ -427,8 +444,9 @@ struct ActivitiesView: View {
                 activity.wrappedValue.participants.append(currentUserId)
             } else {
                 activity.wrappedValue.waitingList.append(currentUserId)
+            
+                }
             }
-        }
 
         let attendanceData = activity.wrappedValue.attendance.map {
             [
@@ -587,46 +605,51 @@ struct ActivityCard: View {
         .shadow(color: .black.opacity(0.08), radius: 10)
     }
 
+    @ViewBuilder
     var statusBadge: some View {
-
-        Group {
-
-            if activity.date < Date() {
-
-                Text("終了")
-                    .font(.caption)
-                    .bold()
-                    .padding(.horizontal,12)
-                    .padding(.vertical,6)
-                    .background(Color.gray.opacity(0.2))
-                    .clipShape(Capsule())
-
-            } else if activity.isFull {
-
-                Text("満員")
-                    .font(.caption)
-                    .bold()
-                    .foregroundStyle(.white)
-                    .padding(.horizontal,12)
-                    .padding(.vertical,6)
-                    .background(.red)
-                    .clipShape(Capsule())
-
-            } else {
-
-                Text("募集中")
-                    .font(.caption)
-                    .bold()
-                    .foregroundStyle(.white)
-                    .padding(.horizontal,12)
-                    .padding(.vertical,6)
-                    .background(.green)
-                    .clipShape(Capsule())
-
-            }
-
+        if activityEndDateTime < Date() {
+            Text("終了")
+                .font(.caption)
+                .bold()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.gray.opacity(0.2))
+                .clipShape(Capsule())
+        } else if activity.isFull {
+            Text("満員")
+                .font(.caption)
+                .bold()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.red)
+                .clipShape(Capsule())
+        } else {
+            Text("募集中")
+                .font(.caption)
+                .bold()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.green)
+                .clipShape(Capsule())
         }
+    }
 
+    var activityEndDateTime: Date {
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: activity.date)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: activity.endTime)
+
+        var components = DateComponents()
+        components.year = dateComponents.year
+        components.month = dateComponents.month
+        components.day = dateComponents.day
+        components.hour = timeComponents.hour
+        components.minute = timeComponents.minute
+
+        return calendar.date(from: components) ?? activity.endTime
+    }
     }
 
     func statView(
@@ -665,4 +688,4 @@ struct ActivityCard: View {
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
-}
+

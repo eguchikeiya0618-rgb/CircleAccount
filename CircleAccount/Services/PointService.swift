@@ -158,4 +158,52 @@ final class PointService {
             ])
         }
     }
+    func useTicket(
+        memberId: String,
+        ticketField: String,
+        title: String,
+        icon: String
+    ) {
+        let memberRef = db.collection("members").document(memberId)
+
+        db.runTransaction({ transaction, errorPointer in
+            let snapshot: DocumentSnapshot
+
+            do {
+                snapshot = try transaction.getDocument(memberRef)
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+
+            let ticketCount = snapshot.data()?[ticketField] as? Int ?? 0
+
+            if ticketCount <= 0 {
+                errorPointer?.pointee = NSError(
+                    domain: "PointService",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "チケットがありません"]
+                )
+                return nil
+            }
+
+            transaction.updateData([
+                ticketField: FieldValue.increment(Int64(-1))
+            ], forDocument: memberRef)
+
+            return nil
+        }) { _, error in
+            if let error = error {
+                print("チケット使用失敗: \(error.localizedDescription)")
+                return
+            }
+
+            memberRef.collection("pointHistories").addDocument(data: [
+                "title": "\(title)を使用",
+                "point": 0,
+                "icon": icon,
+                "date": Timestamp()
+            ])
+        }
+    }
 }

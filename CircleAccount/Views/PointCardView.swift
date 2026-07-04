@@ -26,8 +26,15 @@ struct PointCardView: View {
     @State private var isFlipped = false
     @State private var rankingMembers: [Member] = []
 
+    @State private var hasLoadedMember = false
+    @State private var showRankUpAlert = false
+    @State private var rankUpMessage = ""
     
-    
+    @State private var showUseTicketAlert = false
+    @State private var selectedTicketTitle = ""
+    @State private var selectedTicketField = ""
+    @State private var selectedTicketIcon = ""
+
     var rankName: String {
         if totalPoint >= 700 { return "👑 Legend Player" }
         if totalPoint >= 400 { return "💎 Platinum Player" }
@@ -53,24 +60,21 @@ struct PointCardView: View {
     }
 
     var nextReward: (title: String, point: Int, icon: String) {
-        if totalPoint >= 700 {
-            return ("最高ランク達成！", 700, "👑")
-        }
-
         if availablePoint < 100 {
-            return ("片付け免除", 100, "🧹")
+            return ("片付けパス", 100, "🧹")
         } else if availablePoint < 200 {
-            return ("100円引き", 200, "💴")
+            return ("参加費500円券", 200, "💰")
         } else if availablePoint < 400 {
-            return ("参加費無料", 400, "🎁")
+            return ("参加費半額券", 400, "🏸")
+        } else if availablePoint < 700 {
+            return ("参加費無料券", 700, "🎁")
         } else {
-            return ("参加費無料交換できます", 400, "🎁")
+            return ("参加費無料券と交換できます", 700, "🎁")
         }
     }
 
     var remainingPoint: Int {
-        if totalPoint >= 700 { return 0 }
-        return max(nextReward.point - availablePoint, 0)
+        max(nextReward.point - availablePoint, 0)
     }
 
     var body: some View {
@@ -96,7 +100,7 @@ struct PointCardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
                 .buttonStyle(.plain)
-               
+
                 pointRuleSection
             }
             .padding()
@@ -107,6 +111,20 @@ struct PointCardView: View {
         .onAppear {
             loadMember()
             loadRanking()
+        }
+        .alert("🎉 RANK UP!", isPresented: $showRankUpAlert) {
+            Button("OK") { }
+        } message: {
+            Text(rankUpMessage)
+                .alert("チケットを使用しますか？", isPresented: $showUseTicketAlert) {
+                    Button("キャンセル", role: .cancel) { }
+
+                    Button("使用する", role: .destructive) {
+                        useTicket()
+                    }
+                } message: {
+                    Text("使用すると元に戻せません。")
+                }
         }
     }
 
@@ -128,7 +146,6 @@ struct PointCardView: View {
             }
         }
     }
-
     var memberCard: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
@@ -185,7 +202,7 @@ struct PointCardView: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text(totalPoint >= 700 ? "LEGEND MAX" : "NEXT REWARD")
+                        Text("NEXT REWARD")
                             .font(.caption2)
                             .bold()
                             .opacity(0.75)
@@ -193,16 +210,9 @@ struct PointCardView: View {
                         Text("\(nextReward.icon) \(nextReward.title)")
                             .font(.headline)
 
-                        if totalPoint >= 700 {
-                            Text("最高ランク")
-                                .font(.caption)
-                                .bold()
-                                .foregroundStyle(.yellow)
-                        } else {
-                            Text("あと\(remainingPoint)pt")
-                                .font(.caption)
-                                .opacity(0.85)
-                        }
+                        Text("あと\(remainingPoint)pt")
+                            .font(.caption)
+                            .opacity(0.85)
                     }
                     .offset(x: -20, y: 8)
                 }
@@ -324,61 +334,50 @@ struct PointCardView: View {
         .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         .cardStyle(imageName: cardBackground)
     }
-
     var ticketsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("🎫 My Tickets")
                 .font(.title2)
                 .bold()
 
-            ticketRow(icon: "🧹", title: "片付けパス", count: cleanupTickets)
+            ticketRow(
+                icon: "⭐",
+                title: "対戦指名券",
+                count: challengeTickets,
+                ticketField: "challengeTickets"
+            )
             Divider()
-            ticketRow(icon: "💰", title: "参加費500円券", count: discountTickets)
+            ticketRow(
+                icon: "🚀",
+                title: "優先ゲーム券",
+                count: priorityTickets,
+                ticketField: "priorityTickets"
+            )
             Divider()
-            ticketRow(icon: "🏸", title: "参加費半額券", count: halfPriceTickets)
-            Divider()
-            ticketRow(icon: "🎁", title: "参加費無料券", count: freeTickets)
-            Divider()
-            ticketRow(icon: "⭐", title: "対戦指名券", count: challengeTickets)
-            Divider()
-            ticketRow(icon: "🚀", title: "優先ゲーム券", count: priorityTickets)
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
-    }
-    var exchangeSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("🎁 ポイント交換")
-                .font(.title2)
-                .bold()
-
-            exchangeButton(
-                title: "片付けパス",
-                point: 100,
+            ticketRow(
                 icon: "🧹",
+                title: "片付けパス",
+                count: cleanupTickets,
                 ticketField: "cleanupTickets"
             )
-
-            exchangeButton(
-                title: "参加費500円券",
-                point: 200,
+            ticketRow(
                 icon: "💰",
+                title: "参加費500円券",
+                count: discountTickets,
                 ticketField: "discountTickets"
             )
 
-            exchangeButton(
-                title: "参加費半額券",
-                point: 400,
+            ticketRow(
                 icon: "🏸",
+                title: "参加費半額券",
+                count: halfPriceTickets,
                 ticketField: "halfPriceTickets"
             )
 
-            exchangeButton(
-                title: "参加費無料券",
-                point: 700,
+            ticketRow(
                 icon: "🎁",
+                title: "参加費無料券",
+                count: freeTickets,
                 ticketField: "freeTickets"
             )
         }
@@ -388,28 +387,50 @@ struct PointCardView: View {
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
     }
 
-    func ticketRow(icon: String, title: String, count: Int) -> some View {
+    var exchangeSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("🎁 ポイント交換")
+                .font(.title2)
+                .bold()
+
+            exchangeButton(title: "片付けパス", point: 100, icon: "🧹", ticketField: "cleanupTickets")
+            exchangeButton(title: "参加費500円券", point: 200, icon: "💰", ticketField: "discountTickets")
+            exchangeButton(title: "参加費半額券", point: 400, icon: "🏸", ticketField: "halfPriceTickets")
+            exchangeButton(title: "参加費無料券", point: 700, icon: "🎁", ticketField: "freeTickets")
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+    }
+
+    func ticketRow(
+        icon: String,
+        title: String,
+        count: Int,
+        ticketField: String
+    ) -> some View {
+
         HStack(spacing: 14) {
+
             Text(icon)
                 .font(.title2)
 
-            Text(title)
-                .font(.headline)
+            VStack(alignment: .leading) {
+                Text(title)
+                    .font(.headline)
+
+                Text("残り \(count)枚")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
 
-            Text("\(count)枚")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+            
         }
     }
-
-    func exchangeButton(
-        title: String,
-        point: Int,
-        icon: String,
-        ticketField: String
-    ) -> some View {
+    func exchangeButton(title: String, point: Int, icon: String, ticketField: String) -> some View {
         Button {
             PointService.shared.exchangeTicket(
                 memberId: currentUserId,
@@ -453,7 +474,6 @@ struct PointCardView: View {
         .buttonStyle(.plain)
         .disabled(availablePoint < point)
     }
-
     var pointRuleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("ポイントルール")
@@ -492,7 +512,6 @@ struct PointCardView: View {
         default: return "🏸"
         }
     }
-
     func loadMember() {
         guard !currentUserId.isEmpty else { return }
 
@@ -501,17 +520,56 @@ struct PointCardView: View {
             .getDocument { snapshot, _ in
                 guard let data = snapshot?.data() else { return }
 
-                totalPoint = data["totalPoint"] as? Int ?? 0
+                let oldPoint = totalPoint
+                let newPoint = data["totalPoint"] as? Int ?? 0
+
+                totalPoint = newPoint
                 availablePoint = data["availablePoint"] as? Int ?? 0
+
                 cleanupTickets = data["cleanupTickets"] as? Int ?? 0
                 discountTickets = data["discountTickets"] as? Int ?? 0
-                freeTickets = data["freeTickets"] as? Int ?? 0
                 halfPriceTickets = data["halfPriceTickets"] as? Int ?? 0
+                freeTickets = data["freeTickets"] as? Int ?? 0
                 challengeTickets = data["challengeTickets"] as? Int ?? 0
+                priorityTickets = data["priorityTickets"] as? Int ?? 0
+
                 memberNo = data["memberNo"] as? Int ?? 999999
                 legendCount = data["legendCount"] as? Int ?? 0
                 isLegend = data["isLegend"] as? Bool ?? false
+
+                if hasLoadedMember {
+                    checkRankUp(oldPoint: oldPoint, newPoint: newPoint)
+                } else {
+                    hasLoadedMember = true
+                }
             }
+    }
+    func useTicket() {
+        PointService.shared.useTicket(
+            memberId: currentUserId,
+            ticketField: selectedTicketField,
+            title: selectedTicketTitle,
+            icon: selectedTicketIcon
+        )
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            loadMember()
+        }
+    }
+    func checkRankUp(oldPoint: Int, newPoint: Int) {
+        if oldPoint < 700 && newPoint >= 700 {
+            rankUpMessage = "👑 Legend Player\n\n⭐ 対戦指名券 ×2\n🚀 優先ゲーム券 ×2 を獲得しました！"
+            showRankUpAlert = true
+        } else if oldPoint < 400 && newPoint >= 400 {
+            rankUpMessage = "💎 Platinum Player\n\n⭐ 対戦指名券 ×1\n🚀 優先ゲーム券 ×1 を獲得しました！"
+            showRankUpAlert = true
+        } else if oldPoint < 200 && newPoint >= 200 {
+            rankUpMessage = "🥇 Gold Player\n\n⭐ 対戦指名券 ×2 を獲得しました！"
+            showRankUpAlert = true
+        } else if oldPoint < 100 && newPoint >= 100 {
+            rankUpMessage = "🥈 Silver Player\n\n⭐ 対戦指名券 ×1 を獲得しました！"
+            showRankUpAlert = true
+        }
     }
 
     func loadRanking() {
@@ -534,7 +592,10 @@ struct PointCardView: View {
                         availablePoint: data["availablePoint"] as? Int ?? 0,
                         cleanupTickets: data["cleanupTickets"] as? Int ?? 0,
                         discountTickets: data["discountTickets"] as? Int ?? 0,
+                        halfPriceTickets: data["halfPriceTickets"] as? Int ?? 0,
                         freeTickets: data["freeTickets"] as? Int ?? 0,
+                        challengeTickets: data["challengeTickets"] as? Int ?? 0,
+                        priorityTickets: data["priorityTickets"] as? Int ?? 0,
                         attendanceCount: data["attendanceCount"] as? Int ?? 0,
                         setupCount: data["setupCount"] as? Int ?? 0
                     )

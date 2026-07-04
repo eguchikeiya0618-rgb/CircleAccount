@@ -32,7 +32,7 @@ struct Activity: Identifiable, Codable {
 
     // ポイント付与日時
     var pointGrantedAt: Date? = nil
-
+    var usedTickets: [UsedTicket] = []
     var createdAt = Date()
 
     var participantCount: Int {
@@ -54,4 +54,12 @@ struct Activity: Identifiable, Codable {
     var isFull: Bool {
         participantCount >= capacity
     }
+}
+struct UsedTicket: Codable, Identifiable {
+
+    var id = UUID().uuidString
+
+    var memberId: String
+    var ticketType: String
+    var usedAt: Date
 }
