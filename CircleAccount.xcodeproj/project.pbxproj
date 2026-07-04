@@ -6,8 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5C6659DC2FF258680098D6E8 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659DB2FF258680098D6E8 /* FirebaseCore */; };
+		5C6659E22FF2608F0098D6E8 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */; };
+		5C665A002FF3B5A40098D6E8 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */; };
+		5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C665A462FF61B000098D6E8 /* PointProgressCard.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		5C12CE0B2FEF9187007BB317 /* CircleAccount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CircleAccount.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C665A462FF61B000098D6E8 /* PointProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointProgressCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +31,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C6659DC2FF258680098D6E8 /* FirebaseCore in Frameworks */,
+				5C665A002FF3B5A40098D6E8 /* FirebaseAuth in Frameworks */,
+				5C6659E22FF2608F0098D6E8 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -32,7 +43,11 @@
 		5C12CE022FEF9187007BB317 = {
 			isa = PBXGroup;
 			children = (
+				5C665A392FF5DC630098D6E8 /* Services */,
+				5C665A382FF5DC450098D6E8 /* Managers */,
+				5C665A372FF5DC2C0098D6E8 /* Components */,
 				5C12CE0D2FEF9187007BB317 /* CircleAccount */,
+				5C6659DA2FF258680098D6E8 /* Frameworks */,
 				5C12CE0C2FEF9187007BB317 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +58,35 @@
 				5C12CE0B2FEF9187007BB317 /* CircleAccount.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		5C6659DA2FF258680098D6E8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		5C665A372FF5DC2C0098D6E8 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				5C665A462FF61B000098D6E8 /* PointProgressCard.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		5C665A382FF5DC450098D6E8 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		5C665A392FF5DC630098D6E8 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +109,9 @@
 			);
 			name = CircleAccount;
 			packageProductDependencies = (
+				5C6659DB2FF258680098D6E8 /* FirebaseCore */,
+				5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */,
+				5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */,
 			);
 			productName = CircleAccount;
 			productReference = 5C12CE0B2FEF9187007BB317 /* CircleAccount.app */;
@@ -94,6 +141,9 @@
 			);
 			mainGroup = 5C12CE022FEF9187007BB317;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5C6659D92FF256D50098D6E8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5C12CE0C2FEF9187007BB317 /* Products */;
 			projectDirPath = "";
@@ -119,6 +169,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -251,8 +302,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U29DPH4Y9A;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "QRコードを読み取るためにカメラを使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -282,8 +335,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U29DPH4Y9A;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "QRコードを読み取るためにカメラを使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -328,6 +383,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5C6659D92FF256D50098D6E8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.15.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5C6659DB2FF258680098D6E8 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5C6659D92FF256D50098D6E8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5C6659D92FF256D50098D6E8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5C6659D92FF256D50098D6E8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5C12CE032FEF9187007BB317 /* Project object */;
 }

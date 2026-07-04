@@ -1,0 +1,309 @@
+import SwiftUI
+import FirebaseFirestore
+
+struct ActivityDetailView: View {
+    @Binding var activity: Activity
+    private let db = Firestore.firestore()
+
+    @AppStorage("currentUserIsAdmin") private var currentUserIsAdmin = false
+
+    @State private var memberNames: [String: String] = [:]
+    @State private var memberGenders: [String: Gender] = [:]
+    @State private var memberLevels: [String: MemberLevel] = [:]
+    @State private var isShowingQRCode = false
+
+    var attendingIds: [String] {
+        activity.attendance.filter { $0.status == .attending }.map { $0.memberId }
+    }
+
+    var undecidedIds: [String] {
+        activity.attendance.filter { $0.status == .undecided }.map { $0.memberId }
+    }
+
+    var absentIds: [String] {
+        activity.attendance.filter { $0.status == .absent }.map { $0.memberId }
+    }
+
+    var paidCount: Int { activity.paidMembers.count }
+    var unpaidCount: Int { max(attendingIds.count - activity.paidMembers.count, 0) }
+    var collectedAmount: Int { activity.fee * paidCount }
+    var uncollectedAmount: Int { activity.fee * unpaidCount }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(activity.title)
+                    .font(.largeTitle)
+                    .bold()
+
+                Label(formatDate(activity.date), systemImage: "calendar")
+                Label("\(formatTime(activity.startTime))〜\(formatTime(activity.endTime))", systemImage: "clock")
+                Label(activity.place, systemImage: "mappin.and.ellipse")
+                Label("参加費 \(activity.fee)円", systemImage: "creditcard")
+                Label("定員 \(activity.capacity)人", systemImage: "person.3")
+
+                if currentUserIsAdmin {
+                    Button {
+                        isShowingQRCode = true
+                    } label: {
+                        Label("QRコードを表示", systemImage: "qrcode")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    if activity.pointGranted {
+                        VStack(spacing: 6) {
+                            Label("ポイント付与済み", systemImage: "checkmark.seal.fill")
+                                .foregroundStyle(.green)
+                                .font(.headline)
+
+                            if let date = activity.pointGrantedAt {
+                                Text("付与日時 \(formatDateTime(date))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.green.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    } else {
+                        Button {
+                            grantPoints()
+                        } label: {
+                            Label("参加者へポイント一括付与", systemImage: "star.circle.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(attendingIds.isEmpty)
+                    }
+                }
+
+                Divider()
+
+                Text("出欠状況")
+                    .font(.title2)
+                    .bold()
+
+                HStack {
+                    Text("参加 \(attendingIds.count)人")
+                    Spacer()
+                    Text("未定 \(undecidedIds.count)人")
+                    Spacer()
+                    Text("不参加 \(absentIds.count)人")
+                }
+                .font(.headline)
+
+                attendanceNameSection(title: "参加", memberIds: attendingIds)
+                attendanceNameSection(title: "未定", memberIds: undecidedIds)
+                attendanceNameSection(title: "不参加", memberIds: absentIds)
+
+                Divider()
+
+                Text("会計")
+                    .font(.title2)
+                    .bold()
+
+                HStack {
+                    Text("回収済み")
+                    Spacer()
+                    Text("\(collectedAmount)円").bold()
+                }
+
+                HStack {
+                    Text("未回収")
+                    Spacer()
+                    Text("\(uncollectedAmount)円")
+                        .foregroundStyle(.red)
+                        .bold()
+                }
+
+                Text("支払済 \(paidCount)人 / 未払い \(unpaidCount)人")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+
+                Text("参加者・支払い状況")
+                    .font(.title2)
+                    .bold()
+
+                if attendingIds.isEmpty {
+                    Text("まだ参加者はいません")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(attendingIds, id: \.self) { memberId in
+                        HStack {
+                            memberNameRow(memberId)
+
+                            Spacer()
+
+                            Text(activity.paidMembers.contains(memberId) ? "支払い済み" : "未払い")
+                                .font(.caption)
+                                .foregroundStyle(activity.paidMembers.contains(memberId) ? .green : .red)
+
+                            if currentUserIsAdmin {
+                                Button {
+                                    togglePaid(memberId)
+                                } label: {
+                                    Image(systemName: activity.paidMembers.contains(memberId) ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+
+                Divider()
+
+                Text("キャンセル待ち")
+                    .font(.title2)
+                    .bold()
+
+                if activity.waitingList.isEmpty {
+                    Text("キャンセル待ちはいません")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(activity.waitingList, id: \.self) { memberId in
+                        memberNameRow(memberId)
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("活動詳細")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            fetchMemberNames()
+        }
+        .sheet(isPresented: $isShowingQRCode) {
+            QRCodeView(activity: activity)
+        }
+    }
+
+    func attendanceNameSection(title: String, memberIds: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.headline)
+
+            if memberIds.isEmpty {
+                Text("該当者なし")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(memberIds, id: \.self) { memberId in
+                    memberNameRow(memberId)
+                        .font(.caption)
+                }
+            }
+        }
+    }
+
+    func memberNameRow(_ memberId: String) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(memberGenders[memberId] == .female ? Color.pink : Color.blue)
+                .frame(width: 10, height: 10)
+
+            Text(memberNames[memberId] ?? "読み込み中...")
+                .fontWeight(.medium)
+
+            if currentUserIsAdmin {
+                Text(memberLevels[memberId]?.rawValue ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    func fetchMemberNames() {
+        memberNames = [:]
+        memberGenders = [:]
+        memberLevels = [:]
+
+        let ids = Array(Set(attendingIds + undecidedIds + absentIds + activity.waitingList))
+
+        for memberId in ids {
+            db.collection("members").document(memberId).getDocument { snapshot, error in
+                if let error = error {
+                    print("参加者取得エラー: \(error.localizedDescription)")
+                    return
+                }
+
+                let data = snapshot?.data()
+                let name = data?["name"] as? String ?? "ID不一致: \(memberId)"
+                let gender = Gender(rawValue: data?["gender"] as? String ?? "男性") ?? .male
+                let level = MemberLevel(rawValue: data?["level"] as? String ?? "初心者") ?? .beginner
+
+                DispatchQueue.main.async {
+                    memberNames[memberId] = name
+                    memberGenders[memberId] = gender
+                    memberLevels[memberId] = level
+                }
+            }
+        }
+    }
+
+    func grantPoints() {
+        guard !activity.pointGranted else { return }
+
+        for memberId in attendingIds {
+            PointService.shared.addPoint(
+                memberId: memberId,
+                point: 5,
+                title: "練習参加",
+                icon: "🏸",
+                addAttendanceCount: true
+            )
+        }
+
+        db.collection("activities")
+            .document(activity.id)
+            .updateData([
+                "pointGranted": true,
+                "pointGrantedAt": Timestamp()
+            ])
+
+        activity.pointGranted = true
+        activity.pointGrantedAt = Date()
+    }
+
+    func togglePaid(_ memberId: String) {
+        let activityId = activity.id
+
+        if activity.paidMembers.contains(memberId) {
+            activity.paidMembers.removeAll { $0 == memberId }
+
+            db.collection("activities").document(activityId).updateData([
+                "paidMembers": FieldValue.arrayRemove([memberId])
+            ])
+        } else {
+            activity.paidMembers.append(memberId)
+
+            db.collection("activities").document(activityId).updateData([
+                "paidMembers": FieldValue.arrayUnion([memberId])
+            ])
+        }
+    }
+
+    func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d(E)"
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
+    }
+
+    func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+
+    func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy/MM/dd HH:mm"
+        return formatter.string(from: date)
+    }
+}
