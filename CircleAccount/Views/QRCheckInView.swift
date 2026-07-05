@@ -86,20 +86,35 @@ struct QRCheckInView: View {
                 return
             }
 
+            let now = Date()
+
             var participants = data["participants"] as? [String] ?? []
             var waitingList = data["waitingList"] as? [String] ?? []
+            var checkedInMembers = data["checkedInMembers"] as? [String] ?? []
             var attendanceArray = data["attendance"] as? [[String: Any]] ?? []
-            let capacity = data["capacity"] as? Int ?? 0
-            let alreadyCheckedIn = attendanceArray.contains { item in
-                (item["memberId"] as? String) == currentUserId &&
-                (item["status"] as? String) == AttendanceStatus.attending.rawValue
-            }
 
-            if alreadyCheckedIn {
+            let capacity = data["capacity"] as? Int ?? 0
+            let activityDate = (data["date"] as? Timestamp)?.dateValue() ?? Date()
+
+            if checkedInMembers.contains(currentUserId) {
                 message = "この活動はすでに受付済みです"
                 isSuccess = true
                 return
             }
+
+            let previousAttendance = attendanceArray.first {
+                ($0["memberId"] as? String) == currentUserId
+            }
+
+            let previousAnsweredAt = (previousAttendance?["answeredAt"] as? Timestamp)?.dateValue()
+            let previousStatus = previousAttendance?["status"] as? String
+
+            let isEarlyAnswer =
+                previousStatus == AttendanceStatus.attending.rawValue &&
+                previousAnsweredAt.map { $0 <= earlyAnswerDeadline(for: activityDate) } ?? false
+
+            let isEarlyArrival = now <= earlyArrivalDeadline(for: activityDate)
+
             participants.removeAll { $0 == currentUserId }
             waitingList.removeAll { $0 == currentUserId }
             attendanceArray.removeAll {
@@ -109,44 +124,104 @@ struct QRCheckInView: View {
             attendanceArray.append([
                 "memberId": currentUserId,
                 "status": AttendanceStatus.attending.rawValue,
-                "answeredAt": Timestamp(date: Date())
+                "answeredAt": Timestamp(date: previousAnsweredAt ?? now),
+                "checkedInAt": Timestamp(date: now),
+                "earlyAnswerPointGranted": isEarlyAnswer
             ])
+
+            checkedInMembers.append(currentUserId)
+
+            let isParticipant: Bool
 
             if participants.count < capacity {
                 participants.append(currentUserId)
-                message = "受付中..."
+                isParticipant = true
             } else {
                 waitingList.append(currentUserId)
-                message = "定員いっぱいのためキャンセル待ちに登録します"
+                isParticipant = false
             }
 
             ref.updateData([
                 "participants": participants,
                 "waitingList": waitingList,
-                "attendance": attendanceArray
+                "attendance": attendanceArray,
+                "checkedInMembers": checkedInMembers
             ]) { error in
                 if let error = error {
                     message = "受付失敗: \(error.localizedDescription)"
                     isSuccess = false
-                } else {
+                    return
+                }
+
+                var totalPoint = 0
+                var pointMessages: [String] = []
+
+                PointService.shared.addPoint(
+                    memberId: currentUserId,
+                    point: 5,
+                    title: "練習参加",
+                    icon: "🏸",
+                    addAttendanceCount: true
+                )
+                totalPoint += 5
+                pointMessages.append("🏸 練習参加 +5pt")
+
+                if isEarlyAnswer {
+                    PointService.shared.addPoint(
+                        memberId: currentUserId,
+                        point: 2,
+                        title: "前日18時まで参加回答",
+                        icon: "⏰"
+                    )
+                    totalPoint += 2
+                    pointMessages.append("⏰ 早期回答 +2pt")
+                }
+
+                if isEarlyArrival {
                     PointService.shared.addPoint(
                         memberId: currentUserId,
                         point: 5,
-                        title: "練習参加",
-                        icon: "🏸",
-                        addAttendanceCount: true
+                        title: "18時30分まで受付",
+                        icon: "🛠"
                     )
-
-                    if participants.contains(currentUserId) {
-                        message = "受付完了！🏸\n+5pt獲得しました！"
-                    } else {
-                        message = "キャンセル待ち登録完了！\n+5pt獲得しました！"
-                    }
-
-                    isSuccess = true
+                    totalPoint += 5
+                    pointMessages.append("🛠 早期来場 +5pt")
                 }
+
+                if isParticipant {
+                    message = "受付完了！\n\n" + pointMessages.joined(separator: "\n") + "\n\n合計 +\(totalPoint)pt"
+                } else {
+                    message = "キャンセル待ち登録完了！\n\n" + pointMessages.joined(separator: "\n") + "\n\n合計 +\(totalPoint)pt"
+                }
+
+                isSuccess = true
             }
         }
+    }
+
+    func earlyAnswerDeadline(for activityDate: Date) -> Date {
+        let calendar = Calendar.current
+        let activityDay = calendar.startOfDay(for: activityDate)
+        let previousDay = calendar.date(byAdding: .day, value: -1, to: activityDay) ?? activityDay
+
+        return calendar.date(
+            bySettingHour: 18,
+            minute: 0,
+            second: 0,
+            of: previousDay
+        ) ?? previousDay
+    }
+
+    func earlyArrivalDeadline(for activityDate: Date) -> Date {
+        let calendar = Calendar.current
+        let activityDay = calendar.startOfDay(for: activityDate)
+
+        return calendar.date(
+            bySettingHour: 18,
+            minute: 30,
+            second: 0,
+            of: activityDay
+        ) ?? activityDay
     }
 }
 

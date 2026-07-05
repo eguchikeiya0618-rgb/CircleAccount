@@ -94,33 +94,6 @@ struct ActivityDetailView: View {
                     }
                     .buttonStyle(.borderedProminent)
 
-                    if activity.pointGranted {
-                        VStack(spacing: 6) {
-                            Label("ポイント付与済み", systemImage: "checkmark.seal.fill")
-                                .foregroundStyle(.green)
-                                .font(.headline)
-
-                            if let date = activity.pointGrantedAt {
-                                Text("付与日時 \(formatDateTime(date))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                    } else {
-                        Button {
-                            grantPoints()
-                        } label: {
-                            Label("参加者へポイント一括付与", systemImage: "star.circle.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(attendingIds.isEmpty)
-                    }
-
                     usedTicketSection()
                     Divider()
                 }

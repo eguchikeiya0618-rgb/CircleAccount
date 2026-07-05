@@ -387,11 +387,13 @@ struct ActivitiesView: View {
                         }
 
                         let answeredAt = (item["answeredAt"] as? Timestamp)?.dateValue() ?? Date()
+                        let earlyAnswerPointGranted = item["earlyAnswerPointGranted"] as? Bool ?? false
 
                         return Attendance(
                             memberId: memberId,
                             status: status,
-                            answeredAt: answeredAt
+                            answeredAt: answeredAt,
+                            earlyAnswerPointGranted: earlyAnswerPointGranted
                         )
                     }
                     let usedTicketsArray = data["usedTickets"] as? [[String: Any]] ?? []
@@ -461,7 +463,8 @@ struct ActivitiesView: View {
             [
                 "memberId": $0.memberId,
                 "status": $0.status.rawValue,
-                "answeredAt": Timestamp(date: $0.answeredAt)
+                "answeredAt": Timestamp(date: $0.answeredAt),
+                "earlyAnswerPointGranted": $0.earlyAnswerPointGranted
             ]
         }
 

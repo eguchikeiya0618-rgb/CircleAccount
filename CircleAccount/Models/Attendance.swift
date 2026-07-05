@@ -5,6 +5,7 @@ struct Attendance: Identifiable, Codable {
     var memberId: String
     var status: AttendanceStatus
     var answeredAt: Date = Date()
+    var earlyAnswerPointGranted = false
 }
 
 enum AttendanceStatus: String, Codable, CaseIterable {
