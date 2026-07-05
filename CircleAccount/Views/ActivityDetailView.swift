@@ -7,6 +7,7 @@ struct ActivityDetailView: View {
 
     @AppStorage("currentUserIsAdmin") private var currentUserIsAdmin = false
     @AppStorage("currentUserId") private var currentUserId = ""
+
     @State private var memberNames: [String: String] = [:]
     @State private var memberGenders: [String: Gender] = [:]
     @State private var memberLevels: [String: MemberLevel] = [:]
@@ -17,6 +18,8 @@ struct ActivityDetailView: View {
     @State private var selectedTicketTitle = ""
     @State private var selectedTicketField = ""
     @State private var selectedTicketIcon = ""
+    @State private var ticketToCancel: UsedTicket?
+
     var attendingIds: [String] {
         activity.attendance.filter { $0.status == .attending }.map { $0.memberId }
     }
@@ -33,12 +36,14 @@ struct ActivityDetailView: View {
     var unpaidCount: Int { max(attendingIds.count - activity.paidMembers.count, 0) }
     var collectedAmount: Int { activity.fee * paidCount }
     var uncollectedAmount: Int { activity.fee * unpaidCount }
+
     func hasUsedTicket(_ ticketType: String) -> Bool {
         activity.usedTickets.contains {
             $0.memberId == currentUserId &&
             $0.ticketType == ticketType
         }
     }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -51,6 +56,7 @@ struct ActivityDetailView: View {
                 Label(activity.place, systemImage: "mappin.and.ellipse")
                 Label("参加費 \(activity.fee)円", systemImage: "creditcard")
                 Label("定員 \(activity.capacity)人", systemImage: "person.3")
+
                 if challengeTickets > 0 && !hasUsedTicket("対戦指名券") {
                     Button("🏸 対戦指名券を使用") {
                         selectedTicketTitle = "対戦指名券"
@@ -59,15 +65,12 @@ struct ActivityDetailView: View {
                         showUseTicketAlert = true
                     }
                     .buttonStyle(.borderedProminent)
+                } else if hasUsedTicket("対戦指名券") {
+                    Button("✅ 対戦指名券 使用済み") { }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(true)
                 }
-                else if hasUsedTicket("対戦指名券") {
 
-                    Button("✅ 対戦指名券 使用済み") {
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(true)
-
-                }
                 if priorityTickets > 0 && !hasUsedTicket("優先ゲーム券") {
                     Button("🚀 優先ゲーム券を使用") {
                         selectedTicketTitle = "優先ゲーム券"
@@ -76,15 +79,12 @@ struct ActivityDetailView: View {
                         showUseTicketAlert = true
                     }
                     .buttonStyle(.borderedProminent)
+                } else if hasUsedTicket("優先ゲーム券") {
+                    Button("✅ 優先ゲーム券 使用済み") { }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(true)
                 }
-                else if hasUsedTicket("優先ゲーム券") {
 
-                    Button("✅ 優先ゲーム券 使用済み") {
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(true)
-
-                }
                 if currentUserIsAdmin {
                     Button {
                         isShowingQRCode = true
@@ -120,8 +120,7 @@ struct ActivityDetailView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(attendingIds.isEmpty)
                     }
-                }
-                if currentUserIsAdmin {
+
                     usedTicketSection()
                     Divider()
                 }
@@ -236,7 +235,18 @@ struct ActivityDetailView: View {
             }
         } message: {
             Text("使用すると元には戻せません。")
-        }}
+        }
+        .alert(item: $ticketToCancel) { ticket in
+            Alert(
+                title: Text("使用済みチケットを取り消しますか？"),
+                message: Text("\(memberNames[ticket.memberId] ?? "メンバー") の「\(ticket.ticketType)」を取り消します。チケットも1枚戻します。"),
+                primaryButton: .destructive(Text("取り消す")) {
+                    cancelUsedTicket(ticket)
+                },
+                secondaryButton: .cancel(Text("キャンセル"))
+            )
+        }
+    }
 
     func attendanceNameSection(title: String, memberIds: [String]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -272,7 +282,9 @@ struct ActivityDetailView: View {
             }
         }
     }
+
     func useTicket() {
+        let usedAt = Date()
 
         PointService.shared.useTicket(
             memberId: currentUserId,
@@ -280,6 +292,14 @@ struct ActivityDetailView: View {
             title: selectedTicketTitle,
             icon: selectedTicketIcon
         )
+
+        let newTicket = UsedTicket(
+            memberId: currentUserId,
+            ticketType: selectedTicketTitle,
+            usedAt: usedAt
+        )
+
+        activity.usedTickets.append(newTicket)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             loadMyTickets()
@@ -291,10 +311,11 @@ struct ActivityDetailView: View {
                 "usedTickets": FieldValue.arrayUnion([[
                     "memberId": currentUserId,
                     "ticketType": selectedTicketTitle,
-                    "usedAt": Timestamp()
+                    "usedAt": Timestamp(date: usedAt)
                 ]])
             ])
     }
+
     func loadMyTickets() {
         guard !currentUserId.isEmpty else { return }
 
@@ -305,12 +326,13 @@ struct ActivityDetailView: View {
             priorityTickets = data?["priorityTickets"] as? Int ?? 0
         }
     }
+
     func fetchMemberNames() {
         memberNames = [:]
         memberGenders = [:]
         memberLevels = [:]
 
-        let ids = Array(Set(attendingIds + undecidedIds + absentIds + activity.waitingList))
+        let ids = Array(Set(attendingIds + undecidedIds + absentIds + activity.waitingList + activity.usedTickets.map { $0.memberId }))
 
         for memberId in ids {
             db.collection("members").document(memberId).getDocument { snapshot, error in
@@ -356,6 +378,7 @@ struct ActivityDetailView: View {
         activity.pointGranted = true
         activity.pointGrantedAt = Date()
     }
+
     func usedTicketSection() -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("🎟 使用済みチケット")
@@ -367,16 +390,79 @@ struct ActivityDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(activity.usedTickets) { ticket in
-                    HStack {
-                        Text(ticket.ticketType)
-                        Spacer()
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(ticket.ticketType)
+                                .font(.headline)
+
+                            Spacer()
+
+                            Button("取消") {
+                                ticketToCancel = ticket
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        }
+
                         Text(memberNames[ticket.memberId] ?? "読み込み中...")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .padding(.vertical, 6)
                 }
             }
         }
     }
+
+    func cancelUsedTicket(_ ticket: UsedTicket) {
+        let ticketField = ticket.ticketType == "対戦指名券" ? "challengeTickets" : "priorityTickets"
+
+        db.collection("activities").document(activity.id).getDocument { snapshot, error in
+            if let error = error {
+                print("使用済みチケット取得エラー: \(error.localizedDescription)")
+                return
+            }
+
+            guard var data = snapshot?.data(),
+                  var usedTicketsArray = data["usedTickets"] as? [[String: Any]] else {
+                return
+            }
+
+            if let index = usedTicketsArray.firstIndex(where: { item in
+                let memberId = item["memberId"] as? String
+                let ticketType = item["ticketType"] as? String
+                return memberId == ticket.memberId && ticketType == ticket.ticketType
+            }) {
+                usedTicketsArray.remove(at: index)
+            }
+
+            db.collection("activities").document(activity.id).updateData([
+                "usedTickets": usedTicketsArray
+            ])
+
+            db.collection("members").document(ticket.memberId).updateData([
+                ticketField: FieldValue.increment(Int64(1))
+            ])
+
+            if let localIndex = activity.usedTickets.firstIndex(where: {
+                $0.memberId == ticket.memberId &&
+                $0.ticketType == ticket.ticketType &&
+                $0.usedAt == ticket.usedAt
+            }) {
+                activity.usedTickets.remove(at: localIndex)
+            } else if let localIndex = activity.usedTickets.firstIndex(where: {
+                $0.memberId == ticket.memberId &&
+                $0.ticketType == ticket.ticketType
+            }) {
+                activity.usedTickets.remove(at: localIndex)
+            }
+
+            if ticket.memberId == currentUserId {
+                loadMyTickets()
+            }
+        }
+    }
+
     func togglePaid(_ memberId: String) {
         let activityId = activity.id
 

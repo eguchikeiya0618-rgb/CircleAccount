@@ -4,6 +4,7 @@ struct Attendance: Identifiable, Codable {
     var id: String = UUID().uuidString
     var memberId: String
     var status: AttendanceStatus
+    var answeredAt: Date = Date()
 }
 
 enum AttendanceStatus: String, Codable, CaseIterable {

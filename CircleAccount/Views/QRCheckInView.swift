@@ -88,11 +88,11 @@ struct QRCheckInView: View {
 
             var participants = data["participants"] as? [String] ?? []
             var waitingList = data["waitingList"] as? [String] ?? []
-            var attendanceArray = data["attendance"] as? [[String: String]] ?? []
+            var attendanceArray = data["attendance"] as? [[String: Any]] ?? []
             let capacity = data["capacity"] as? Int ?? 0
             let alreadyCheckedIn = attendanceArray.contains { item in
-                item["memberId"] == currentUserId &&
-                item["status"] == AttendanceStatus.attending.rawValue
+                (item["memberId"] as? String) == currentUserId &&
+                (item["status"] as? String) == AttendanceStatus.attending.rawValue
             }
 
             if alreadyCheckedIn {
@@ -102,11 +102,14 @@ struct QRCheckInView: View {
             }
             participants.removeAll { $0 == currentUserId }
             waitingList.removeAll { $0 == currentUserId }
-            attendanceArray.removeAll { $0["memberId"] == currentUserId }
+            attendanceArray.removeAll {
+                ($0["memberId"] as? String) == currentUserId
+            }
 
             attendanceArray.append([
                 "memberId": currentUserId,
-                "status": AttendanceStatus.attending.rawValue
+                "status": AttendanceStatus.attending.rawValue,
+                "answeredAt": Timestamp(date: Date())
             ])
 
             if participants.count < capacity {

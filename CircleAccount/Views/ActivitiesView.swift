@@ -386,7 +386,13 @@ struct ActivitiesView: View {
                             return nil
                         }
 
-                        return Attendance(memberId: memberId, status: status)
+                        let answeredAt = (item["answeredAt"] as? Timestamp)?.dateValue() ?? Date()
+
+                        return Attendance(
+                            memberId: memberId,
+                            status: status,
+                            answeredAt: answeredAt
+                        )
                     }
                     let usedTicketsArray = data["usedTickets"] as? [[String: Any]] ?? []
 
@@ -436,9 +442,12 @@ struct ActivitiesView: View {
         activity.wrappedValue.waitingList.removeAll { $0 == currentUserId }
 
         activity.wrappedValue.attendance.append(
-            Attendance(memberId: currentUserId, status: status)
+            Attendance(
+                memberId: currentUserId,
+                status: status,
+                answeredAt: Date()
+            )
         )
-
         if status == .attending {
             if activity.wrappedValue.participants.count < activity.wrappedValue.capacity {
                 activity.wrappedValue.participants.append(currentUserId)
@@ -451,7 +460,8 @@ struct ActivitiesView: View {
         let attendanceData = activity.wrappedValue.attendance.map {
             [
                 "memberId": $0.memberId,
-                "status": $0.status.rawValue
+                "status": $0.status.rawValue,
+                "answeredAt": Timestamp(date: $0.answeredAt)
             ]
         }
 
