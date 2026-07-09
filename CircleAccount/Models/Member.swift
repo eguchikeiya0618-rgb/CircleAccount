@@ -32,7 +32,18 @@ struct Member: Identifiable, Codable {
     // 実績
     var attendanceCount: Int = 0
     var setupCount: Int = 0
+    
+    
+    
+    // 月間実績
+    var monthlyChampionCount: Int = 0      // 月間1位
+    var monthlySecondCount: Int = 0        // 月間2位
+    var monthlyThirdCount: Int = 0         // 月間3位
+    var mvpCount: Int = 0                  // MVP
 
+    // 今月ポイント
+    var monthlyPoint: Int = 0
+    
     // LEGEND
     var legendCount: Int = 0
     var isLegend: Bool = false

@@ -6,7 +6,7 @@ struct AccountingView: View {
     private let db = Firestore.firestore()
 
     @State private var activities: [Activity] = []
-
+    @State private var uncheckedTicketCount = 0
     var totalSales: Int {
         activities.reduce(0) {
             $0 + ($1.fee * $1.paidMembers.count)
@@ -24,7 +24,17 @@ struct AccountingView: View {
             List {
 
                 Section("会計サマリー") {
-
+                    NavigationLink {
+                        TicketUsageHistoryView()
+                    } label: {
+                        HStack {
+                            Text("🔔 未確認チケット使用")
+                            Spacer()
+                            Text("\(uncheckedTicketCount)件")
+                                .bold()
+                                .foregroundStyle(uncheckedTicketCount > 0 ? .red : .secondary)
+                        }
+                    }
                     HStack {
                         Text("回収済み")
                         Spacer()
@@ -75,10 +85,11 @@ struct AccountingView: View {
             .navigationTitle("会計")
             .onAppear {
                 loadActivities()
+                loadUncheckedTicketCount()
+            }
             }
         }
-    }
-
+    
     func loadActivities() {
 
         db.collection("activities")
@@ -135,6 +146,13 @@ struct AccountingView: View {
         formatter.dateFormat = "HH:mm"
 
         return formatter.string(from: date)
+    }
+    func loadUncheckedTicketCount() {
+        db.collection("ticketUsages")
+            .whereField("status", isEqualTo: "未確認")
+            .getDocuments { snapshot, _ in
+                uncheckedTicketCount = snapshot?.documents.count ?? 0
+            }
     }
 }
 

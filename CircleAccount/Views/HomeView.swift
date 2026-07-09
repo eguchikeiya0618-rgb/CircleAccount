@@ -47,7 +47,7 @@ struct HomeView: View {
                     }
 
                     pointCardLink
-
+                    rankingCardLink
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         SummaryCard(title: "メンバー", value: "\(totalMembers)人", icon: "person.3.fill", color: accentColor)
                         SummaryCard(title: "今月活動", value: "\(thisMonthActivities)回", icon: "calendar.badge.clock", color: accentColor)
@@ -140,7 +140,33 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
     }
+    var rankingCardLink: some View {
+        NavigationLink {
+            RankingView()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("月間ランキング", systemImage: "trophy.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
 
+                    Text("今月の順位をチェック")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
     var headerView: some View {
         VStack(spacing: 8) {
             Text("SiRiUS")

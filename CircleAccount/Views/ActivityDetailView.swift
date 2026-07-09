@@ -14,6 +14,9 @@ struct ActivityDetailView: View {
     @State private var isShowingQRCode = false
     @State private var challengeTickets = 0
     @State private var priorityTickets = 0
+    @State private var discountTickets = 0
+    @State private var halfPriceTickets = 0
+    @State private var freeTickets = 0
     @State private var showUseTicketAlert = false
     @State private var selectedTicketTitle = ""
     @State private var selectedTicketField = ""
@@ -45,6 +48,8 @@ struct ActivityDetailView: View {
     }
 
     var body: some View {
+        let discount = discountAmount()
+        let payment = max(activity.fee - discount, 0)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text(activity.title)
@@ -55,6 +60,24 @@ struct ActivityDetailView: View {
                 Label("\(formatTime(activity.startTime))〜\(formatTime(activity.endTime))", systemImage: "clock")
                 Label(activity.place, systemImage: "mappin.and.ellipse")
                 Label("参加費 \(activity.fee)円", systemImage: "creditcard")
+                VStack(alignment: .leading, spacing: 6) {
+
+                    Text("💰本日のお支払い")
+                        .font(.headline)
+
+                    if discount > 0 {
+                        Text("通常参加費 \(activity.fee)円")
+                            .foregroundStyle(.secondary)
+
+                        Text("チケット割引 -\(discount)円")
+                            .foregroundStyle(.green)
+                    }
+
+                    Text("👉 お支払い金額 \(payment)円")
+                        .font(.title3.bold())
+                        .foregroundStyle(.blue)
+                }
+                .padding(.vertical, 8)
                 Label("定員 \(activity.capacity)人", systemImage: "person.3")
 
                 if challengeTickets > 0 && !hasUsedTicket("対戦指名券") {
@@ -84,7 +107,57 @@ struct ActivityDetailView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(true)
                 }
+                if freeTickets > 0 &&
+                    !hasUsedTicket("参加費無料券") {
 
+                    Button("🎁 参加費無料券を使用") {
+                        selectedTicketTitle = "参加費無料券"
+                        selectedTicketField = "freeTickets"
+                        selectedTicketIcon = "🎁"
+                        showUseTicketAlert = true
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                } else if hasUsedTicket("参加費無料券") {
+
+                    Button("✅ 参加費無料券 使用済み") { }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(true)
+                }
+                if discountTickets > 0 &&
+                    !hasUsedTicket("参加費500円券") {
+
+                    Button("💰 参加費500円券を使用") {
+                        selectedTicketTitle = "参加費500円券"
+                        selectedTicketField = "discountTickets"
+                        selectedTicketIcon = "💰"
+                        showUseTicketAlert = true
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                } else if hasUsedTicket("参加費500円券") {
+
+                    Button("✅ 参加費500円券 使用済み") { }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(true)
+                }
+                if halfPriceTickets > 0 &&
+                    !hasUsedTicket("参加費半額券") {
+
+                    Button("🏸 参加費半額券を使用") {
+                        selectedTicketTitle = "参加費半額券"
+                        selectedTicketField = "halfPriceTickets"
+                        selectedTicketIcon = "🏸"
+                        showUseTicketAlert = true
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                } else if hasUsedTicket("参加費半額券") {
+
+                    Button("✅ 参加費半額券 使用済み") { }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(true)
+                }
                 if currentUserIsAdmin {
                     Button {
                         isShowingQRCode = true
@@ -165,8 +238,18 @@ struct ActivityDetailView: View {
                                 Button {
                                     togglePaid(memberId)
                                 } label: {
-                                    Image(systemName: activity.paidMembers.contains(memberId) ? "checkmark.circle.fill" : "circle")
-                                        .font(.title2)
+                                    Text(activity.paidMembers.contains(memberId) ? "支払い取消" : "支払い確認")
+                                        .font(.caption)
+                                        .bold()
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            activity.paidMembers.contains(memberId)
+                                            ? Color.orange
+                                            : Color.green
+                                        )
+                                        .foregroundColor(.white)
+                                        .clipShape(Capsule())
                                 }
                             }
                         }
@@ -263,7 +346,8 @@ struct ActivityDetailView: View {
             memberId: currentUserId,
             ticketField: selectedTicketField,
             title: selectedTicketTitle,
-            icon: selectedTicketIcon
+            icon: selectedTicketIcon,
+            activityId: activity.id
         )
 
         let newTicket = UsedTicket(
@@ -284,11 +368,27 @@ struct ActivityDetailView: View {
                 "usedTickets": FieldValue.arrayUnion([[
                     "memberId": currentUserId,
                     "ticketType": selectedTicketTitle,
-                    "usedAt": Timestamp(date: usedAt)
+                    "usedAt": Timestamp(date: usedAt),
+                    "activityId": activity.id
                 ]])
             ])
     }
+    func discountAmount() -> Int {
 
+        if hasUsedTicket("参加費無料券") {
+            return activity.fee
+        }
+
+        if hasUsedTicket("参加費半額券") {
+            return activity.fee / 2
+        }
+
+        if hasUsedTicket("参加費500円券") {
+            return activity.fee - 500
+        }
+
+        return 0
+    }
     func loadMyTickets() {
         guard !currentUserId.isEmpty else { return }
 
@@ -297,6 +397,9 @@ struct ActivityDetailView: View {
 
             challengeTickets = data?["challengeTickets"] as? Int ?? 0
             priorityTickets = data?["priorityTickets"] as? Int ?? 0
+            discountTickets = data?["discountTickets"] as? Int ?? 0
+            halfPriceTickets = data?["halfPriceTickets"] as? Int ?? 0
+            freeTickets = data?["freeTickets"] as? Int ?? 0
         }
     }
 

@@ -95,6 +95,11 @@ struct QRCheckInView: View {
 
             let capacity = data["capacity"] as? Int ?? 0
             let activityDate = (data["date"] as? Timestamp)?.dateValue() ?? Date()
+            let fee = data["fee"] as? Int ?? 0
+            let usedTickets = data["usedTickets"] as? [[String: Any]] ?? []
+
+            let discount = discountAmount(fee: fee, usedTickets: usedTickets)
+            let payment = max(fee - discount, 0)
 
             if checkedInMembers.contains(currentUserId) {
                 message = "この活動はすでに受付済みです"
@@ -111,7 +116,7 @@ struct QRCheckInView: View {
 
             let isEarlyAnswer =
                 previousStatus == AttendanceStatus.attending.rawValue &&
-                previousAnsweredAt.map { $0 <= earlyAnswerDeadline(for: activityDate) } ?? false
+                (previousAnsweredAt.map { $0 <= earlyAnswerDeadline(for: activityDate) } ?? false)
 
             let isEarlyArrival = now <= earlyArrivalDeadline(for: activityDate)
 
@@ -181,22 +186,76 @@ struct QRCheckInView: View {
                     PointService.shared.addPoint(
                         memberId: currentUserId,
                         point: 5,
-                        title: "18時30分まで受付",
+                        title: "設営参加（18:30まで受付）",
                         icon: "🛠"
                     )
                     totalPoint += 5
-                    pointMessages.append("🛠 早期来場 +5pt")
+                    pointMessages.append("🛠 設営参加 +5pt")
                 }
 
+                markTicketUsagesChecked(activityId: activityId)
+
+                let paymentMessage = """
+                
+                💰本日のお支払い
+                通常参加費 \(fee)円
+                チケット割引 -\(discount)円
+                👉 お支払い金額 \(payment)円
+                
+                PayPayまたは現金でお支払いください
+                """
+
                 if isParticipant {
-                    message = "受付完了！\n\n" + pointMessages.joined(separator: "\n") + "\n\n合計 +\(totalPoint)pt"
+                    message = "受付完了！\n\n" +
+                        paymentMessage +
+                        "\n\n" +
+                        pointMessages.joined(separator: "\n") +
+                        "\n\n合計 +\(totalPoint)pt"
                 } else {
-                    message = "キャンセル待ち登録完了！\n\n" + pointMessages.joined(separator: "\n") + "\n\n合計 +\(totalPoint)pt"
+                    message = "キャンセル待ち登録完了！\n\n" +
+                        paymentMessage +
+                        "\n\n" +
+                        pointMessages.joined(separator: "\n") +
+                        "\n\n合計 +\(totalPoint)pt"
                 }
 
                 isSuccess = true
             }
         }
+    }
+
+    func discountAmount(fee: Int, usedTickets: [[String: Any]]) -> Int {
+        let myTickets = usedTickets.filter {
+            ($0["memberId"] as? String) == currentUserId
+        }
+
+        if myTickets.contains(where: { ($0["ticketType"] as? String) == "参加費無料券" }) {
+            return fee
+        }
+
+        if myTickets.contains(where: { ($0["ticketType"] as? String) == "参加費半額券" }) {
+            return fee / 2
+        }
+
+        if myTickets.contains(where: { ($0["ticketType"] as? String) == "参加費500円券" }) {
+            return max(fee - 500, 0)
+        }
+
+        return 0
+    }
+
+    func markTicketUsagesChecked(activityId: String) {
+        db.collection("ticketUsages")
+            .whereField("activityId", isEqualTo: activityId)
+            .whereField("memberId", isEqualTo: currentUserId)
+            .whereField("status", isEqualTo: "未確認")
+            .getDocuments { snapshot, _ in
+                snapshot?.documents.forEach { document in
+                    document.reference.updateData([
+                        "status": "確認済み"
+                    ])
+                }
+            }
     }
 
     func earlyAnswerDeadline(for activityDate: Date) -> Date {
