@@ -17,6 +17,14 @@ struct HomeView: View {
 
     @State private var totalPoint = 0
     @State private var availablePoint = 0
+    @State private var totalTickets = 0
+    @State private var memberName = ""
+    
+    @State private var latestChampionName = ""
+    @State private var latestChampionPoint = 0
+    @State private var latestChampionMonth = ""
+    @State private var latestNotice = ""
+    @State private var latestNoticeDate = ""
 
     let mainColor = Color(red: 0.05, green: 0.11, blue: 0.26)
     let accentColor = Color(red: 0.15, green: 0.39, blue: 0.92)
@@ -31,13 +39,41 @@ struct HomeView: View {
     var remainingPoint: Int {
         max(nextReward.point - availablePoint, 0)
     }
+    var memberLevel: Int {
+        max(1, totalPoint / 50 + 1)
+    }
 
+    var rankName: String {
+        if totalPoint >= 700 { return "LEGEND" }
+        if totalPoint >= 400 { return "PLATINUM" }
+        if totalPoint >= 200 { return "GOLD" }
+        if totalPoint >= 100 { return "SILVER" }
+        return "BRONZE"
+    }
+
+    var rankIcon: String {
+        if totalPoint >= 700 { return "👑" }
+        if totalPoint >= 400 { return "💎" }
+        if totalPoint >= 200 { return "🥇" }
+        if totalPoint >= 100 { return "🥈" }
+        return "🥉"
+    }
+
+    var levelProgress: Double {
+        Double(totalPoint % 50) / 50.0
+    }
+
+    var pointToNextLevel: Int {
+        let remainder = totalPoint % 50
+        return remainder == 0 ? 50 : 50 - remainder
+    }
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
                     headerView
-
+                    profileCard
+                    
                     if let todayActivity {
                         todayCard(todayActivity)
                     }
@@ -48,6 +84,9 @@ struct HomeView: View {
 
                     pointCardLink
                     rankingCardLink
+                    latestChampionCard
+                    noticeCard
+                    gachaCardLink
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         SummaryCard(title: "メンバー", value: "\(totalMembers)人", icon: "person.3.fill", color: accentColor)
                         SummaryCard(title: "今月活動", value: "\(thisMonthActivities)回", icon: "calendar.badge.clock", color: accentColor)
@@ -64,6 +103,8 @@ struct HomeView: View {
             .onAppear {
                 loadDashboard()
                 loadPoint()
+                loadLatestChampion()
+                loadLatestNotice()
             }
         }
     }
@@ -132,6 +173,14 @@ struct HomeView: View {
                 Text("あと\(remainingPoint)ptで \(nextReward.icon)\(nextReward.title)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                HStack {
+                    Image(systemName: "ticket.fill")
+                        .foregroundStyle(.orange)
+
+                    Text("所持チケット \(totalTickets)枚")
+                        .font(.caption)
+                        .bold()
+                }
             }
             .padding()
             .background(Color(.systemBackground))
@@ -167,6 +216,120 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
     }
+    var latestChampionCard: some View {
+        NavigationLink {
+            HallOfFameView()
+        } label: {
+            HStack(spacing: 14) {
+                Text("👑")
+                    .font(.system(size: 38))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("前回の月間チャンピオン")
+                        .font(.caption)
+                        .bold()
+                        .foregroundStyle(.orange)
+
+                    if latestChampionName.isEmpty {
+                        Text("まだ記録がありません")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(latestChampionName)
+                            .font(.title2)
+                            .bold()
+                            .foregroundStyle(mainColor)
+
+                        Text("\(formatChampionMonth(latestChampionMonth))・\(latestChampionPoint)pt")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(Color.orange.opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22)
+                    .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    var gachaCardLink: some View {
+        NavigationLink {
+            GachaView()
+        } label: {
+            HStack(spacing: 14) {
+                Text("🎰")
+                    .font(.system(size: 38))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SiRiUS GACHA")
+                        .font(.headline)
+                        .bold()
+                        .foregroundStyle(.orange)
+
+                    Text("100ptでチケットを獲得")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(Color.orange.opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22)
+                    .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    var noticeCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("お知らせ", systemImage: "megaphone.fill")
+                    .font(.headline)
+                    .foregroundStyle(.red)
+
+                Spacer()
+
+                if !latestNoticeDate.isEmpty {
+                    Text(latestNoticeDate)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if latestNotice.isEmpty {
+                Text("現在お知らせはありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(latestNotice)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color.red.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(Color.red.opacity(0.15), lineWidth: 1)
+        }
+    }
     var headerView: some View {
         VStack(spacing: 8) {
             Text("SiRiUS")
@@ -185,7 +348,68 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18)
     }
+    var profileCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(memberName.isEmpty ? "メンバー" : memberName)
+                        .font(.title2)
+                        .bold()
+                        .foregroundStyle(mainColor)
 
+                    HStack(spacing: 6) {
+                        Text(rankIcon)
+
+                        Text(rankName)
+                            .font(.headline)
+                            .bold()
+                    }
+                    .foregroundStyle(accentColor)
+                }
+
+                Spacer()
+
+                Text("Lv.\(memberLevel)")
+                    .font(.title2)
+                    .bold()
+                    .foregroundStyle(.orange)
+            }
+
+            ProgressView(value: levelProgress)
+                .tint(accentColor)
+                .scaleEffect(y: 1.3)
+
+            HStack {
+                Text("次のレベルまで")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("あと\(pointToNextLevel)pt")
+                    .font(.caption)
+                    .bold()
+                    .foregroundStyle(accentColor)
+            }
+
+            Divider()
+
+            HStack {
+                Label("\(availablePoint)pt", systemImage: "star.fill")
+                    .foregroundStyle(.yellow)
+
+                Spacer()
+
+                Label("\(totalTickets)枚", systemImage: "ticket.fill")
+                    .foregroundStyle(.orange)
+            }
+            .font(.headline)
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+    }
     func nextActivityCard(_ activity: Activity) -> some View {
         brandedCard {
             VStack(alignment: .leading, spacing: 14) {
@@ -263,16 +487,78 @@ struct HomeView: View {
         }
         .padding(.top, 6)
     }
+    func loadLatestChampion() {
+        db.collection("hallOfFame")
+            .order(by: "createdAt", descending: true)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("❌ 前回チャンピオン取得失敗: \(error.localizedDescription)")
+                    return
+                }
 
+                guard let document = snapshot?.documents.first else {
+                    latestChampionName = ""
+                    latestChampionPoint = 0
+                    latestChampionMonth = ""
+                    return
+                }
+
+                let data = document.data()
+
+                latestChampionName = data["championName"] as? String ?? ""
+                latestChampionPoint = data["championPoint"] as? Int ?? 0
+                latestChampionMonth = data["month"] as? String ?? ""
+            }
+    }
+    func loadLatestNotice() {
+        db.collection("notices")
+            .order(by: "createdAt", descending: true)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+
+                if let error = error {
+                    print("❌ お知らせ取得失敗: \(error.localizedDescription)")
+                    return
+                }
+
+                guard let document = snapshot?.documents.first else {
+                    latestNotice = ""
+                    latestNoticeDate = ""
+                    return
+                }
+
+                let data = document.data()
+
+                latestNotice = data["text"] as? String ?? ""
+
+                if let timestamp = data["createdAt"] as? Timestamp {
+                    let formatter = DateFormatter()
+                    formatter.locale = Locale(identifier: "ja_JP")
+                    formatter.dateFormat = "M/d"
+
+                    latestNoticeDate = formatter.string(from: timestamp.dateValue())
+                }
+            }
+    }
     func loadPoint() {
         guard !currentUserId.isEmpty else { return }
 
         db.collection("members").document(currentUserId).getDocument { snapshot, _ in
             let data = snapshot?.data()
+            memberName = data?["name"] as? String ?? ""
             totalPoint = data?["totalPoint"] as? Int ?? 0
             availablePoint = data?["availablePoint"] as? Int ?? 0
+            totalTickets =
+                (data?["challengeTickets"] as? Int ?? 0) +
+                (data?["priorityTickets"] as? Int ?? 0) +
+                (data?["discountTickets"] as? Int ?? 0) +
+                (data?["halfPriceTickets"] as? Int ?? 0) +
+                (data?["freeTickets"] as? Int ?? 0) +
+                (data?["stringingFreeTickets"] as? Int ?? 0)
         }
     }
+    
 
     func loadDashboard() {
         db.collection("members").getDocuments { snapshot, _ in
@@ -347,7 +633,20 @@ struct HomeView: View {
                     .first
             }
     }
+    func formatChampionMonth(_ month: String) -> String {
+        let inputFormatter = DateFormatter()
+        inputFormatter.dateFormat = "yyyy-MM"
 
+        let outputFormatter = DateFormatter()
+        outputFormatter.locale = Locale(identifier: "ja_JP")
+        outputFormatter.dateFormat = "yyyy年M月"
+
+        guard let date = inputFormatter.date(from: month) else {
+            return month
+        }
+
+        return outputFormatter.string(from: date)
+    }
     func daysUntilText(_ date: Date) -> String {
         let today = Calendar.current.startOfDay(for: Date())
         let target = Calendar.current.startOfDay(for: date)

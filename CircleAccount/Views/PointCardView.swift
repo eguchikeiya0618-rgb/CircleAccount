@@ -48,6 +48,7 @@ struct PointCardView: View {
     @State private var showAlreadyAwardedAlert = false
     @State private var showMonthlyAwardAlert = false
     @State private var showMonthlyAwardDoneAlert = false
+    @State private var showHallOfFame = false
 
     var rankBadge: String {
         if totalPoint >= 700 { return "LEGEND" }
@@ -104,7 +105,17 @@ struct PointCardView: View {
                     monthlyAwardButton
                 }
                 
-
+                Button {
+                    showHallOfFame = true
+                } label: {
+                    Label("歴代チャンピオンを見る", systemImage: "crown.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                }
+                .buttonStyle(.plain)
                 NavigationLink {
                     PointHistoryView()
                 } label: {
@@ -178,7 +189,13 @@ struct PointCardView: View {
         } message: {
             Text("月間表彰は月に1回だけ実行できます。")
         }
+        .sheet(isPresented: $showHallOfFame) {
+            NavigationStack {
+                HallOfFameView()
+            }
+        }
     }
+    
 
     var flippingCard: some View {
         ZStack {
@@ -724,6 +741,35 @@ struct PointCardView: View {
     func grantMonthlyAwards() {
         guard rankingMembers.count >= 3 else { return }
 
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        let currentMonth = formatter.string(from: Date())
+
+        db.collection("hallOfFame")
+            .document(currentMonth)
+            .setData([
+                "month": currentMonth,
+
+                "championId": rankingMembers[0].id,
+                "championName": rankingMembers[0].name,
+                "championPoint": rankingMembers[0].monthlyPoint,
+
+                "secondId": rankingMembers[1].id,
+                "secondName": rankingMembers[1].name,
+                "secondPoint": rankingMembers[1].monthlyPoint,
+
+                "thirdId": rankingMembers[2].id,
+                "thirdName": rankingMembers[2].name,
+                "thirdPoint": rankingMembers[2].monthlyPoint,
+
+                "createdAt": Timestamp()
+            ]) { error in
+                if let error = error {
+                    print("❌ hallOfFame保存失敗: \(error.localizedDescription)")
+                } else {
+                    print("✅ hallOfFame保存成功: \(currentMonth)")
+                }
+            }
         PointService.shared.addMonthlyAward(
             memberId: rankingMembers[0].id,
             field: "monthlyChampionCount"
@@ -741,10 +787,6 @@ struct PointCardView: View {
 
         PointService.shared.resetAllMonthlyPoints()
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let currentMonth = formatter.string(from: Date())
-
         db.collection("settings")
             .document("monthlyAward")
             .setData([
@@ -757,7 +799,6 @@ struct PointCardView: View {
             showMonthlyAwardDoneAlert = true
         }
     }
-
     func checkMonthlyAward() {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM"

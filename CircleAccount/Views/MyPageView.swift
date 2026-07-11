@@ -18,18 +18,20 @@ struct MyPageView: View {
     @State private var currentRank = 0
 
     @State private var referralCount = 0
-    
+    @State private var gachaCount = 0
     @State private var totalPoint = 0
     @State private var availablePoint = 0
     @State private var monthlyPoint = 0
 
     @State private var attendanceCount = 0
     @State private var setupCount = 0
+    @State private var streakCount = 0
     @State private var mvpCount = 0
     @State private var monthlyChampionCount = 0
     @State private var monthlySecondCount = 0
     @State private var monthlyThirdCount = 0
-
+    @State private var legendCount = 0
+    
     @State private var cleanupTickets = 0
     @State private var discountTickets = 0
     @State private var halfPriceTickets = 0
@@ -40,6 +42,14 @@ struct MyPageView: View {
 
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var profileImage: UIImage?
+    
+    @State private var selectedAchievement: Achievement?
+    @State private var unlockedAchievement: Achievement?
+    
+    @State private var showLevelUp = false
+    @State private var previousLevel = 1
+    
+    @State private var recentActivities: [String] = []
 
     var rankBadge: String {
         if totalPoint >= 700 { return "LEGEND" }
@@ -87,8 +97,20 @@ struct MyPageView: View {
                     profileCard
                     pointCard
                     achievementGrid
-                    ticketCard
-
+                
+                    
+                    TicketCardView(
+                        stringingFreeTickets: stringingFreeTickets,
+                        challengeTickets: challengeTickets,
+                        priorityTickets: priorityTickets,
+                        cleanupTickets: cleanupTickets,
+                        discountTickets: discountTickets,
+                        halfPriceTickets: halfPriceTickets,
+                        freeTickets: freeTickets
+                    )
+                    ActivityHistoryCardView(
+                        recentActivities: recentActivities
+                    )
                     if currentUserIsAdmin {
                         adminSection
                     }
@@ -100,6 +122,51 @@ struct MyPageView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("マイページ")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $selectedAchievement) { achievement in
+
+                VStack(spacing: 24) {
+
+                    Text(achievement.icon)
+                        .font(.system(size: 70))
+
+                    Text(achievement.title)
+                        .font(.largeTitle)
+                        .bold()
+
+                    Text(achievement.description)
+                        .multilineTextAlignment(.center)
+
+                    VStack(spacing: 12) {
+
+                        Label(
+                            "報酬：\(achievement.reward)",
+                            systemImage: "gift.fill"
+                        )
+
+                        Label(
+                            achievement.isAchieved ? "達成済み" : "未達成",
+                            systemImage: achievement.isAchieved
+                            ? "checkmark.circle.fill"
+                            : "lock.fill"
+                        )
+                    }
+                    .font(.headline)
+
+                    Spacer()
+                }
+                .padding()
+            }
+            .fullScreenCover(item: $unlockedAchievement) { achievement in
+                AchievementUnlockView(
+                    achievement: achievement
+                )
+            }
+            .fullScreenCover(isPresented: $showLevelUp) {
+                LevelUpView(
+                    oldLevel: previousLevel,
+                    newLevel: memberLevel
+                )
+            }
             .onAppear {
                 loadMember()
                 loadMyRank()
@@ -233,53 +300,53 @@ struct MyPageView: View {
 
     var achievementGrid: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("🏆 実績")
-                    .font(.title2)
-                    .bold()
+            NavigationLink {
+                AchievementsView(achievements: achievements)
+            } label: {
+                HStack {
+                    Text("🏆 実績")
+                        .font(.title2)
+                        .bold()
+                        .foregroundStyle(.primary)
 
-                Spacer()
+                    Spacer()
 
-                Text("\(achievedCount)/\(achievements.count) 達成")
-                    .font(.caption)
-                    .bold()
-                    .foregroundStyle(.secondary)
+                    Text("\(achievedCount)/\(achievements.count) 達成")
+                        .font(.caption)
+                        .bold()
+                        .foregroundStyle(.secondary)
+
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
             }
+            .buttonStyle(.plain)
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 14) {
-                ForEach(achievements) { achievement in
+                ForEach(achievements.prefix(6)) { achievement in
                     achievementBadge(achievement)
                 }
             }
+
+            NavigationLink {
+                AchievementsView(achievements: achievements)
+            } label: {
+                Text("すべての実績を見る")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
         }
         .mypageCard()
     }
-    var ticketCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("保有チケット")
-                .font(.title2)
-                .bold()
-
-            ticketRow(icon: "🎾", title: "ガット張り工賃無料券", count: stringingFreeTickets)
-            Divider()
-            ticketRow(icon: "⭐", title: "対戦指名券", count: challengeTickets)
-            Divider()
-            ticketRow(icon: "🚀", title: "優先ゲーム券", count: priorityTickets)
-            Divider()
-            ticketRow(icon: "🧹", title: "片付けパス", count: cleanupTickets)
-            Divider()
-            ticketRow(icon: "💰", title: "参加費500円券", count: discountTickets)
-            Divider()
-            ticketRow(icon: "🏸", title: "参加費半額券", count: halfPriceTickets)
-            Divider()
-            ticketRow(icon: "🎁", title: "参加費無料券", count: freeTickets)
-        }
-        .mypageCard()
-    }
-
+    
+    
     var adminSection: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("管理メニュー")
@@ -297,7 +364,13 @@ struct MyPageView: View {
             NavigationLink { AccountingView() } label: {
                 menuRow(icon: "creditcard.fill", title: "会計管理", color: .green)
             }
-
+            NavigationLink { NoticeView() } label: {
+                menuRow(
+                    icon: "megaphone.fill",
+                    title: "お知らせ管理",
+                    color: .red
+                )
+            }
             NavigationLink { CalendarView() } label: {
                 menuRow(icon: "calendar.circle.fill", title: "カレンダー", color: .purple)
             }
@@ -342,145 +415,244 @@ struct MyPageView: View {
                 icon: "🥉",
                 title: "BRONZE",
                 subtitle: "登録完了",
+                description: "SiRiUSメンバーとして登録",
+                reward: "なし",
                 isAchieved: true,
                 color: .brown
             ),
+
             Achievement(
                 icon: "🥈",
                 title: "SILVER",
                 subtitle: totalPoint >= 100 ? "達成" : "\(totalPoint)/100pt",
+                description: "累計100ptを獲得する",
+                reward: "⭐ 対戦指名券 ×1",
                 isAchieved: totalPoint >= 100,
                 color: .gray
             ),
+
             Achievement(
                 icon: "🥇",
                 title: "GOLD",
                 subtitle: totalPoint >= 200 ? "達成" : "\(totalPoint)/200pt",
+                description: "累計200ptを獲得する",
+                reward: "⭐ 対戦指名券 ×2",
                 isAchieved: totalPoint >= 200,
                 color: .orange
             ),
+
             Achievement(
                 icon: "💎",
                 title: "PLATINUM",
                 subtitle: totalPoint >= 400 ? "達成" : "\(totalPoint)/400pt",
+                description: "累計400ptを獲得する",
+                reward: "⭐対戦指名券×1・🚀優先ゲーム券×1",
                 isAchieved: totalPoint >= 400,
                 color: .purple
             ),
+
             Achievement(
                 icon: "👑",
                 title: "LEGEND",
                 subtitle: totalPoint >= 700 ? "達成" : "\(totalPoint)/700pt",
+                description: "累計700ptを獲得する",
+                reward: "⭐対戦指名券×2・🚀優先ゲーム券×2",
                 isAchieved: totalPoint >= 700,
                 color: .yellow
             ),
+
             Achievement(
                 icon: "🎉",
                 title: "初参加",
-                subtitle: attendanceCount >= 1 ? "達成" : "\(attendanceCount)/1回",
+                subtitle: "\(attendanceCount)/1回",
+                description: "初めて活動に参加する",
+                reward: "+5pt",
                 isAchieved: attendanceCount >= 1,
                 color: .blue
             ),
+
             Achievement(
                 icon: "🔥",
                 title: "常連",
                 subtitle: "\(attendanceCount)/10回",
+                description: "10回参加する",
+                reward: "+10pt",
                 isAchieved: attendanceCount >= 10,
                 color: .orange
             ),
+
             Achievement(
                 icon: "💪",
                 title: "ベテラン",
                 subtitle: "\(attendanceCount)/50回",
+                description: "50回参加する",
+                reward: "限定バッジ",
                 isAchieved: attendanceCount >= 50,
                 color: .green
             ),
+
             Achievement(
                 icon: "⚡",
                 title: "100回参加",
                 subtitle: "\(attendanceCount)/100回",
+                description: "100回参加する",
+                reward: "LEGEND称号",
                 isAchieved: attendanceCount >= 100,
                 color: .red
             ),
+
             Achievement(
                 icon: "🧹",
-                title: "設営参加",
+                title: "設営デビュー",
                 subtitle: "\(setupCount)/1回",
+                description: "設営を1回行う",
+                reward: "+3pt",
                 isAchieved: setupCount >= 1,
                 color: .mint
             ),
+
             Achievement(
                 icon: "🛠",
-                title: "設営10回",
+                title: "設営マスター",
                 subtitle: "\(setupCount)/10回",
+                description: "設営を10回行う",
+                reward: "+10pt",
                 isAchieved: setupCount >= 10,
                 color: .orange
             ),
+
             Achievement(
                 icon: "🏗",
-                title: "設営30回",
+                title: "設営職人",
                 subtitle: "\(setupCount)/30回",
+                description: "設営を30回行う",
+                reward: "限定称号",
                 isAchieved: setupCount >= 30,
                 color: .brown
             ),
+
             Achievement(
                 icon: "🥇",
-                title: "月間1位",
+                title: "月間チャンピオン",
                 subtitle: "\(monthlyChampionCount)回",
+                description: "月間ランキング1位になる",
+                reward: "🎾 ガット張り工賃無料券",
                 isAchieved: monthlyChampionCount >= 1,
                 color: .yellow
             ),
+
             Achievement(
                 icon: "👑",
                 title: "三連覇",
                 subtitle: "\(monthlyChampionCount)/3回",
+                description: "月間1位を3回獲得する",
+                reward: "限定称号",
                 isAchieved: monthlyChampionCount >= 3,
                 color: .yellow
             ),
+
             Achievement(
                 icon: "⭐",
                 title: "MVP",
                 subtitle: "\(mvpCount)回",
+                description: "MVPを獲得する",
+                reward: "+20pt",
                 isAchieved: mvpCount >= 1,
                 color: .yellow
             ),
+
             Achievement(
                 icon: "🌟",
-                title: "MVP5回",
+                title: "MVP×5",
                 subtitle: "\(mvpCount)/5回",
+                description: "MVPを5回獲得する",
+                reward: "限定エフェクト",
                 isAchieved: mvpCount >= 5,
                 color: .purple
             ),
+
             Achievement(
                 icon: "👥",
                 title: "初紹介",
                 subtitle: "\(referralCount)/1人",
+                description: "新しいメンバーを紹介する",
+                reward: "+20pt",
                 isAchieved: referralCount >= 1,
                 color: .blue
             ),
+
             Achievement(
                 icon: "🚀",
-                title: "紹介10人",
+                title: "紹介マスター",
                 subtitle: "\(referralCount)/10人",
+                description: "10人紹介する",
+                reward: "限定称号",
                 isAchieved: referralCount >= 10,
                 color: .cyan
             ),
+
             Achievement(
                 icon: "🎾",
                 title: "ガット券GET",
                 subtitle: "\(stringingFreeTickets)枚",
+                description: "ガット張り工賃無料券を獲得",
+                reward: "実績解除",
                 isAchieved: stringingFreeTickets >= 1,
                 color: .green
             ),
+
             Achievement(
                 icon: "🎁",
                 title: "無料券GET",
                 subtitle: "\(freeTickets)枚",
+                description: "参加費無料券を獲得",
+                reward: "実績解除",
                 isAchieved: freeTickets >= 1,
                 color: .pink
             )
+            ,
+
+            Achievement(
+                icon: "🎰",
+                title: "初ガチャ",
+                subtitle: "\(gachaCount)/1回",
+                description: "初めてガチャを回す",
+                reward: "実績解除",
+                isAchieved: gachaCount >= 1,
+                color: .purple
+            )
+            ,
+
+            Achievement(
+                icon: "🎲",
+                title: "ガチャ10回",
+                subtitle: "\(gachaCount)/10回",
+                description: "ガチャを10回回す",
+                reward: "参加費500円券 ×1",
+                isAchieved: gachaCount >= 10,
+                color: .orange
+            ),
+            Achievement(
+                icon: "🎰",
+                title: "ガチャ50回",
+                subtitle: "\(gachaCount)/50回",
+                description: "ガチャを50回回す",
+                reward: "参加費無料券 ×1",
+                isAchieved: gachaCount >= 50,
+                color: .pink
+            ),
+
+            Achievement(
+                icon: "👑",
+                title: "ガチャマスター",
+                subtitle: "\(gachaCount)/100回",
+                description: "ガチャを100回回す",
+                reward: "限定称号",
+                isAchieved: gachaCount >= 100,
+                color: .yellow
+            )
         ]
     }
-
     var achievedCount: Int {
         achievements.filter { $0.isAchieved }.count
     }
@@ -503,9 +675,9 @@ struct MyPageView: View {
     }
 
     func achievementBadge(_ achievement: Achievement) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Text(achievement.isAchieved ? achievement.icon : "🔒")
-                .font(.system(size: 30))
+                .font(.system(size: 34))
 
             Text(achievement.title)
                 .font(.headline)
@@ -518,8 +690,26 @@ struct MyPageView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
+
+            Divider()
+
+            Text(achievement.description)
+                .font(.caption2)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+
+            Text("🎁 \(achievement.reward)")
+                .font(.caption)
+                .bold()
+                .foregroundStyle(.orange)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, 10)
         .padding(.vertical, 16)
         .background(
             achievement.isAchieved
@@ -529,14 +719,18 @@ struct MyPageView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 18)
                 .stroke(
-                    achievement.isAchieved ? achievement.color.opacity(0.35) : .clear,
+                    achievement.isAchieved
+                    ? achievement.color.opacity(0.35)
+                    : .clear,
                     lineWidth: 1
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .opacity(achievement.isAchieved ? 1 : 0.55)
+        .onTapGesture {
+            selectedAchievement = achievement
+        }
     }
-
     func ticketRow(icon: String, title: String, count: Int) -> some View {
         HStack {
             Text(icon)
@@ -645,6 +839,101 @@ struct MyPageView: View {
                 }
             }
     }
+    func checkForNewAchievementUnlock() {
+        guard !currentUserId.isEmpty else { return }
+
+        let achievedAchievements = achievements.filter {
+            $0.isAchieved
+        }
+
+        let achievedTitles = achievedAchievements.map {
+            $0.title
+        }
+
+        let seenKey = "seenAchievementTitles_\(currentUserId)"
+        let initializedKey = "achievementUnlockInitialized_\(currentUserId)"
+
+        if !UserDefaults.standard.bool(forKey: initializedKey) {
+
+            UserDefaults.standard.set(
+                achievedTitles,
+                forKey: seenKey
+            )
+
+            UserDefaults.standard.set(
+                true,
+                forKey: initializedKey
+            )
+
+            return
+        }
+
+        let seenTitles =
+            UserDefaults.standard.stringArray(forKey: seenKey) ?? []
+
+        guard let newAchievement = achievedAchievements.first(where: {
+            !seenTitles.contains($0.title)
+        }) else {
+            return
+        }
+
+        var updatedTitles = seenTitles
+        updatedTitles.append(newAchievement.title)
+
+        UserDefaults.standard.set(
+            updatedTitles,
+            forKey: seenKey
+        )
+
+        unlockedAchievement = newAchievement
+        if newAchievement.title == "ガチャ10回" {
+
+            PointService.shared.grantAchievementRewardOnce(
+                memberId: currentUserId,
+                achievementId: "gacha10",
+                ticketField: "discountTickets"
+            ) { _ in }
+
+        }
+
+        if newAchievement.title == "ガチャ50回" {
+
+            PointService.shared.grantAchievementRewardOnce(
+                memberId: currentUserId,
+                achievementId: "gacha50",
+                ticketField: "freeTickets"
+            ) { _ in }
+
+        }
+    }
+    func checkForLevelUp() {
+        guard !currentUserId.isEmpty else { return }
+
+        let currentLevel = memberLevel
+        let levelKey = "lastMemberLevel_\(currentUserId)"
+
+        let savedLevel = UserDefaults.standard.integer(forKey: levelKey)
+
+        // 初回は現在レベルを保存するだけ
+        if savedLevel == 0 {
+            UserDefaults.standard.set(currentLevel, forKey: levelKey)
+            return
+        }
+
+        // 前回よりレベルが上がっていたら演出を表示
+        if currentLevel > savedLevel {
+            previousLevel = savedLevel
+
+            UserDefaults.standard.set(
+                currentLevel,
+                forKey: levelKey
+            )
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                showLevelUp = true
+            }
+        }
+    }
     func loadMember() {
         guard !currentUserId.isEmpty else { return }
 
@@ -666,12 +955,15 @@ struct MyPageView: View {
 
                 attendanceCount = data["attendanceCount"] as? Int ?? 0
                 setupCount = data["setupCount"] as? Int ?? 0
+                streakCount = data["streakCount"] as? Int ?? 0
                 mvpCount = data["mvpCount"] as? Int ?? 0
                 referralCount = data["referralCount"] as? Int ?? 0
+                gachaCount = data["gachaCount"] as? Int ?? 0
                 monthlyChampionCount = data["monthlyChampionCount"] as? Int ?? 0
                 monthlySecondCount = data["monthlySecondCount"] as? Int ?? 0
                 monthlyThirdCount = data["monthlyThirdCount"] as? Int ?? 0
-
+                legendCount = data["legendCount"] as? Int ?? 0
+                
                 cleanupTickets = data["cleanupTickets"] as? Int ?? 0
                 discountTickets = data["discountTickets"] as? Int ?? 0
                 halfPriceTickets = data["halfPriceTickets"] as? Int ?? 0
@@ -683,6 +975,116 @@ struct MyPageView: View {
                 if let profileImageBase64 = data["profileImageBase64"] as? String {
                     loadProfileImage(from: profileImageBase64)
                 }
+                loadRecentActivities()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    checkForNewAchievementUnlock()
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    checkForLevelUp()
+                }
+                checkDailyLoginReward()
+            }
+    }
+    func checkDailyLoginReward() {
+        guard !currentUserId.isEmpty else { return }
+
+        let today = Calendar.current.startOfDay(for: Date())
+        let memberRef = db.collection("members").document(currentUserId)
+
+        memberRef.getDocument { snapshot, error in
+            guard let data = snapshot?.data(), error == nil else {
+                return
+            }
+
+            if let lastLoginTimestamp = data["lastDailyLoginAt"] as? Timestamp {
+                let lastLoginDate = Calendar.current.startOfDay(
+                    for: lastLoginTimestamp.dateValue()
+                )
+
+                if lastLoginDate == today {
+                    return
+                }
+            }
+
+            PointService.shared.addPoint(
+                memberId: currentUserId,
+                point: 1,
+                title: "デイリーログイン",
+                icon: "📅"
+            )
+
+            memberRef.updateData([
+                "lastDailyLoginAt": Timestamp(date: Date())
+            ])
+        }
+    }
+    func loadRecentActivities() {
+        guard !currentUserId.isEmpty else { return }
+
+        db.collection("activities")
+            .order(by: "date", descending: true)
+            .limit(to: 20)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("❌ 活動履歴取得失敗: \(error.localizedDescription)")
+                    return
+                }
+
+                guard let documents = snapshot?.documents else {
+                    recentActivities = []
+                    return
+                }
+
+                var results: [String] = []
+
+                for document in documents {
+                    let data = document.data()
+
+                    let title = data["title"] as? String ?? "活動"
+                    let place = data["place"] as? String ?? ""
+                    let date = (data["date"] as? Timestamp)?.dateValue() ?? Date()
+
+                    let attendanceArray = data["attendance"] as? [[String: String]] ?? []
+
+                    guard let myAttendance = attendanceArray.first(where: {
+                        $0["memberId"] == currentUserId
+                    }) else {
+                        continue
+                    }
+
+                    let status = myAttendance["status"] ?? ""
+
+                    let formatter = DateFormatter()
+                    formatter.locale = Locale(identifier: "ja_JP")
+                    formatter.dateFormat = "M/d"
+
+                    let dateText = formatter.string(from: date)
+
+                    let statusText: String
+
+                    switch status {
+                    case "参加":
+                        statusText = "✅ 参加"
+                    case "不参加":
+                        statusText = "❌ 不参加"
+                    case "未定":
+                        statusText = "⏳ 未定"
+                    default:
+                        statusText = "・\(status)"
+                    }
+
+                    let placeText = place.isEmpty ? "" : "・\(place)"
+
+                    results.append(
+                        "\(dateText) \(title)\(placeText) \(statusText)"
+                    )
+
+                    if results.count >= 5 {
+                        break
+                    }
+                }
+
+                recentActivities = results
             }
     }
 }
@@ -698,9 +1100,19 @@ extension View {
 }
 struct Achievement: Identifiable {
     let id = UUID()
+
     let icon: String
     let title: String
+
+    // 進捗表示
     let subtitle: String
+
+    // 条件説明
+    let description: String
+
+    // 報酬
+    let reward: String
+
     let isAchieved: Bool
     let color: Color
 }

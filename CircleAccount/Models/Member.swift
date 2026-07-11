@@ -32,7 +32,7 @@ struct Member: Identifiable, Codable {
     // 実績
     var attendanceCount: Int = 0
     var setupCount: Int = 0
-    
+    var streakCount: Int = 0
     
     
     // 月間実績

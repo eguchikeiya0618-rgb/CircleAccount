@@ -4,9 +4,11 @@ import FirebaseFirestore
 struct ActivityDetailView: View {
     @Binding var activity: Activity
     private let db = Firestore.firestore()
+    @AppStorage("currentUserId") private var currentUserId = ""
+
 
     @AppStorage("currentUserIsAdmin") private var currentUserIsAdmin = false
-    @AppStorage("currentUserId") private var currentUserId = ""
+    
 
     @State private var memberNames: [String: String] = [:]
     @State private var memberGenders: [String: Gender] = [:]
@@ -46,7 +48,18 @@ struct ActivityDetailView: View {
             $0.ticketType == ticketType
         }
     }
+    func hasUsedPaymentTicket() -> Bool {
+        let paymentTicketTypes = [
+            "参加費無料券",
+            "参加費500円券",
+            "参加費半額券"
+        ]
 
+        return activity.usedTickets.contains {
+            $0.memberId == currentUserId &&
+            paymentTicketTypes.contains($0.ticketType)
+        }
+    }
     var body: some View {
         let discount = discountAmount()
         let payment = max(activity.fee - discount, 0)
@@ -60,6 +73,7 @@ struct ActivityDetailView: View {
                 Label("\(formatTime(activity.startTime))〜\(formatTime(activity.endTime))", systemImage: "clock")
                 Label(activity.place, systemImage: "mappin.and.ellipse")
                 Label("参加費 \(activity.fee)円", systemImage: "creditcard")
+              
                 VStack(alignment: .leading, spacing: 6) {
 
                     Text("💰本日のお支払い")
@@ -108,7 +122,7 @@ struct ActivityDetailView: View {
                         .disabled(true)
                 }
                 if freeTickets > 0 &&
-                    !hasUsedTicket("参加費無料券") {
+                    !hasUsedPaymentTicket() {
 
                     Button("🎁 参加費無料券を使用") {
                         selectedTicketTitle = "参加費無料券"
@@ -125,7 +139,7 @@ struct ActivityDetailView: View {
                         .disabled(true)
                 }
                 if discountTickets > 0 &&
-                    !hasUsedTicket("参加費500円券") {
+                    !hasUsedPaymentTicket() {
 
                     Button("💰 参加費500円券を使用") {
                         selectedTicketTitle = "参加費500円券"
@@ -142,7 +156,7 @@ struct ActivityDetailView: View {
                         .disabled(true)
                 }
                 if halfPriceTickets > 0 &&
-                    !hasUsedTicket("参加費半額券") {
+                    !hasUsedPaymentTicket() {
 
                     Button("🏸 参加費半額券を使用") {
                         selectedTicketTitle = "参加費半額券"
@@ -384,7 +398,7 @@ struct ActivityDetailView: View {
         }
 
         if hasUsedTicket("参加費500円券") {
-            return activity.fee - 500
+            return max(activity.fee - 500, 0)
         }
 
         return 0
@@ -443,7 +457,11 @@ struct ActivityDetailView: View {
                 addAttendanceCount: true
             )
         }
-
+        for memberId in absentIds {
+            PointService.shared.resetAttendanceStreak(
+                memberId: memberId
+            )
+        }
         db.collection("activities")
             .document(activity.id)
             .updateData([
@@ -491,7 +509,27 @@ struct ActivityDetailView: View {
     }
 
     func cancelUsedTicket(_ ticket: UsedTicket) {
-        let ticketField = ticket.ticketType == "対戦指名券" ? "challengeTickets" : "priorityTickets"
+        let ticketField: String
+
+        switch ticket.ticketType {
+        case "対戦指名券":
+            ticketField = "challengeTickets"
+
+        case "優先ゲーム券":
+            ticketField = "priorityTickets"
+
+        case "参加費無料券":
+            ticketField = "freeTickets"
+
+        case "参加費500円券":
+            ticketField = "discountTickets"
+
+        case "参加費半額券":
+            ticketField = "halfPriceTickets"
+
+        default:
+            return
+        }
 
         db.collection("activities").document(activity.id).getDocument { snapshot, error in
             if let error = error {
