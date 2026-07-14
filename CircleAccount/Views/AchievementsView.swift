@@ -9,7 +9,43 @@ struct AchievementsView: View {
         ScrollView {
 
             LazyVStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("🏅 実績達成率")
+                            .font(.headline)
+                            .bold()
 
+                        Spacer()
+
+                        Text("\(achievements.filter { $0.isAchieved }.count)/\(achievements.count)")
+                            .font(.headline)
+                            .bold()
+                            .foregroundStyle(.blue)
+                    }
+
+                    ProgressView(
+                        value: Double(achievements.filter { $0.isAchieved }.count),
+                        total: Double(max(achievements.count, 1))
+                    )
+                    .tint(.blue)
+                    .scaleEffect(y: 1.4)
+
+                    let percentage = achievements.isEmpty
+                        ? 0
+                        : Int(
+                            Double(achievements.filter { $0.isAchieved }.count)
+                            / Double(achievements.count)
+                            * 100
+                        )
+
+                    Text("\(percentage)%達成")
+                        .font(.caption)
+                        .bold()
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 ForEach(achievements) { achievement in
 
                     HStack(spacing: 16) {

@@ -24,6 +24,9 @@ struct ActivityDetailView: View {
     @State private var selectedTicketField = ""
     @State private var selectedTicketIcon = ""
     @State private var ticketToCancel: UsedTicket?
+    @State private var selectedSetupMemberIds: Set<String> = []
+    @State private var setupPointGrantedMemberIds: Set<String> = []
+    @State private var showSetupPointDoneAlert = false
 
     var attendingIds: [String] {
         activity.attendance.filter { $0.status == .attending }.map { $0.memberId }
@@ -243,7 +246,42 @@ struct ActivityDetailView: View {
                             memberNameRow(memberId)
 
                             Spacer()
+                            if currentUserIsAdmin {
+                                Button {
+                                    if selectedSetupMemberIds.contains(memberId) {
+                                        selectedSetupMemberIds.remove(memberId)
+                                    } else {
+                                        selectedSetupMemberIds.insert(memberId)
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(
+                                            systemName:
+                                                setupPointGrantedMemberIds.contains(memberId)
+                                                ? "checkmark.circle.fill"
+                                                : (
+                                                    selectedSetupMemberIds.contains(memberId)
+                                                    ? "checkmark.square.fill"
+                                                    : "square"
+                                                )
+                                        )
 
+                                        Text(
+                                            setupPointGrantedMemberIds.contains(memberId)
+                                            ? "給付済み"
+                                            : "設営"
+                                        )
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .foregroundStyle(
+                                        setupPointGrantedMemberIds.contains(memberId)
+                                            ? .green
+                                            : .blue
+                                    )
+                                }
+                                .disabled(setupPointGrantedMemberIds.contains(memberId))
+                            }
                             Text(activity.paidMembers.contains(memberId) ? "支払い済み" : "未払い")
                                 .font(.caption)
                                 .foregroundStyle(activity.paidMembers.contains(memberId) ? .green : .red)
@@ -270,7 +308,23 @@ struct ActivityDetailView: View {
                         .padding(.vertical, 8)
                     }
                 }
-
+                if currentUserIsAdmin {
+                    Button {
+                        grantSetupPoints()
+                    } label: {
+                        Label(
+                            selectedSetupMemberIds.isEmpty
+                                ? "設営した人を選択してください"
+                                : "選択した\(selectedSetupMemberIds.count)人に設営ポイント付与",
+                            systemImage: "hammer.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .disabled(selectedSetupMemberIds.isEmpty)
+                }
                 Divider()
 
                 Text("キャンセル待ち")
@@ -293,6 +347,7 @@ struct ActivityDetailView: View {
         .onAppear {
             fetchMemberNames()
             loadMyTickets()
+            setupPointGrantedMemberIds = Set(activity.setupPointGrantedMembers)
         }
         .sheet(isPresented: $isShowingQRCode) {
             QRCodeView(activity: activity)
@@ -613,5 +668,36 @@ struct ActivityDetailView: View {
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "yyyy/MM/dd HH:mm"
         return formatter.string(from: date)
+    }
+    func grantSetupPoints() {
+        guard !selectedSetupMemberIds.isEmpty else { return }
+
+        let memberIds = Array(selectedSetupMemberIds)
+
+        for memberId in memberIds {
+            PointService.shared.addPoint(
+                memberId: memberId,
+                point: 3,
+                title: "設営参加",
+                icon: "🛠"
+            )
+            db.collection("members")
+                .document(memberId)
+                .updateData([
+                    "setupCount": FieldValue.increment(Int64(1))
+                ])
+        }
+
+        setupPointGrantedMemberIds.formUnion(memberIds)
+        activity.setupPointGrantedMembers = Array(setupPointGrantedMemberIds)
+
+        db.collection("activities")
+            .document(activity.id)
+            .updateData([
+                "setupPointGrantedMembers": Array(setupPointGrantedMemberIds)
+            ])
+
+        selectedSetupMemberIds.removeAll()
+        showSetupPointDoneAlert = true
     }
 }

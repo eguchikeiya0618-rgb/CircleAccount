@@ -348,7 +348,9 @@ struct ActivitiesView: View {
             "participants": [],
             "waitingList": [],
             "attendance": [],
+            "pointGrantedMembers": [],
             "paidMembers": [],
+            "setupPointGrantedMembers": [],
             "pointGranted": false,
             "pointGrantedAt": NSNull(),
             "createdAt": Timestamp()
@@ -376,18 +378,22 @@ struct ActivitiesView: View {
                 activities = snapshot?.documents.compactMap { document in
                     let data = document.data()
 
-                    let attendanceArray = data["attendance"] as? [[String: String]] ?? []
+                    let attendanceArray =
+                        data["attendance"] as? [[String: Any]] ?? []
                     let attendance = attendanceArray.compactMap { item -> Attendance? in
                         guard
-                            let memberId = item["memberId"],
-                            let statusRawValue = item["status"],
+                            let memberId = item["memberId"] as? String,
+                            let statusRawValue = item["status"] as? String,
                             let status = AttendanceStatus(rawValue: statusRawValue)
                         else {
                             return nil
                         }
 
-                        let answeredAt = (item["answeredAt"] as? Timestamp)?.dateValue() ?? Date()
-                        let earlyAnswerPointGranted = item["earlyAnswerPointGranted"] as? Bool ?? false
+                        let answeredAt =
+                            (item["answeredAt"] as? Timestamp)?.dateValue() ?? Date()
+
+                        let earlyAnswerPointGranted =
+                            item["earlyAnswerPointGranted"] as? Bool ?? false
 
                         return Attendance(
                             memberId: memberId,
@@ -429,6 +435,8 @@ struct ActivitiesView: View {
                         waitingList: data["waitingList"] as? [String] ?? [],
                         attendance: attendance,
                         paidMembers: data["paidMembers"] as? [String] ?? [],
+                        setupPointGrantedMembers:
+                            data["setupPointGrantedMembers"] as? [String] ?? [],
                         pointGranted: data["pointGranted"] as? Bool ?? false,
                         pointGrantedAt: (data["pointGrantedAt"] as? Timestamp)?.dateValue(),usedTickets: usedTickets,
                     )

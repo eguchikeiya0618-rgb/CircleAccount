@@ -22,78 +22,108 @@ final class PointService {
         addSetupCount: Bool = false
     ) {
         let memberRef = db.collection("members").document(memberId)
-        
+
         db.runTransaction({ transaction, errorPointer in
             let snapshot: DocumentSnapshot
-            
+
             do {
                 snapshot = try transaction.getDocument(memberRef)
             } catch {
                 errorPointer?.pointee = error as NSError
                 return nil
             }
-            
-            let oldTotal = snapshot.data()?["totalPoint"] as? Int ?? 0
+
+            let data = snapshot.data() ?? [:]
+
+            let oldTotal = data["totalPoint"] as? Int ?? 0
             let newTotal = oldTotal + point
-            
-            var updateData: [String: Any] = [
+
+            var updatedData: [String: Any] = [
                 "totalPoint": FieldValue.increment(Int64(point)),
                 "availablePoint": FieldValue.increment(Int64(point)),
-                "monthlyPoint": FieldValue.increment(Int64(point)),
+                "monthlyPoint": FieldValue.increment(Int64(point))
             ]
-            
+
             if addAttendanceCount {
-                updateData["attendanceCount"] = FieldValue.increment(Int64(1))
-                updateData["streakCount"] = FieldValue.increment(Int64(1))
+                updatedData["attendanceCount"] =
+                    FieldValue.increment(Int64(1))
+
+                updatedData["streakCount"] =
+                    FieldValue.increment(Int64(1))
             }
-            
+
             if addSetupCount {
-                updateData["setupCount"] = FieldValue.increment(Int64(1))
+                updatedData["setupCount"] =
+                    FieldValue.increment(Int64(1))
             }
-            
-            let reward = self.rankUpReward(oldTotal: oldTotal, newTotal: newTotal)
-            
+
+            let reward = self.rankUpReward(
+                oldTotal: oldTotal,
+                newTotal: newTotal
+            )
+
             if reward.challengeTickets > 0 {
-                updateData["challengeTickets"] = FieldValue.increment(Int64(reward.challengeTickets))
+                updatedData["challengeTickets"] =
+                    FieldValue.increment(
+                        Int64(reward.challengeTickets)
+                    )
             }
-            
+
             if reward.priorityTickets > 0 {
-                updateData["priorityTickets"] = FieldValue.increment(Int64(reward.priorityTickets))
+                updatedData["priorityTickets"] =
+                    FieldValue.increment(
+                        Int64(reward.priorityTickets)
+                    )
             }
-            
-            transaction.updateData(updateData, forDocument: memberRef)
-            
+
+            transaction.updateData(
+                updatedData,
+                forDocument: memberRef
+            )
+
             return reward
+
         }) { rewardAny, error in
             if let error = error {
-                print("ポイント付与失敗: \(error.localizedDescription)")
+                print(
+                    "ポイント付与失敗: \(error.localizedDescription)"
+                )
                 return
             }
-            
-            memberRef.collection("pointHistories").addDocument(data: [
-                "title": title,
-                "point": point,
-                "icon": icon,
-                "date": Timestamp()
-            ])
+
+            memberRef.collection("pointHistories")
+                .addDocument(data: [
+                    "title": title,
+                    "point": point,
+                    "icon": icon,
+                    "date": Timestamp()
+                ])
+
             if addAttendanceCount {
                 self.checkAndGrantStreakBonus(
                     memberId: memberId
                 )
             }
-            if let reward = rewardAny as? (title: String, icon: String, challengeTickets: Int, priorityTickets: Int),
-               reward.challengeTickets > 0 || reward.priorityTickets > 0 {
-                
-                memberRef.collection("pointHistories").addDocument(data: [
-                    "title": reward.title,
-                    "point": 0,
-                    "icon": reward.icon,
-                    "date": Timestamp()
-                ])
+
+            if let reward = rewardAny as? (
+                title: String,
+                icon: String,
+                challengeTickets: Int,
+                priorityTickets: Int
+            ),
+            reward.challengeTickets > 0 ||
+            reward.priorityTickets > 0 {
+
+                memberRef.collection("pointHistories")
+                    .addDocument(data: [
+                        "title": reward.title,
+                        "point": 0,
+                        "icon": reward.icon,
+                        "date": Timestamp()
+                    ])
             }
         }
     }
-    
     private func rankUpReward(
         oldTotal: Int,
         newTotal: Int

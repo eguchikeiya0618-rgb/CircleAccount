@@ -26,6 +26,8 @@ struct Activity: Identifiable, Codable {
 
     // 支払い済み
     var paidMembers: [String] = []
+    // 設営ポイント付与済み
+    var setupPointGrantedMembers: [String] = []
 
     // ポイント一括付与済みか
     var pointGranted: Bool = false

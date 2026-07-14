@@ -5,11 +5,15 @@ struct QRCheckInView: View {
     private let db = Firestore.firestore()
 
     @AppStorage("currentUserId") private var currentUserId = ""
-
+    @AppStorage("currentUserName") private var currentUserName = ""
     @State private var isShowingScanner = false
     @State private var message = "QRコードを読み取って受付できます"
     @State private var isSuccess = false
-
+    @State private var showWelcome = false
+    @State private var welcomeTotalPoint = 0
+    @State private var welcomePointMessages: [String] = []
+    
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
@@ -47,6 +51,15 @@ struct QRCheckInView: View {
                         isShowingScanner = false
                     }
                 )
+            }
+            .fullScreenCover(isPresented: $showWelcome) {
+                CheckInWelcomeView(
+                    memberName: currentUserName,
+                    totalPoint: welcomeTotalPoint,
+                    pointMessages: welcomePointMessages
+                ) {
+                    showWelcome = false
+                }
             }
         }
     }
@@ -182,16 +195,7 @@ struct QRCheckInView: View {
                     pointMessages.append("⏰ 早期回答 +2pt")
                 }
 
-                if isEarlyArrival {
-                    PointService.shared.addPoint(
-                        memberId: currentUserId,
-                        point: 5,
-                        title: "設営参加（18:30まで受付）",
-                        icon: "🛠"
-                    )
-                    totalPoint += 5
-                    pointMessages.append("🛠 設営参加 +5pt")
-                }
+                
 
                 markTicketUsagesChecked(activityId: activityId)
 
@@ -220,6 +224,11 @@ struct QRCheckInView: View {
                 }
 
                 isSuccess = true
+                welcomeTotalPoint = totalPoint
+                welcomePointMessages = pointMessages
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showWelcome = true
+                }
             }
         }
     }

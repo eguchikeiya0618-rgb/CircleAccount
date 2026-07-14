@@ -50,7 +50,18 @@ struct Member: Identifiable, Codable {
 
     // プロフィール画像
     var profileImageBase64: String = ""
-
+    var earnedBadges: [String] = []
+    
+    // バドミントンプロフィール
+    var badmintonStartAge: Int = 0
+    var badmintonYears: Int = 0
+    var racket: String = ""
+    var stringName: String = ""
+    var tension: String = ""
+    var playStyle: String = ""
+    var comment: String = ""
+    var dominantHand: String = ""
+    var favoriteShot: String = ""
     var createdAt = Date()
 
     var memberRank: MemberRank {

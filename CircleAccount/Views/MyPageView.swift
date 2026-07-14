@@ -15,6 +15,16 @@ struct MyPageView: View {
     @State private var gender = ""
     @State private var level = ""
     
+    @State private var badmintonStartAge = 0
+    @State private var badmintonYears = 0
+    @State private var racket = ""
+    @State private var stringName = ""
+    @State private var tension = ""
+    @State private var playStyle = ""
+    @State private var comment = ""
+    
+    @State private var showProfileEditor = false
+    
     @State private var currentRank = 0
 
     @State private var referralCount = 0
@@ -50,7 +60,76 @@ struct MyPageView: View {
     @State private var previousLevel = 1
     
     @State private var recentActivities: [String] = []
+    @State private var savedBadgeIds: [String] = []
+    var earnedBadges: [(icon: String, title: String)] {
+        var badges: [(icon: String, title: String)] = []
 
+        if totalPoint >= 700 {
+            badges.append(("👑", "LEGEND"))
+        }
+
+        if monthlyChampionCount >= 1 {
+            badges.append(("🏆", "月間王者"))
+        }
+
+        if mvpCount >= 1 {
+            badges.append(("⭐", "MVP"))
+        }
+
+        if attendanceCount >= 10 {
+            badges.append(("🔥", "常連"))
+        }
+
+        if attendanceCount >= 50 {
+            badges.append(("💪", "ベテラン"))
+        }
+
+        if setupCount >= 10 {
+            badges.append(("🧹", "設営王候補"))
+        }
+
+        if streakCount >= 5 {
+            badges.append(("⚡", "\(streakCount)連続参加"))
+        }
+
+        if referralCount >= 1 {
+            badges.append(("👥", "紹介者"))
+        }
+        for badgeId in savedBadgeIds {
+            let savedBadge: (icon: String, title: String)
+
+            switch badgeId {
+            case "monthlyContributor":
+                savedBadge = ("🏅", "今月の貢献者")
+            case "monthlyChampion":
+                savedBadge = ("🏆", "月間王者")
+
+            case "setupKing":
+                savedBadge = ("🧹", "設営王")
+
+            case "perfectAttendance":
+                savedBadge = ("🔥", "皆勤賞")
+
+            case "mvp":
+                savedBadge = ("⭐", "MVP")
+
+            case "legend":
+                savedBadge = ("👑", "LEGEND")
+
+            default:
+                savedBadge = ("🏅", badgeId)
+            }
+
+            let alreadyExists = badges.contains {
+                $0.title == savedBadge.title
+            }
+
+            if !alreadyExists {
+                badges.append(savedBadge)
+            }
+        }
+        return badges
+    }
     var rankBadge: String {
         if totalPoint >= 700 { return "LEGEND" }
         if totalPoint >= 400 { return "PLATINUM" }
@@ -96,6 +175,32 @@ struct MyPageView: View {
                 VStack(spacing: 18) {
                     profileCard
                     pointCard
+                    NavigationLink {
+                        TicketShopView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "cart.fill")
+                                .font(.title2)
+
+                            VStack(alignment: .leading) {
+                                Text("チケットショップ")
+                                    .font(.headline)
+
+                                Text("ポイントでチケットを交換")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                    }
+                    .buttonStyle(.plain)
                     achievementGrid
                 
                     
@@ -156,11 +261,7 @@ struct MyPageView: View {
                 }
                 .padding()
             }
-            .fullScreenCover(item: $unlockedAchievement) { achievement in
-                AchievementUnlockView(
-                    achievement: achievement
-                )
-            }
+           
             .fullScreenCover(isPresented: $showLevelUp) {
                 LevelUpView(
                     oldLevel: previousLevel,
@@ -220,7 +321,16 @@ struct MyPageView: View {
                     .background(Color(.systemGray6))
                     .clipShape(Capsule())
             }
-
+            Button {
+                showProfileEditor = true
+            } label: {
+                Label("バドプロフィールを編集", systemImage: "pencil")
+                    .font(.headline)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(Color.blue.opacity(0.12))
+                    .clipShape(Capsule())
+            }
             Text(name.isEmpty ? "メンバー" : name)
                 .font(.system(size: 34, weight: .black))
 
@@ -228,6 +338,26 @@ struct MyPageView: View {
                 .font(.headline)
                 .bold()
                 .foregroundStyle(.orange)
+            if streakCount > 0 {
+                Text("🔥 現在\(streakCount)連続参加中")
+                    .font(.subheadline)
+                    .bold()
+                    .foregroundStyle(.orange)
+            } else {
+                Text("次の参加から連続記録スタート")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ProgressView(
+                value: Double(totalPoint % 50),
+                total: 50
+            )
+            .tint(.orange)
+            .frame(maxWidth: 240)
+
+            Text("あと\(50 - (totalPoint % 50))ptでLv.\(memberLevel + 1)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 Text(rankIcon)
                 Text(rankBadge)
@@ -248,6 +378,83 @@ struct MyPageView: View {
             Text("\(gender) ・ \(level)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("獲得バッジ", systemImage: "medal.fill")
+                        .font(.headline)
+                        .bold()
+                        .foregroundStyle(.orange)
+
+                    Spacer()
+
+                    Text("\(earnedBadges.count)個")
+                        .font(.caption)
+                        .bold()
+                        .foregroundStyle(.secondary)
+                }
+
+                if earnedBadges.isEmpty {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(.secondary)
+
+                        Text("条件を達成するとバッジを獲得できます")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(
+                                Array(earnedBadges.enumerated()),
+                                id: \.offset
+                            ) { _, badge in
+                                VStack(spacing: 8) {
+                                    Text(badge.icon)
+                                        .font(.system(size: 32))
+                                        .frame(width: 58, height: 58)
+                                        .background(
+                                            Circle()
+                                                .fill(
+                                                    badgeColor(
+                                                        title: badge.title
+                                                    ).opacity(0.15)
+                                                )
+                                        )
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    badgeColor(
+                                                        title: badge.title
+                                                    ).opacity(0.45),
+                                                    lineWidth: 2
+                                                )
+                                        }
+
+                                    Text(badge.title)
+                                        .font(.caption2)
+                                        .bold()
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                }
+                                .frame(width: 86)
+                                .padding(.vertical, 12)
+                                .background(Color(.systemGray6).opacity(0.75))
+                                .clipShape(RoundedRectangle(cornerRadius: 18))
+                            }
+                        }
+                        .padding(.horizontal, 2)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 6)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
@@ -255,6 +462,9 @@ struct MyPageView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 28))
         .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 5)
+        .sheet(isPresented: $showProfileEditor) {
+            ProfileEditView()
+        }
     }
 
     var pointCard: some View {
@@ -505,32 +715,42 @@ struct MyPageView: View {
                 icon: "🧹",
                 title: "設営デビュー",
                 subtitle: "\(setupCount)/1回",
-                description: "設営を1回行う",
-                reward: "+3pt",
+                description: "設営を1回担当する",
+                reward: "限定バッジ",
                 isAchieved: setupCount >= 1,
                 color: .mint
             ),
 
             Achievement(
                 icon: "🛠",
-                title: "設営マスター",
-                subtitle: "\(setupCount)/10回",
-                description: "設営を10回行う",
-                reward: "+10pt",
-                isAchieved: setupCount >= 10,
-                color: .orange
+                title: "設営サポーター",
+                subtitle: "\(setupCount)/5回",
+                description: "設営を5回担当する",
+                reward: "限定バッジ",
+                isAchieved: setupCount >= 5,
+                color: .blue
             ),
 
             Achievement(
                 icon: "🏗",
-                title: "設営職人",
-                subtitle: "\(setupCount)/30回",
-                description: "設営を30回行う",
+                title: "設営マスター",
+                subtitle: "\(setupCount)/20回",
+                description: "設営を20回担当する",
                 reward: "限定称号",
-                isAchieved: setupCount >= 30,
-                color: .brown
+                isAchieved: setupCount >= 20,
+                color: .orange
             ),
-
+            Achievement(
+                icon: "🏅",
+                title: "今月の貢献者",
+                subtitle: savedBadgeIds.contains("monthlyContributor")
+                    ? "獲得済み"
+                    : "未獲得",
+                description: "月間ミッションをすべて達成する",
+                reward: "限定バッジ",
+                isAchieved: savedBadgeIds.contains("monthlyContributor"),
+                color: .mint
+            ),
             Achievement(
                 icon: "🥇",
                 title: "月間チャンピオン",
@@ -600,7 +820,29 @@ struct MyPageView: View {
                 isAchieved: stringingFreeTickets >= 1,
                 color: .green
             ),
+            Achievement(
+                icon: "🧹",
+                title: "設営王",
+                subtitle: savedBadgeIds.contains("setupKing")
+                    ? "獲得済み"
+                    : "未獲得",
+                description: "月間で最も多く設営を担当する",
+                reward: "限定バッジ",
+                isAchieved: savedBadgeIds.contains("setupKing"),
+                color: .orange
+            ),
 
+            Achievement(
+                icon: "🔥",
+                title: "皆勤賞",
+                subtitle: savedBadgeIds.contains("perfectAttendance")
+                    ? "獲得済み"
+                    : "未獲得",
+                description: "その月のすべての活動に参加する",
+                reward: "限定バッジ",
+                isAchieved: savedBadgeIds.contains("perfectAttendance"),
+                color: .red
+            ),
             Achievement(
                 icon: "🎁",
                 title: "無料券GET",
@@ -656,7 +898,38 @@ struct MyPageView: View {
     var achievedCount: Int {
         achievements.filter { $0.isAchieved }.count
     }
+    func badgeColor(title: String) -> Color {
+        switch title {
+        case "LEGEND":
+            return .yellow
 
+        case "月間王者":
+            return .orange
+        case "今月の貢献者":
+            return .mint
+            
+        case "MVP":
+            return .yellow
+
+        case "常連":
+            return .red
+
+        case "ベテラン":
+            return .green
+
+        case "設営王", "設営王候補":
+            return .orange
+
+        case "皆勤賞":
+            return .red
+
+        case "紹介者":
+            return .blue
+
+        default:
+            return .purple
+        }
+    }
     func profileStatBox(icon: String, title: String, value: String, color: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
@@ -948,7 +1221,8 @@ struct MyPageView: View {
                 memberNo = data["memberNo"] as? Int ?? 0
                 gender = data["gender"] as? String ?? ""
                 level = data["level"] as? String ?? ""
-
+                savedBadgeIds = data["earnedBadges"] as? [String] ?? []
+                
                 totalPoint = data["totalPoint"] as? Int ?? 0
                 availablePoint = data["availablePoint"] as? Int ?? 0
                 monthlyPoint = data["monthlyPoint"] as? Int ?? 0

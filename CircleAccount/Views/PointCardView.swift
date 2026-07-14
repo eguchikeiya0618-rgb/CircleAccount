@@ -90,7 +90,8 @@ struct PointCardView: View {
     }
 
     var body: some View {
-        ScrollView {
+        NavigationStack {
+            ScrollView {
             VStack(spacing: 22) {
                 flippingCard
 
@@ -195,7 +196,7 @@ struct PointCardView: View {
             }
         }
     }
-    
+    }
 
     var flippingCard: some View {
         ZStack {
@@ -447,20 +448,44 @@ struct PointCardView: View {
     }
 
     var exchangeSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("🎁 ポイント交換")
-                .font(.title2)
-                .bold()
+        NavigationLink {
+            TicketShopView()
+        } label: {
+            HStack(spacing: 14) {
+                Text("🛒")
+                    .font(.system(size: 38))
+                    .frame(width: 56, height: 56)
+                    .background(Color.blue.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
 
-            exchangeButton(title: "片付けパス", point: 100, icon: "🧹", ticketField: "cleanupTickets")
-            exchangeButton(title: "参加費500円券", point: 200, icon: "💰", ticketField: "discountTickets")
-            exchangeButton(title: "参加費半額券", point: 400, icon: "🏸", ticketField: "halfPriceTickets")
-            exchangeButton(title: "参加費無料券", point: 700, icon: "🎁", ticketField: "freeTickets")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("チケットショップ")
+                        .font(.title3)
+                        .bold()
+                        .foregroundStyle(.primary)
+
+                    Text("ポイントでチケットを交換")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .shadow(
+                color: .black.opacity(0.06),
+                radius: 8,
+                x: 0,
+                y: 4
+            )
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        .buttonStyle(.plain)
     }
     var monthlyAwardButton: some View {
         Button {
@@ -774,6 +799,11 @@ struct PointCardView: View {
             memberId: rankingMembers[0].id,
             field: "monthlyChampionCount"
         )
+        db.collection("members")
+            .document(rankingMembers[0].id)
+            .updateData([
+                "earnedBadges": FieldValue.arrayUnion(["monthlyChampion"])
+            ])
 
         PointService.shared.addMonthlyAward(
             memberId: rankingMembers[1].id,
