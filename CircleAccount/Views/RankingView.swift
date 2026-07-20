@@ -75,11 +75,17 @@ struct RankingView: View {
     @AppStorage("currentUserId")
     private var currentUserId = ""
 
+    @AppStorage("currentUserIsAdmin")
+    private var currentUserIsAdmin = false
+    
     @State private var members: [RankingMember] = []
     @State private var isLoading = true
     @State private var errorMessage = ""
 
     @State private var selectedRankingType: RankingType = .point
+    @State private var isSavingHallOfFame = false
+    @State private var hallOfFameMessage = ""
+    @State private var showHallOfFameAlert = false
 
     private var sortedMembers: [RankingMember] {
         members.sorted { first, second in
@@ -136,6 +142,9 @@ struct RankingView: View {
                     }
 
                     rankingList
+                    if currentUserIsAdmin {
+                        hallOfFameSaveSection
+                    }
                 }
             }
             .padding()
@@ -283,10 +292,26 @@ struct RankingView: View {
         member: RankingMember
     ) -> some View {
         HStack(spacing: 14) {
-            Text(rankIcon(rank))
-                .font(.system(size: rank <= 3 ? 34 : 21))
-                .bold()
-                .frame(width: 46)
+            ZStack {
+                if rank == 1 {
+                    HStack(spacing: -4) {
+                        Text("🥇")
+                        Text("👑")
+                            .font(.system(size: 18))
+                            .offset(y: -12)
+                    }
+                    .font(.system(size: 32))
+                } else {
+                    Text(rankIcon(rank))
+                        .font(
+                            .system(
+                                size: rank <= 3 ? 34 : 21
+                            )
+                        )
+                        .bold()
+                }
+            }
+            .frame(width: 46)
 
             ProfileImageView(
                 imageBase64: member.profileImageBase64,
@@ -310,7 +335,22 @@ struct RankingView: View {
                             .clipShape(Capsule())
                     }
                 }
-
+                if rank == 1 {
+                    Text("👑 王者")
+                        .font(.caption2)
+                        .bold()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            LinearGradient(
+                                colors: [.yellow, .orange],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
                 Text(rankingSubText(member))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -421,7 +461,7 @@ struct RankingView: View {
 
         switch rank {
         case 1:
-            return Color.yellow.opacity(0.11)
+            return Color.orange.opacity(0.15)
 
         case 2:
             return Color.gray.opacity(0.07)
@@ -433,7 +473,244 @@ struct RankingView: View {
             return Color.clear
         }
     }
+    // MARK: - 月間表彰保存
 
+    private var hallOfFameSaveSection: some View {
+        VStack(spacing: 12) {
+            Button {
+                saveMonthlyHallOfFame()
+            } label: {
+                HStack(spacing: 10) {
+                    if isSavingHallOfFame {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "crown.fill")
+                    }
+
+                    Text(
+                        isSavingHallOfFame
+                            ? "保存中..."
+                            : "今月の結果を殿堂入り"
+                    )
+                    .font(.headline)
+                    .bold()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .foregroundStyle(.white)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color.orange,
+                            Color.purple
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(
+                    RoundedRectangle(cornerRadius: 18)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(
+                isSavingHallOfFame
+                || members.isEmpty
+            )
+
+            Text("同じ月は一度だけ保存できます")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 4)
+        .alert(
+            "Hall of Fame",
+            isPresented: $showHallOfFameAlert
+        ) {
+            Button("OK", role: .cancel) {
+            }
+        } message: {
+            Text(hallOfFameMessage)
+        }
+    }
+
+    private func saveMonthlyHallOfFame() {
+        guard !members.isEmpty else {
+            hallOfFameMessage =
+                "保存できるランキングデータがありません"
+            showHallOfFameAlert = true
+            return
+        }
+
+        isSavingHallOfFame = true
+
+        let monthKey = currentMonthKey()
+
+        db.collection("hallOfFame")
+            .whereField(
+                "month",
+                isEqualTo: monthKey
+            )
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error {
+                    DispatchQueue.main.async {
+                        isSavingHallOfFame = false
+                        hallOfFameMessage =
+                            "保存確認に失敗しました\n"
+                            + error.localizedDescription
+                        showHallOfFameAlert = true
+                    }
+                    return
+                }
+
+                if let documents = snapshot?.documents,
+                   !documents.isEmpty {
+                    DispatchQueue.main.async {
+                        isSavingHallOfFame = false
+                        hallOfFameMessage =
+                            "\(currentMonthText())はすでに殿堂入り済みです"
+                        showHallOfFameAlert = true
+                    }
+                    return
+                }
+
+                guard
+                    let pointKing =
+                        members.max(
+                            by: {
+                                $0.monthlyPoint
+                                < $1.monthlyPoint
+                            }
+                        ),
+                    let attendanceKing =
+                        members.max(
+                            by: {
+                                $0.monthlyAttendanceCount
+                                < $1.monthlyAttendanceCount
+                            }
+                        ),
+                    let setupKing =
+                        members.max(
+                            by: {
+                                $0.monthlySetupCount
+                                < $1.monthlySetupCount
+                            }
+                        )
+                else {
+                    DispatchQueue.main.async {
+                        isSavingHallOfFame = false
+                        hallOfFameMessage =
+                            "月間王者を集計できませんでした"
+                        showHallOfFameAlert = true
+                    }
+                    return
+                }
+
+                let pointRanking =
+                    members.sorted {
+                        if $0.monthlyPoint
+                            == $1.monthlyPoint {
+                            return
+                                $0.name
+                                .localizedStandardCompare(
+                                    $1.name
+                                )
+                                == .orderedAscending
+                        }
+
+                        return
+                            $0.monthlyPoint
+                            > $1.monthlyPoint
+                    }
+
+                let second =
+                    pointRanking.indices.contains(1)
+                        ? pointRanking[1]
+                        : nil
+
+                let third =
+                    pointRanking.indices.contains(2)
+                        ? pointRanking[2]
+                        : nil
+
+                let data: [String: Any] = [
+                    "month": monthKey,
+
+                    "championName":
+                        pointKing.name,
+                    "championPoint":
+                        pointKing.monthlyPoint,
+
+                    "secondName":
+                        second?.name
+                        ?? "",
+                    "secondPoint":
+                        second?.monthlyPoint
+                        ?? 0,
+
+                    "thirdName":
+                        third?.name
+                        ?? "",
+                    "thirdPoint":
+                        third?.monthlyPoint
+                        ?? 0,
+
+                    "pointKingName":
+                        pointKing.name,
+                    "pointKingPoint":
+                        pointKing.monthlyPoint,
+
+                    "attendanceKingName":
+                        attendanceKing.name,
+                    "attendanceKingCount":
+                        attendanceKing
+                            .monthlyAttendanceCount,
+
+                    "setupKingName":
+                        setupKing.name,
+                    "setupKingCount":
+                        setupKing
+                            .monthlySetupCount,
+
+                    "createdAt":
+                        FieldValue.serverTimestamp()
+                ]
+
+                db.collection("hallOfFame")
+                    .addDocument(data: data) {
+                        saveError in
+
+                        DispatchQueue.main.async {
+                            isSavingHallOfFame = false
+
+                            if let saveError {
+                                hallOfFameMessage =
+                                    "殿堂入りの保存に失敗しました\n"
+                                    + saveError
+                                        .localizedDescription
+                            } else {
+                                hallOfFameMessage =
+                                    "\(currentMonthText())の結果を殿堂入りしました！"
+                            }
+
+                            showHallOfFameAlert = true
+                        }
+                    }
+            }
+    }
+
+    private func currentMonthKey() -> String {
+        let formatter = DateFormatter()
+        formatter.locale =
+            Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy-MM"
+
+        return formatter.string(
+            from: Date()
+        )
+    }
     // MARK: - データ取得
 
     private func loadRanking() {

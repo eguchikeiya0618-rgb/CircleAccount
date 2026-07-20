@@ -9,6 +9,15 @@ struct HomeView: View {
 
     @AppStorage("currentUserIsAdmin")
     private var currentUserIsAdmin = false
+    
+    @AppStorage("testMVPName")
+    private var testMVPName = ""
+
+    @AppStorage("testMVPId")
+    private var testMVPId = ""
+
+    @State private var testMVPPoint = 0
+    @State private var testMVPImageBase64 = ""
 
     @State private var todayActivity: Activity?
     @State private var nextActivity: Activity?
@@ -24,6 +33,17 @@ struct HomeView: View {
     @State private var latestChampionName = ""
     @State private var latestChampionPoint = 0
     @State private var latestChampionMonth = ""
+    
+    
+    // 最新の月間MVP
+    @State private var latestMVPName = ""
+    @State private var latestMVPPoint = 0
+    @State private var latestMVPImageBase64 = ""
+
+    // 自分の今月ランキング
+    @State private var myMonthlyRank = 0
+    @State private var myMonthlyRankingPoint = 0
+    @State private var activeMemberCount = 0
 
     @State private var latestNotice = ""
     @State private var latestNoticeDate = ""
@@ -32,7 +52,13 @@ struct HomeView: View {
     @State private var monthlySetupCount = 0
     @State private var monthlyEarlyAnswerCount = 0
     @State private var currentAttendanceStreak = 0
+    
+    @State private var rankingEntries: [HomeRankingEntry] = []
 
+    @State private var currentUserRank = 0
+
+    @State private var pointToNextRank = 0
+    
     @State private var screenAppeared = false
     @State private var heroGlow = false
     @State private var shimmerOffset: CGFloat = -1.3
@@ -132,28 +158,39 @@ struct HomeView: View {
                     LazyVStack(spacing: 18) {
                         luxuryHeader
 
-                        noticeCard
+                        if !latestNotice.isEmpty {
+                            noticeCard
+                        }
+
+                        activitySection
 
                         homeDashboardHero
 
+                        HomeRankingCard(
+                            entries: rankingEntries,
+                            currentUserId: currentUserId,
+                            currentUserRank: currentUserRank,
+                            pointToNextRank: pointToNextRank
+                        )
+
+                        LatestMVPHeroCard(
+                            mvpName:
+                                latestMVPName.isEmpty
+                                    ? testMVPName
+                                    : latestMVPName,
+                            mvpPoint:
+                                latestMVPName.isEmpty
+                                    ? testMVPPoint
+                                    : latestMVPPoint,
+                            imageBase64:
+                                latestMVPName.isEmpty
+                                    ? testMVPImageBase64
+                                    : latestMVPImageBase64
+                        )
+
                         quickMenuSection
 
-                        if let todayActivity {
-                            todayCard(todayActivity)
-                        } else if let nextActivity {
-                            nextActivityCard(nextActivity)
-                        }
-
-                        if todayActivity != nil,
-                           let nextActivity {
-                            nextActivityCard(nextActivity)
-                        }
-
-                        rankingCardLink
                         latestChampionCard
-                        awardCard
-                        monthlyMissionCard
-                        gachaCardLink
 
                         if currentUserIsAdmin {
                             administratorDashboard
@@ -165,7 +202,7 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 140)
                 }
                 .scrollIndicators(.hidden)
             }
@@ -175,12 +212,27 @@ struct HomeView: View {
                 loadDashboard()
                 loadPoint()
                 loadLatestChampion()
+                loadLatestMVP()
+                loadTestMVP()
                 loadLatestNotice()
+                loadRanking()
                 startHomeAnimations()
             }
         }
     }
 
+    @ViewBuilder
+    private var activitySection: some View {
+        if let todayActivity {
+            todayCard(todayActivity)
+
+            if let nextActivity {
+                nextActivityCard(nextActivity)
+            }
+        } else if let nextActivity {
+            nextActivityCard(nextActivity)
+        }
+    }
     // MARK: - ホーム演出
 
     private func startHomeAnimations() {
@@ -519,7 +571,7 @@ struct HomeView: View {
 
             VStack(
                 alignment: .trailing,
-                spacing: 7
+                spacing: 6
             ) {
                 Text("PLAYER LEVEL")
                     .font(
@@ -546,15 +598,114 @@ struct HomeView: View {
                         color: Color.cyan.opacity(0.55),
                         radius: 10
                     )
+
+                Text("TOTAL \(totalPoint)pt")
+                    .font(.caption)
+                    .fontWeight(.black)
+                    .foregroundStyle(.cyan)
             }
         }
         .padding(.horizontal, 22)
         .padding(.top, 22)
         .padding(.bottom, 20)
     }
-
     private var playerGrowthSection: some View {
         VStack(spacing: 18) {
+            // 次のレベル
+            VStack(spacing: 10) {
+                HStack {
+                    HStack(spacing: 7) {
+                        Image(systemName: "bolt.fill")
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+
+                        Text("NEXT LEVEL")
+                            .font(.caption)
+                            .fontWeight(.black)
+                            .tracking(1.2)
+                            .foregroundStyle(
+                                .white.opacity(0.72)
+                            )
+                    }
+
+                    Spacer()
+
+                    Text("あと\(pointToNextLevel)pt")
+                        .font(.caption)
+                        .bold()
+                        .foregroundStyle(.yellow)
+                }
+
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(
+                                Color.white.opacity(0.14)
+                            )
+
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.cyan,
+                                        Color.blue,
+                                        Color.purple,
+                                        Color.white
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(
+                                width:
+                                    geometry.size.width
+                                    * max(
+                                        min(
+                                            levelProgress,
+                                            1
+                                        ),
+                                        0.03
+                                    )
+                            )
+                            .shadow(
+                                color:
+                                    Color.cyan.opacity(0.65),
+                                radius: 7
+                            )
+                            .animation(
+                                .spring(
+                                    response: 0.75,
+                                    dampingFraction: 0.72
+                                ),
+                                value: levelProgress
+                            )
+                    }
+                }
+                .frame(height: 12)
+
+                HStack {
+                    Text("Lv.\(memberLevel)")
+                        .font(.caption2)
+                        .bold()
+                        .foregroundStyle(
+                            .white.opacity(0.65)
+                        )
+
+                    Spacer()
+
+                    Text("Lv.\(memberLevel + 1)")
+                        .font(.caption2)
+                        .bold()
+                        .foregroundStyle(.white)
+                }
+            }
+
+            Divider()
+                .overlay(
+                    Color.white.opacity(0.15)
+                )
+
+            // 連続参加
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
@@ -609,17 +760,15 @@ struct HomeView: View {
                 Spacer()
 
                 if currentAttendanceStreak > 0 {
-                    Text(
-                        "\(currentAttendanceStreak)"
-                    )
-                    .font(
-                        .system(
-                            size: 36,
-                            weight: .black,
-                            design: .rounded
+                    Text("\(currentAttendanceStreak)")
+                        .font(
+                            .system(
+                                size: 34,
+                                weight: .black,
+                                design: .rounded
+                            )
                         )
-                    )
-                    .foregroundStyle(.white)
+                        .foregroundStyle(.white)
 
                     Text("回")
                         .font(.caption)
@@ -630,100 +779,7 @@ struct HomeView: View {
                 }
             }
 
-            VStack(spacing: 10) {
-                HStack {
-                    HStack(spacing: 7) {
-                        Image(
-                            systemName: "bolt.fill"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-
-                        Text("NEXT LEVEL")
-                            .font(.caption)
-                            .fontWeight(.black)
-                            .tracking(1.2)
-                            .foregroundStyle(
-                                .white.opacity(0.72)
-                            )
-                    }
-
-                    Spacer()
-
-                    Text(
-                        "あと\(pointToNextLevel)pt"
-                    )
-                    .font(.caption)
-                    .bold()
-                    .foregroundStyle(.yellow)
-                }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(
-                                Color.white.opacity(0.14)
-                            )
-
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.cyan,
-                                        Color.blue,
-                                        Color.purple,
-                                        Color.white
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(
-                                width:
-                                    geometry.size.width
-                                    * max(
-                                        min(
-                                            levelProgress,
-                                            1
-                                        ),
-                                        0.03
-                                    )
-                            )
-                            .shadow(
-                                color:
-                                    Color.cyan.opacity(
-                                        0.65
-                                    ),
-                                radius: 7
-                            )
-                            .animation(
-                                .spring(
-                                    response: 0.75,
-                                    dampingFraction: 0.72
-                                ),
-                                value: levelProgress
-                            )
-                    }
-                }
-                .frame(height: 12)
-
-                HStack {
-                    Text("Lv.\(memberLevel)")
-                        .font(.caption2)
-                        .bold()
-                        .foregroundStyle(
-                            .white.opacity(0.65)
-                        )
-
-                    Spacer()
-
-                    Text("Lv.\(memberLevel + 1)")
-                        .font(.caption2)
-                        .bold()
-                        .foregroundStyle(.white)
-                }
-            }
-
+            // 今月の記録
             HStack(spacing: 11) {
                 playerStatusTile(
                     icon: "figure.badminton",
@@ -734,19 +790,18 @@ struct HomeView: View {
                 )
 
                 playerStatusTile(
-                    icon: "flame.fill",
-                    title: "連続参加",
+                    icon: "hammer.fill",
+                    title: "今月設営",
                     value:
-                        "\(currentAttendanceStreak)回",
+                        "\(monthlySetupCount)回",
                     color: .orange
                 )
 
                 playerStatusTile(
-                    icon:
-                        "arrow.up.right.circle.fill",
-                    title: "次のLv.",
+                    icon: "clock.badge.checkmark",
+                    title: "早期回答",
                     value:
-                        "あと\(pointToNextLevel)pt",
+                        "\(monthlyEarlyAnswerCount)回",
                     color: .yellow
                 )
             }
@@ -755,7 +810,6 @@ struct HomeView: View {
         .padding(.top, 20)
         .padding(.bottom, 22)
     }
-
     private func playerStatusTile(
         icon: String,
         title: String,
@@ -1455,13 +1509,13 @@ struct HomeView: View {
 
     private var awardCard: some View {
         luxuryNavigationCard(
-            icon: "🏆",
-            title: "SiRiUS AWARD",
+            icon: "👑",
+            title: "HALL OF FAME",
             subtitle:
-                "ポイント王・設営王・皆勤賞",
-            color: .orange,
+                "歴代チャンピオン・永久記録",
+            color: .purple,
             destination: AnyView(
-                SiriusAwardView()
+                HallOfFameView()
             )
         )
     }
@@ -1728,127 +1782,363 @@ struct HomeView: View {
 
     private var latestChampionCard: some View {
         NavigationLink {
-            SiriusAwardView()
+            HallOfFameView()
         } label: {
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color.yellow.opacity(
-                            0.18
-                        ),
-                        Color.orange.opacity(
-                            0.10
-                        ),
-                        Color(
-                            .systemBackground
-                        )
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+            VStack(spacing: 0) {
+                // 上部ヘッダー
+                HStack(spacing: 13) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.yellow.opacity(0.28),
+                                        Color.orange.opacity(0.14)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(
+                                width: 55,
+                                height: 55
+                            )
 
-                Circle()
-                    .fill(
-                        Color.yellow.opacity(
-                            0.13
-                        )
-                    )
-                    .frame(
-                        width: 130,
-                        height: 130
-                    )
-                    .offset(
-                        x: -155,
-                        y: 30
-                    )
+                        Text("👑")
+                            .font(.system(size: 31))
+                            .shadow(
+                                color: Color.yellow.opacity(0.55),
+                                radius: 8
+                            )
+                    }
 
-                HStack(spacing: 15) {
-                    Text("👑")
+                    VStack(
+                        alignment: .leading,
+                        spacing: 4
+                    ) {
+                        Text("HALL OF FAME")
+                            .font(
+                                .system(
+                                    size: 17,
+                                    weight: .black
+                                )
+                            )
+                            .tracking(1.1)
+                            .foregroundStyle(.white)
+
+                        Text("歴代チャンピオン・永久記録")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(
+                                .white.opacity(0.62)
+                            )
+                    }
+
+                    Spacer()
+
+                    Text("VIEW")
                         .font(
-                            .system(size: 46)
+                            .system(
+                                size: 9,
+                                weight: .black
+                            )
                         )
-                        .shadow(
-                            color:
-                                Color.yellow.opacity(
-                                    0.40
+                        .tracking(1.1)
+                        .foregroundStyle(.yellow)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Color.yellow.opacity(0.13)
+                        )
+                        .clipShape(Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(
+                                    Color.yellow.opacity(0.28),
+                                    lineWidth: 1
+                                )
+                        }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 17)
+
+                Divider()
+                    .overlay(
+                        Color.white.opacity(0.15)
+                    )
+                    .padding(.horizontal, 20)
+
+                // 前回チャンピオン表示
+                HStack(
+                    alignment: .center,
+                    spacing: 16
+                ) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                Color.yellow.opacity(0.12)
+                            )
+                            .frame(
+                                width: 76,
+                                height: 76
+                            )
+
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.yellow,
+                                        Color.white.opacity(0.85),
+                                        Color.orange.opacity(0.55)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 ),
-                            radius: 10
-                        )
+                                lineWidth: 2.5
+                            )
+                            .frame(
+                                width: 70,
+                                height: 70
+                            )
+
+                        Text("🏆")
+                            .font(.system(size: 35))
+                    }
+                    .shadow(
+                        color: Color.yellow.opacity(0.30),
+                        radius: 10
+                    )
 
                     VStack(
                         alignment: .leading,
                         spacing: 5
                     ) {
-                        Text(
-                            "前回の月間チャンピオン"
-                        )
-                        .font(.caption)
-                        .bold()
-                        .foregroundStyle(
-                            .orange
-                        )
+                        Text("前回の月間チャンピオン")
+                            .font(
+                                .system(
+                                    size: 10,
+                                    weight: .black
+                                )
+                            )
+                            .tracking(1.1)
+                            .foregroundStyle(
+                                .yellow.opacity(0.82)
+                            )
 
-                        if latestChampionName
-                            .isEmpty {
-                            Text(
-                                "まだ記録がありません"
-                            )
-                            .font(.headline)
-                            .foregroundStyle(
-                                .secondary
-                            )
+                        if latestChampionName.isEmpty {
+                            Text("まだ記録がありません")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundStyle(
+                                    .white.opacity(0.72)
+                                )
+
+                            Text("月間結果が保存されると表示されます")
+                                .font(.caption2)
+                                .foregroundStyle(
+                                    .white.opacity(0.48)
+                                )
                         } else {
-                            Text(
-                                latestChampionName
-                            )
-                            .font(.title2)
-                            .bold()
-                            .foregroundStyle(
-                                mainColor
-                            )
+                            Text(latestChampionName)
+                                .font(
+                                    .system(
+                                        size: 27,
+                                        weight: .black,
+                                        design: .rounded
+                                    )
+                                )
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
 
                             Text(
                                 "\(formatChampionMonth(latestChampionMonth))・\(latestChampionPoint)pt"
                             )
                             .font(.caption)
+                            .fontWeight(.bold)
                             .foregroundStyle(
-                                .secondary
+                                .white.opacity(0.64)
                             )
                         }
                     }
 
-                    Spacer()
+                    Spacer(minLength: 5)
 
-                    Image(
-                        systemName:
-                            "chevron.right"
+                    Image(systemName: "chevron.right")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.yellow)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 20)
+
+                Divider()
+                    .overlay(
+                        Color.white.opacity(0.15)
                     )
-                    .foregroundStyle(
-                        .secondary
+                    .padding(.horizontal, 20)
+
+                // 下部リンク
+                HStack(spacing: 11) {
+                    hallOfFameFeature(
+                        icon: "crown.fill",
+                        title: "歴代王者",
+                        color: .yellow
+                    )
+
+                    hallOfFameFeature(
+                        icon: "star.fill",
+                        title: "MVP",
+                        color: .orange
+                    )
+
+                    hallOfFameFeature(
+                        icon: "medal.fill",
+                        title: "永久記録",
+                        color: .purple
                     )
                 }
-                .padding(19)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 17)
+                .background(
+                    Color.white.opacity(0.045)
+                )
+            }
+            .background {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(
+                                        red: 0.055,
+                                        green: 0.035,
+                                        blue: 0.12
+                                    ),
+                                    Color(
+                                        red: 0.18,
+                                        green: 0.07,
+                                        blue: 0.30
+                                    ),
+                                    Color(
+                                        red: 0.36,
+                                        green: 0.14,
+                                        blue: 0.32
+                                    ),
+                                    Color(
+                                        red: 0.22,
+                                        green: 0.13,
+                                        blue: 0.05
+                                    )
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Circle()
+                        .fill(
+                            Color.yellow.opacity(
+                                heroGlow ? 0.19 : 0.08
+                            )
+                        )
+                        .frame(
+                            width: 205,
+                            height: 205
+                        )
+                        .blur(radius: 20)
+                        .offset(
+                            x: 150,
+                            y: -115
+                        )
+                        .scaleEffect(
+                            heroGlow ? 1.12 : 0.92
+                        )
+
+                    Circle()
+                        .fill(
+                            Color.purple.opacity(0.15)
+                        )
+                        .frame(
+                            width: 180,
+                            height: 180
+                        )
+                        .blur(radius: 18)
+                        .offset(
+                            x: -145,
+                            y: 135
+                        )
+
+                    DashboardParticleLayer()
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: 28)
+                        )
+                }
             }
             .clipShape(
-                RoundedRectangle(
-                    cornerRadius: 25
-                )
+                RoundedRectangle(cornerRadius: 28)
             )
             .overlay {
-                RoundedRectangle(
-                    cornerRadius: 25
-                )
-                .stroke(
-                    Color.orange.opacity(
-                        0.17
-                    ),
-                    lineWidth: 1
-                )
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.yellow.opacity(0.80),
+                                Color.white.opacity(0.52),
+                                Color.purple.opacity(0.44),
+                                Color.orange.opacity(0.25)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
             }
+            .overlay {
+                RoundedRectangle(cornerRadius: 25)
+                    .stroke(
+                        Color.white.opacity(0.08),
+                        lineWidth: 1
+                    )
+                    .padding(4)
+            }
+            .shadow(
+                color: Color.purple.opacity(
+                    heroGlow ? 0.25 : 0.12
+                ),
+                radius: heroGlow ? 22 : 13,
+                x: 0,
+                y: 9
+            )
         }
         .buttonStyle(.plain)
     }
+    private func hallOfFameFeature(
+        icon: String,
+        title: String,
+        color: Color
+    ) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(color)
 
+            Text(title)
+                .font(
+                    .system(
+                        size: 10,
+                        weight: .bold
+                    )
+                )
+                .foregroundStyle(
+                    .white.opacity(0.72)
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity)
+    }
     // MARK: - お知らせ
 
     private var noticeCard: some View {
@@ -2297,7 +2587,320 @@ struct HomeView: View {
                     }
             }
     }
+    private func loadLatestMVP() {
+        db.collection("hallOfFame")
+            .order(
+                by: "createdAt",
+                descending: true
+            )
+            .limit(to: 1)
+            .getDocuments {
+                snapshot,
+                error in
 
+                if let error {
+                    print(
+                        "最新MVP取得失敗: \(error.localizedDescription)"
+                    )
+
+                    DispatchQueue.main.async {
+                        latestMVPName = ""
+                        latestMVPPoint = 0
+                        latestMVPImageBase64 = ""
+                    }
+
+                    return
+                }
+
+                guard
+                    let document =
+                        snapshot?
+                            .documents
+                            .first
+                else {
+                    DispatchQueue.main.async {
+                        latestMVPName = ""
+                        latestMVPPoint = 0
+                        latestMVPImageBase64 = ""
+                    }
+
+                    return
+                }
+
+                let data = document.data()
+
+                print(data)
+                
+                let loadedMVPName =
+                    data["mvpName"] as? String
+                    ?? ""
+
+                let loadedMVPPoint =
+                    data["mvpPoint"] as? Int
+                    ?? 0
+
+                let savedMVPImage =
+                    data["mvpImageBase64"] as? String
+                    ?? ""
+
+                DispatchQueue.main.async {
+                    latestMVPName =
+                        loadedMVPName
+
+                    latestMVPPoint =
+                        loadedMVPPoint
+
+                    if !savedMVPImage.isEmpty {
+                        latestMVPImageBase64 =
+                            savedMVPImage
+                    } else {
+                        loadLatestMVPProfileImage(
+                            mvpName: loadedMVPName
+                        )
+                    }
+                }
+            }
+    }
+    private func loadLatestMVPProfileImage(
+        mvpName: String
+    ) {
+        guard !mvpName.isEmpty else {
+            latestMVPImageBase64 = ""
+            return
+        }
+
+        db.collection("members")
+            .whereField(
+                "name",
+                isEqualTo: mvpName
+            )
+            .limit(to: 1)
+            .getDocuments {
+                snapshot,
+                error in
+
+                if let error {
+                    print(
+                        "MVPプロフィール画像取得失敗: \(error.localizedDescription)"
+                    )
+                    return
+                }
+
+                guard
+                    let data =
+                        snapshot?
+                            .documents
+                            .first?
+                            .data()
+                else {
+                    return
+                }
+
+                let imageBase64 =
+                    data["profileImageBase64"] as? String
+                    ?? data["imageBase64"] as? String
+                    ?? data["profileImage"] as? String
+                    ?? ""
+
+                DispatchQueue.main.async {
+                    latestMVPImageBase64 =
+                        imageBase64
+                }
+            }
+    }
+    private func loadTestMVP() {
+        guard !testMVPId.isEmpty else {
+            DispatchQueue.main.async {
+                testMVPPoint = 0
+                testMVPImageBase64 = ""
+            }
+
+            return
+        }
+
+        db.collection("members")
+            .document(testMVPId)
+            .getDocument {
+                snapshot,
+                error in
+
+                if let error {
+                    print(
+                        "テストMVP取得失敗: \(error.localizedDescription)"
+                    )
+
+                    DispatchQueue.main.async {
+                        testMVPPoint = 0
+                        testMVPImageBase64 = ""
+                    }
+
+                    return
+                }
+
+                guard
+                    let data = snapshot?.data()
+                else {
+                    DispatchQueue.main.async {
+                        testMVPPoint = 0
+                        testMVPImageBase64 = ""
+                    }
+
+                    return
+                }
+
+                let loadedPoint =
+                    data["totalPoint"] as? Int
+                    ?? 0
+
+                let loadedImageBase64 =
+                    data["profileImageBase64"] as? String
+                    ?? data["imageBase64"] as? String
+                    ?? data["profileImage"] as? String
+                    ?? ""
+
+                DispatchQueue.main.async {
+                    testMVPPoint = loadedPoint
+                    testMVPImageBase64 =
+                        loadedImageBase64
+                }
+            }
+    }
+    private func loadRanking() {
+        db.collection("members")
+            .getDocuments {
+                snapshot,
+                error in
+
+                if let error {
+                    print(
+                        "ホームランキング取得失敗: \(error.localizedDescription)"
+                    )
+
+                    DispatchQueue.main.async {
+                        rankingEntries = []
+                        currentUserRank = 0
+                        pointToNextRank = 0
+                    }
+
+                    return
+                }
+
+                guard let documents = snapshot?.documents else {
+                    DispatchQueue.main.async {
+                        rankingEntries = []
+                        currentUserRank = 0
+                        pointToNextRank = 0
+                    }
+
+                    return
+                }
+
+                var loadedEntries: [HomeRankingEntry] = []
+
+                for document in documents {
+                    let data = document.data()
+
+                    let isActive =
+                        data["isActive"] as? Bool
+                        ?? true
+
+                    guard isActive else {
+                        continue
+                    }
+
+                    let name =
+                        data["name"] as? String
+                        ?? ""
+
+                    guard !name.isEmpty else {
+                        continue
+                    }
+
+                    let monthlyPoint =
+                        data["monthlyPoint"] as? Int
+                        ?? 0
+
+                    let totalPoint =
+                        data["totalPoint"] as? Int
+                        ?? 0
+
+                    let imageBase64 =
+                        data["profileImageBase64"] as? String
+                        ?? data["imageBase64"] as? String
+                        ?? data["profileImage"] as? String
+                        ?? ""
+
+                    loadedEntries.append(
+                        HomeRankingEntry(
+                            id: document.documentID,
+                            name: name,
+                            monthlyPoint: monthlyPoint,
+                            totalPoint: totalPoint,
+                            imageBase64: imageBase64
+                        )
+                    )
+                }
+
+                let sortedEntries =
+                    loadedEntries.sorted {
+                        if $0.monthlyPoint
+                            == $1.monthlyPoint {
+                            return $0.name
+                                .localizedStandardCompare(
+                                    $1.name
+                                ) == .orderedAscending
+                        }
+
+                        return $0.monthlyPoint
+                            > $1.monthlyPoint
+                    }
+
+                let myIndex =
+                    sortedEntries.firstIndex {
+                        $0.id == currentUserId
+                    }
+
+                let calculatedRank: Int
+
+                if let myIndex {
+                    calculatedRank = myIndex + 1
+                } else {
+                    calculatedRank = 0
+                }
+
+                var calculatedPointToNextRank = 0
+
+                if let myIndex,
+                   myIndex > 0 {
+                    let myMonthlyPoint =
+                        sortedEntries[myIndex]
+                            .monthlyPoint
+
+                    let upperMonthlyPoint =
+                        sortedEntries[myIndex - 1]
+                            .monthlyPoint
+
+                    calculatedPointToNextRank =
+                        max(
+                            upperMonthlyPoint
+                            - myMonthlyPoint
+                            + 1,
+                            0
+                        )
+                }
+
+                DispatchQueue.main.async {
+                    rankingEntries =
+                        sortedEntries
+
+                    currentUserRank =
+                        calculatedRank
+
+                    pointToNextRank =
+                        calculatedPointToNextRank
+                }
+            }
+    }
     private func loadLatestNotice() {
         db.collection("notices")
             .order(

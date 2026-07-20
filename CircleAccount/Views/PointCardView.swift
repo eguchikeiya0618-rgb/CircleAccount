@@ -1,19 +1,29 @@
 import SwiftUI
 import FirebaseFirestore
+import UIKit
 
 struct PointCardView: View {
-    private let db = Firestore.firestore()
-
+    @AppStorage("testMVPName")
+    var testMVPName = ""
+    
+    @AppStorage("testMVPId")
+    var testMVPId = ""
+    
+    @State private var testMVPPoint = 0
+    @State private var testMVPImageBase64 = ""
+    
+    let db = Firestore.firestore()
+    
     @AppStorage("currentUserId") private var currentUserId = ""
     @AppStorage("currentUserIsAdmin") private var currentUserIsAdmin = false
-
+    
     @State private var memberNo = 1
     @State private var memberName = ""
-
+    
     @State private var totalPoint = 0
     @State private var availablePoint = 0
     @State private var monthlyPoint = 0
-
+    
     @State private var cleanupTickets = 0
     @State private var discountTickets = 0
     @State private var halfPriceTickets = 0
@@ -21,35 +31,60 @@ struct PointCardView: View {
     @State private var challengeTickets = 0
     @State private var priorityTickets = 0
     @State private var stringingFreeTickets = 0
-
+    
     @State private var monthlyChampionCount = 0
     @State private var monthlySecondCount = 0
     @State private var monthlyThirdCount = 0
     @State private var mvpCount = 0
-
+    
     @State private var myRank = 0
     @State private var myRankingPoint = 0
     @State private var pointToNextRank = 0
     @State private var targetRank = 0
     @State private var rankingMembers: [Member] = []
-
+    
     @State private var isFlipped = false
-    @State private var hasLoadedMember = false
 
+    @State private var glowAnimation = false
+    @State private var shimmerOffset: CGFloat = -1.3
+
+    // プレミアムカード操作演出
+    @State private var cardDragOffset: CGSize = .zero
+    @State private var isCardPressed = false
+    @State private var showCardTapFlash = false
+
+    @State private var hasLoadedMember = false
+    
     @State private var showRankUpAlert = false
     @State private var rankUpMessage = ""
-
+    
     @State private var showUseTicketAlert = false
     @State private var selectedTicketTitle = ""
     @State private var selectedTicketField = ""
     @State private var selectedTicketIcon = ""
-
+    
     @State private var showActivityTicketAlert = false
     @State private var showAlreadyAwardedAlert = false
     @State private var showMonthlyAwardAlert = false
     @State private var showMonthlyAwardDoneAlert = false
+    @State private var showHallOfFameCelebration = false
+    @State private var showMVPAnnouncement = false
+    @State private var announcedMVPName = ""
+    @State private var announcedMVPImageBase64 = ""
+    
+    @State private var celebrationMonthText = ""
     @State private var showHallOfFame = false
-
+    
+    @State private var awardTargetMonth = ""
+    // MVP選択
+    @State private var showMVPSelectionSheet = false
+    @State private var selectedMVP: Member?
+    @State private var mvpCandidates: [Member] = []
+    @State private var showMVPRequiredAlert = false
+    @State private var showAwardNotReadyAlert = false
+    @State private var isMVPSelectionTestMode = false
+    @State private var showMVPTestDoneAlert = false
+    
     var rankBadge: String {
         if totalPoint >= 700 { return "LEGEND" }
         if totalPoint >= 400 { return "PLATINUM" }
@@ -57,7 +92,7 @@ struct PointCardView: View {
         if totalPoint >= 100 { return "SILVER" }
         return "BRONZE"
     }
-
+    
     var cardBackground: String {
         if totalPoint >= 700 { return "legend_card_bg" }
         if totalPoint >= 400 { return "platinum_card_bg" }
@@ -65,7 +100,7 @@ struct PointCardView: View {
         if totalPoint >= 100 { return "silver_card_bg" }
         return "bronze_card_bg"
     }
-
+    
     var nextReward: (title: String, point: Int, icon: String) {
         if availablePoint < 100 {
             return ("片付けパス", 100, "🧹")
@@ -77,63 +112,41 @@ struct PointCardView: View {
             return ("参加費無料券", 700, "🎁")
         }
     }
-
+    
     var remainingPoint: Int {
         max(nextReward.point - availablePoint, 0)
     }
-
+    
     var progressToNextRank: Double {
         guard pointToNextRank > 0 else { return 1.0 }
         let goal = myRankingPoint + pointToNextRank
         guard goal > 0 else { return 0.0 }
         return min(Double(myRankingPoint) / Double(goal), 1.0)
     }
-
+    
     var body: some View {
         NavigationStack {
             ScrollView {
-            VStack(spacing: 22) {
-                flippingCard
-
-                Text("カードをタップするとランキングが見れます")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                ticketsSection
-                exchangeSection
-
-                if currentUserIsAdmin {
-                    monthlyAwardButton
-                }
-                
-                Button {
-                    showHallOfFame = true
-                } label: {
-                    Label("歴代チャンピオンを見る", systemImage: "crown.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                }
-                .buttonStyle(.plain)
-                NavigationLink {
-                    PointHistoryView()
-                } label: {
-                    Label("ポイント履歴を見る", systemImage: "clock.arrow.circlepath")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                }
-                .buttonStyle(.plain)
-
-                if currentUserIsAdmin {
-                    NavigationLink {
-                        TicketUsageHistoryView()
+                VStack(spacing: 22) {
+                    flippingCard
+                    
+                    Text("カードをタップするとランキングが見れます")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    ticketsSection
+                    exchangeSection
+                    
+                    if currentUserIsAdmin {
+                        monthlyAwardButton
+                        mvpSelectionTestButton
+                        celebrationTestButton
+                    }
+                    
+                    Button {
+                        showHallOfFame = true
                     } label: {
-                        Label("🎫 チケット使用履歴", systemImage: "clock.badge.checkmark")
+                        Label("歴代チャンピオンを見る", systemImage: "crown.fill")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -141,99 +154,354 @@ struct PointCardView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 18))
                     }
                     .buttonStyle(.plain)
+                    NavigationLink {
+                        PointHistoryView()
+                    } label: {
+                        Label("ポイント履歴を見る", systemImage: "clock.arrow.circlepath")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if currentUserIsAdmin {
+                        NavigationLink {
+                            TicketUsageHistoryView()
+                        } label: {
+                            Label("🎫 チケット使用履歴", systemImage: "clock.badge.checkmark")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color(.systemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 18))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    pointRuleSection
+                }
+                .padding()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("ポイントカード")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+
+                loadMember()
+                loadRanking()
+
+                withAnimation(
+                    .easeInOut(duration: 3.0)
+                    .repeatForever(autoreverses: true)
+                ) {
+                    glowAnimation = true
                 }
 
-                pointRuleSection
+                withAnimation(
+                    .linear(duration: 4.5)
+                    .repeatForever(autoreverses: false)
+                ) {
+                    shimmerOffset = 1.5
+                }
             }
-            .padding()
-        }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("ポイントカード")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            loadMember()
-            loadRanking()
-        }
-        .alert("🎉 RANK UP!", isPresented: $showRankUpAlert) {
-            Button("OK") { }
-        } message: {
-            Text(rankUpMessage)
-        }
-        .alert("チケットを使用しますか？", isPresented: $showUseTicketAlert) {
-            Button("キャンセル", role: .cancel) { }
-            Button("使用する", role: .destructive) {
-                useTicket()
+            .alert("🎉 RANK UP!", isPresented: $showRankUpAlert) {
+                Button("OK") { }
+            } message: {
+                Text(rankUpMessage)
             }
-        } message: {
-            Text("使用すると元に戻せません。")
-        }
-        .alert("活動詳細から使用してください", isPresented: $showActivityTicketAlert) {
-            Button("OK") { }
-        } message: {
-            Text("このチケットは活動に紐づけて使用するため、近日の活動詳細画面から使用してください。")
-        }
-        .alert("🏆 月間表彰", isPresented: $showMonthlyAwardAlert) {
-            Button("キャンセル", role: .cancel) { }
-            Button("確定する") {
-                grantMonthlyAwards()
+            .alert("チケットを使用しますか？", isPresented: $showUseTicketAlert) {
+                Button("キャンセル", role: .cancel) { }
+                Button("使用する", role: .destructive) {
+                    useTicket()
+                }
+            } message: {
+                Text("使用すると元に戻せません。")
             }
-        } message: {
-            Text("今月の表彰を確定しますか？\n\n🥇1位\n🎾 ガット張り工賃無料券 ×1\n\n🥈2位\n⭐ 対戦指名券 ×1\n\n🥉3位\n🚀 優先ゲーム券 ×1\n\n今月は一度だけ実行できます。")
-        }
-        .alert("🎉 月間表彰完了", isPresented: $showMonthlyAwardDoneAlert) {
-            Button("OK") { }
-        } message: {
-            Text("受賞回数と特典チケットを反映しました。")
-        }
-        .alert("今月は表彰済みです", isPresented: $showAlreadyAwardedAlert) {
-            Button("OK") { }
-        } message: {
-            Text("月間表彰は月に1回だけ実行できます。")
-        }
-        .sheet(isPresented: $showHallOfFame) {
-            NavigationStack {
-                HallOfFameView()
+            .alert("活動詳細から使用してください", isPresented: $showActivityTicketAlert) {
+                Button("OK") { }
+            } message: {
+                Text("このチケットは活動に紐づけて使用するため、近日の活動詳細画面から使用してください。")
             }
-        }
-    }
-    }
+            .alert("🏆 月間表彰", isPresented: $showMonthlyAwardAlert) {
+                Button("キャンセル", role: .cancel) { }
+                
+                Button("確定する") {
+                    grantMonthlyAwards()
+                }
+            } message: {
+                Text(
+                    "\(formattedAwardMonth(awardTargetMonth))の結果を確定しますか？\n\n"
+                    + "🥇1位\n"
+                    + "🎾 ガット張り工賃無料券 ×1\n\n"
+                    + "🥈2位\n"
+                    + "⭐ 対戦指名券 ×1\n\n"
+                    + "🥉3位\n"
+                    + "🚀 優先ゲーム券 ×1\n\n"
+                    + "確定後、その月のポイントはリセットされます。"
+                )
+            }
+            .alert(
+                "まだ月間表彰を確定できません",
+                isPresented: $showAwardNotReadyAlert
+            ) {
+                Button("OK") { }
+            } message: {
+                Text(
+                    "現在進行中の月は殿堂入りできません。\n"
+                    + "翌月になってから前月分を確定してください。"
+                )
+            }
+            .alert("🎉 月間表彰完了", isPresented: $showMonthlyAwardDoneAlert) {
+                Button("OK") { }
+            } message: {
+                Text("受賞回数と特典チケットを反映しました。")
+            }
+            .alert("今月は表彰済みです", isPresented: $showAlreadyAwardedAlert) {
+                Button("OK") { }
+            } message: {
+                Text("月間表彰は月に1回だけ実行できます。")
+            }
+            .sheet(isPresented: $showHallOfFame) {
+                NavigationStack {
+                    HallOfFameView()
+                }
+            }
+            
+            .sheet(isPresented: $showMVPSelectionSheet) {
+                NavigationStack {
+                    MVPSelectionView(
+                        candidates: mvpCandidates,
+                        selectedMVP: $selectedMVP
+                    ) {
+                        showMVPSelectionSheet = false
+                        
+                        DispatchQueue.main.asyncAfter(
+                            deadline: .now() + 0.25
+                        ) {
+                            if isMVPSelectionTestMode {
+                                if let selectedMVP {
+                                    testMVPName = selectedMVP.name
+                                    testMVPId = selectedMVP.id
+                                }
 
+                                showMVPTestDoneAlert = true
+                                isMVPSelectionTestMode = false
+                            } else {
+                                showMonthlyAwardAlert = true
+                            }
+                        }
+                    }
+                }
+            }
+            .alert(
+                "MVP選択テスト完了",
+                isPresented: $showMVPTestDoneAlert
+            ) {
+                Button("OK") { }
+            } message: {
+                if let selectedMVP {
+                    Text("月間MVPとして「\(selectedMVP.name)」を選択しました。\n本番データの保存やポイントリセットは行っていません。")
+                } else {
+                    Text("本番データは変更されていません。")
+                }
+            }
+            .alert(
+                "MVPを選択してください",
+                isPresented: $showMVPRequiredAlert
+            ) {
+                Button("OK") { }
+            } message: {
+                Text("月間表彰を確定する前に、MVPを1人選択してください。")
+            }
+            .overlay {
+                ZStack {
+                    if showHallOfFameCelebration {
+                        HallOfFameCelebrationOverlay(
+                            monthText: celebrationMonthText
+                        ) {
+                            withAnimation(
+                                .easeOut(duration: 0.25)
+                            ) {
+                                showHallOfFameCelebration = false
+                            }
+
+                            DispatchQueue.main.asyncAfter(
+                                deadline: .now() + 0.30
+                            ) {
+                                withAnimation(
+                                    .spring(
+                                        response: 0.60,
+                                        dampingFraction: 0.78
+                                    )
+                                ) {
+                                    showMVPAnnouncement = true
+                                }
+                            }
+                        }
+                        .zIndex(100)
+                    }
+
+                    if showMVPAnnouncement {
+                        MVPAnnouncementOverlay(
+                            memberName: announcedMVPName,
+                            imageBase64: announcedMVPImageBase64
+                        ) {
+                            withAnimation(
+                                .easeOut(duration: 0.25)
+                            ) {
+                                showMVPAnnouncement = false
+                            }
+
+                            DispatchQueue.main.asyncAfter(
+                                deadline: .now() + 0.30
+                            ) {
+                                showHallOfFame = true
+                            }
+                        }
+                        .zIndex(101)
+                    }
+                }
+            }
+        }
+    }
+}
+import SwiftUI
+
+extension PointCardView {
     var flippingCard: some View {
         ZStack {
-            memberCard.opacity(isFlipped ? 0 : 1)
-            rankingCard.opacity(isFlipped ? 1 : 0)
+            memberCard
+                .opacity(isFlipped ? 0 : 1)
+
+            rankingCard
+                .opacity(isFlipped ? 1 : 0)
         }
+        .overlay {
+            cardAuroraLayer
+        }
+        .overlay {
+            PremiumPointCardTapFlash(isVisible: showCardTapFlash)
+        }
+        .clipShape(
+            RoundedRectangle(cornerRadius: 28)
+        )
+        // 表面・ランキング面の反転
         .rotation3DEffect(
             .degrees(isFlipped ? 180 : 0),
-            axis: (x: 0, y: 1, z: 0)
+            axis: (x: 0, y: 1, z: 0),
+            perspective: 0.72
         )
-        .onTapGesture {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                isFlipped.toggle()
+        // 指の位置に合わせた立体的な傾き
+        .rotation3DEffect(
+            .degrees(Double(-cardDragOffset.height / 17)),
+            axis: (x: 1, y: 0, z: 0),
+            perspective: 0.62
+        )
+        .rotation3DEffect(
+            .degrees(Double(cardDragOffset.width / 17)),
+            axis: (x: 0, y: 1, z: 0),
+            perspective: 0.62
+        )
+        .scaleEffect(isCardPressed ? 0.975 : 1.0)
+        .offset(
+            x: cardDragOffset.width * 0.035,
+            y: cardDragOffset.height * 0.035
+        )
+        .shadow(
+            color: .black.opacity(isCardPressed ? 0.20 : 0.30),
+            radius: isCardPressed ? 11 : 20,
+            x: -cardDragOffset.width * 0.07,
+            y: 11 - cardDragOffset.height * 0.05
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 28))
+        .gesture(cardInteractionGesture)
+        .animation(
+            .spring(response: 0.38, dampingFraction: 0.76),
+            value: cardDragOffset
+        )
+        .animation(
+            .spring(response: 0.26, dampingFraction: 0.72),
+            value: isCardPressed
+        )
+    }
+
+    private var cardInteractionGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                isCardPressed = true
+
+                cardDragOffset = CGSize(
+                    width: max(-72, min(72, value.translation.width)),
+                    height: max(-48, min(48, value.translation.height))
+                )
+            }
+            .onEnded { value in
+                let travel = hypot(
+                    value.translation.width,
+                    value.translation.height
+                )
+
+                if travel < 12 {
+                    triggerCardTapFeedback()
+
+                    withAnimation(
+                        .spring(response: 0.56, dampingFraction: 0.80)
+                    ) {
+                        isFlipped.toggle()
+                    }
+                }
+
+                withAnimation(
+                    .spring(response: 0.42, dampingFraction: 0.72)
+                ) {
+                    cardDragOffset = .zero
+                    isCardPressed = false
+                }
+            }
+    }
+
+    private func triggerCardTapFeedback() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        generator.impactOccurred(intensity: 0.78)
+
+        showCardTapFlash = false
+
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.10)) {
+                showCardTapFlash = true
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            withAnimation(.easeOut(duration: 0.34)) {
+                showCardTapFlash = false
             }
         }
     }
-
+    
     var memberCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                   
+                    
                     Text("SiRiUS MEMBER CARD")
                         .offset(x: 0, y: 35)
                         .font(.system(size: 9, weight: .bold))
                         .tracking(1.5)
                         .opacity(0.7)
                 }
-
+                
                 Spacer()
-
+                
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(memberName.isEmpty ? "MEMBER" : memberName)
                         .offset(x: -12, y: 5)
                         .font(.system(size: 17, weight: .black))
                         .lineLimit(1)
-
+                    
                     Text("No. \(String(format: "%06d", memberNo))")
                         .offset(x: -3, y: 5)
                         .font(.system(size: 9, weight: .bold))
@@ -250,42 +518,42 @@ struct PointCardView: View {
                         .offset(x: 0, y: 3)
                 }
             }
-
+            
             Spacer()
-
+            
             VStack(spacing: 0) {
                 Text("TOTAL POINT")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(2)
                     .opacity(0.7)
-
+                
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
                     Text("\(totalPoint)")
                         .font(.system(size: 52, weight: .black))
-
+                    
                     Text("pt")
                         .font(.system(size: 18, weight: .black))
                 }
             }
             .frame(maxWidth: .infinity)
-
+            
             Spacer()
-
+            
             HStack(spacing: 7) {
                 walletBox(title: "今月", value: "\(monthlyPoint)pt")
                 walletBox(title: "利用可能", value: "\(availablePoint)pt")
-
+                
                 VStack(alignment: .leading, spacing: 2) {
                     Text("NEXT")
                         .font(.system(size: 8, weight: .black))
                         .tracking(1)
                         .opacity(0.7)
-
+                    
                     Text("\(nextReward.icon) \(nextReward.title)")
                         .font(.system(size: 10, weight: .bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-
+                    
                     Text("あと\(remainingPoint)pt")
                         .font(.system(size: 9, weight: .medium))
                         .opacity(0.7)
@@ -296,31 +564,31 @@ struct PointCardView: View {
                 .background(.black.opacity(0.28))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-
+            
             Spacer(minLength: 6)
-
+            
             HStack {
                 Text("OFFICIAL MEMBER")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(1.4)
                     .opacity(0.6)
-
+                
                 Spacer()
-
+                
                 Image(systemName: "qrcode")
                     .font(.system(size: 18))
                     .opacity(0.2)
             }
         }
         .padding(14)
-        .cardStyle(imageName: cardBackground)
+        .cardStyle(imageName: cardBackground, rank: rankBadge)
     }
     func walletBox(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.system(size: 9, weight: .bold))
                 .opacity(0.7)
-
+            
             Text(value)
                 .font(.system(size: 13, weight: .black))
                 .lineLimit(1)
@@ -336,14 +604,14 @@ struct PointCardView: View {
             HStack {
                 Text("今月ランキング")
                     .font(.system(size: 18, weight: .black))
-
+                
                 Spacer()
-
+                
                 
             }
-
+            
             Spacer(minLength: 8)
-
+            
             if rankingMembers.isEmpty {
                 Spacer()
                 Text("ランキングを読み込み中...")
@@ -356,56 +624,56 @@ struct PointCardView: View {
                         HStack(spacing: 7) {
                             Text(rankIcon(index))
                                 .frame(width: 22)
-
+                            
                             Text("\(index + 1)位")
                                 .font(.system(size: 11, weight: .bold))
                                 .frame(width: 30, alignment: .leading)
-
+                            
                             Text(member.name)
                                 .font(.system(size: 14, weight: .black))
                                 .lineLimit(1)
-
+                            
                             Spacer()
-
+                            
                             Text("\(member.monthlyPoint)pt")
                                 .offset(x: -90)
                                 .font(.system(size: 14, weight: .black))
                         }
                     }
                 }
-
+                
                 Spacer(minLength: 8)
-
+                
                 Rectangle()
                     .fill(.white.opacity(0.15))
                     .frame(height: 1)
-
+                
                 Spacer(minLength: 8)
-
+                
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("あなた")
                             .font(.system(size: 10, weight: .bold))
                             .opacity(0.7)
-
+                        
                         Text(myRank == 0 ? "-位" : "\(myRank)位")
                             .font(.system(size: 34, weight: .black))
-
+                        
                         Text("現在の順位")
                             .font(.system(size: 9, weight: .bold))
                             .opacity(0.65)
                     }
-
+                    
                     Spacer()
-
+                    
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(myRankingPoint)pt")
                             .font(.system(size: 30, weight: .black))
-
+                        
                         Text("今月ポイント")
                             .font(.system(size: 9, weight: .bold))
                             .opacity(0.65)
-
+                        
                         if myRank == 1 {
                             Text("👑 現在トップ！")
                                 .font(.system(size: 11, weight: .black))
@@ -419,14 +687,25 @@ struct PointCardView: View {
         }
         .padding(14)
         .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-        .cardStyle(imageName: cardBackground)
+        .cardStyle(imageName: cardBackground, rank: rankBadge)
     }
+    var cardAuroraLayer: some View {
+        PremiumPointCardEffects(
+            rank: rankBadge,
+            shimmerOffset: shimmerOffset,
+            glowAnimation: glowAnimation
+        )
+    }
+}
+import SwiftUI
+
+extension PointCardView {
     var ticketsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("🎫 My Tickets")
                 .font(.title2)
                 .bold()
-
+            
             ticketRow(icon: "🎾", title: "ガット張り工賃無料券", count: stringingFreeTickets, ticketField: "stringingFreeTickets")
             Divider()
             ticketRow(icon: "⭐", title: "対戦指名券", count: challengeTickets, ticketField: "challengeTickets")
@@ -446,7 +725,7 @@ struct PointCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
     }
-
+    
     var exchangeSection: some View {
         NavigationLink {
             TicketShopView()
@@ -457,20 +736,20 @@ struct PointCardView: View {
                     .frame(width: 56, height: 56)
                     .background(Color.blue.opacity(0.10))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-
+                
                 VStack(alignment: .leading, spacing: 6) {
                     Text("チケットショップ")
                         .font(.title3)
                         .bold()
                         .foregroundStyle(.primary)
-
+                    
                     Text("ポイントでチケットを交換")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-
+                
                 Spacer()
-
+                
                 Image(systemName: "chevron.right")
                     .font(.headline)
                     .foregroundStyle(.secondary)
@@ -494,18 +773,18 @@ struct PointCardView: View {
             HStack {
                 Text("🏆")
                     .font(.title2)
-
+                
                 VStack(alignment: .leading) {
-                    Text("月間表彰を確定する")
+                    Text("前月の表彰を確定する")
                         .font(.headline)
-
-                    Text("1位〜3位に特典を付与して今月ポイントをリセット")
+                    
+                    Text("終了した月の結果を殿堂入りしてポイントをリセット")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-
+                
                 Spacer()
-
+                
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.secondary)
             }
@@ -515,39 +794,199 @@ struct PointCardView: View {
         }
         .buttonStyle(.plain)
     }
-   
+    // MARK: - 殿堂入り演出テストボタン
+    
+    var celebrationTestButton: some View {
+        Button {
+            celebrationMonthText = testCelebrationMonthText()
+            
+            withAnimation(
+                .spring(
+                    response: 0.45,
+                    dampingFraction: 0.82
+                )
+            ) {
+                showHallOfFameCelebration = true
+            }
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.orange.opacity(0.18),
+                                    Color.pink.opacity(0.15),
+                                    Color.purple.opacity(0.13)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 54, height: 54)
+                    
+                    Text("🎉")
+                        .font(.system(size: 29))
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("殿堂入り演出をテスト")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text("保存やポイントリセットは行いません")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "play.fill")
+                    .font(.headline)
+                    .foregroundStyle(.purple)
+            }
+            .padding()
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.orange.opacity(0.10),
+                        Color.pink.opacity(0.08),
+                        Color.purple.opacity(0.08),
+                        Color(.systemBackground)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .clipShape(
+                RoundedRectangle(cornerRadius: 18)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.orange.opacity(0.30),
+                                Color.pink.opacity(0.22),
+                                Color.purple.opacity(0.22)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    // MARK: - MVP選択テストボタン
+    
+    var mvpSelectionTestButton: some View {
+        Button {
+            prepareMVPSelectionTest()
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.yellow.opacity(0.20),
+                                    Color.orange.opacity(0.16),
+                                    Color.purple.opacity(0.12)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 54, height: 54)
+                    
+                    Text("⭐")
+                        .font(.system(size: 29))
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("月間MVP選択をテスト")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text("保存やポイントリセットは行いません")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+            }
+            .padding()
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.yellow.opacity(0.08),
+                        Color.orange.opacity(0.07),
+                        Color.purple.opacity(0.05),
+                        Color(.systemBackground)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .clipShape(
+                RoundedRectangle(cornerRadius: 18)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.yellow.opacity(0.32),
+                                Color.orange.opacity(0.24),
+                                Color.purple.opacity(0.18)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
     func ticketRow(icon: String, title: String, count: Int, ticketField: String) -> some View {
         HStack(spacing: 14) {
             Text(icon)
                 .font(.title2)
-
+            
             VStack(alignment: .leading) {
                 Text(title)
                     .font(.headline)
-
+                
                 Text("残り \(count)枚")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
+            
             Spacer()
         }
         .contentShape(Rectangle())
         .onTapGesture {
             guard count > 0 else { return }
-
+            
             if ticketField == "priorityTickets" || ticketField == "challengeTickets" {
                 showActivityTicketAlert = true
                 return
             }
-
+            
             selectedTicketTitle = title
             selectedTicketField = ticketField
             selectedTicketIcon = icon
             showUseTicketAlert = true
         }
     }
-
+    
     func exchangeButton(title: String, point: Int, icon: String, ticketField: String) -> some View {
         Button {
             PointService.shared.exchangeTicket(
@@ -557,7 +996,7 @@ struct PointCardView: View {
                 title: title,
                 icon: icon
             )
-
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 loadMember()
                 loadRanking()
@@ -566,18 +1005,18 @@ struct PointCardView: View {
             HStack {
                 Text(icon)
                     .font(.title2)
-
+                
                 VStack(alignment: .leading) {
                     Text(title)
                         .font(.headline)
-
+                    
                     Text("\(point)ptで交換")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-
+                
                 Spacer()
-
+                
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.secondary)
             }
@@ -592,12 +1031,12 @@ struct PointCardView: View {
         .buttonStyle(.plain)
         .disabled(availablePoint < point)
     }
-
+    
     var pointRuleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("ポイントルール")
                 .font(.headline)
-
+            
             ruleRow("🏸 練習参加", "+5pt")
             ruleRow("⏰ 前日の18:00までに参加回答", "+2pt")
             ruleRow("🔧 設営参加", "+5pt")
@@ -608,21 +1047,21 @@ struct PointCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.04), radius: 6)
     }
-
+    
     func ruleRow(_ title: String, _ point: String) -> some View {
         HStack {
             Text(title)
                 .font(.caption)
-
+            
             Spacer()
-
+            
             Text(point)
                 .font(.caption)
                 .bold()
                 .foregroundStyle(.blue)
         }
     }
-
+    
     func rankIcon(_ index: Int) -> String {
         switch index {
         case 0: return "🥇"
@@ -631,22 +1070,26 @@ struct PointCardView: View {
         default: return "🏸"
         }
     }
+}
+import SwiftUI
+import FirebaseFirestore
 
+extension PointCardView {
     func loadMember() {
         guard !currentUserId.isEmpty else { return }
-
+        
         db.collection("members")
             .document(currentUserId)
             .getDocument { snapshot, _ in
                 guard let data = snapshot?.data() else { return }
-
+                
                 let oldPoint = totalPoint
                 let newPoint = data["totalPoint"] as? Int ?? 0
-
+                
                 totalPoint = newPoint
                 availablePoint = data["availablePoint"] as? Int ?? 0
                 monthlyPoint = data["monthlyPoint"] as? Int ?? 0
-
+                
                 cleanupTickets = data["cleanupTickets"] as? Int ?? 0
                 discountTickets = data["discountTickets"] as? Int ?? 0
                 halfPriceTickets = data["halfPriceTickets"] as? Int ?? 0
@@ -654,15 +1097,15 @@ struct PointCardView: View {
                 stringingFreeTickets = data["stringingFreeTickets"] as? Int ?? 0
                 challengeTickets = data["challengeTickets"] as? Int ?? 0
                 priorityTickets = data["priorityTickets"] as? Int ?? 0
-
+                
                 memberNo = data["memberNo"] as? Int ?? 999999
                 memberName = data["name"] as? String ?? "MEMBER"
-
+                
                 monthlyChampionCount = data["monthlyChampionCount"] as? Int ?? 0
                 monthlySecondCount = data["monthlySecondCount"] as? Int ?? 0
                 monthlyThirdCount = data["monthlyThirdCount"] as? Int ?? 0
                 mvpCount = data["mvpCount"] as? Int ?? 0
-
+                
                 if hasLoadedMember {
                     checkRankUp(oldPoint: oldPoint, newPoint: newPoint)
                 } else {
@@ -670,7 +1113,7 @@ struct PointCardView: View {
                 }
             }
     }
-
+    
     func useTicket() {
         PointService.shared.useTicket(
             memberId: currentUserId,
@@ -678,12 +1121,12 @@ struct PointCardView: View {
             title: selectedTicketTitle,
             icon: selectedTicketIcon
         )
-
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             loadMember()
         }
     }
-
+    
     func checkRankUp(oldPoint: Int, newPoint: Int) {
         if oldPoint < 700 && newPoint >= 700 {
             rankUpMessage = "👑 Legend Player\n\n⭐ 対戦指名券 ×2\n🚀 優先ゲーム券 ×2 を獲得しました！"
@@ -699,14 +1142,14 @@ struct PointCardView: View {
             showRankUpAlert = true
         }
     }
-
+    
     func loadRanking() {
         db.collection("members")
             .order(by: "monthlyPoint", descending: true)
             .getDocuments { snapshot, _ in
                 let members = snapshot?.documents.compactMap { document -> Member? in
                     let data = document.data()
-
+                    
                     return Member(
                         id: document.documentID,
                         name: data["name"] as? String ?? "",
@@ -735,13 +1178,13 @@ struct PointCardView: View {
                         profileImageBase64: data["profileImageBase64"] as? String ?? ""
                     )
                 } ?? []
-
-                rankingMembers = Array(members.prefix(5))
-
+                
+                rankingMembers = Array(members.prefix(10))
+                
                 if let index = members.firstIndex(where: { $0.id == currentUserId }) {
                     myRank = index + 1
                     myRankingPoint = members[index].monthlyPoint
-
+                    
                     if index == 0 {
                         pointToNextRank = 0
                         targetRank = 0
@@ -762,94 +1205,932 @@ struct PointCardView: View {
                 }
             }
     }
+}
+import SwiftUI
+import FirebaseFirestore
 
+extension PointCardView {
     func grantMonthlyAwards() {
-        guard rankingMembers.count >= 3 else { return }
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let currentMonth = formatter.string(from: Date())
-
+        guard rankingMembers.count >= 3 else {
+            return
+        }
+        
+        guard !awardTargetMonth.isEmpty else {
+            return
+        }
+        
+        guard let selectedMVP else {
+            showMVPRequiredAlert = true
+            return
+        }
+        
+        let targetMonth = awardTargetMonth
+        let newActiveMonth = monthKey(from: Date())
+        
+        let firstMember = rankingMembers[0]
+        let secondMember = rankingMembers[1]
+        let thirdMember = rankingMembers[2]
+        
+        // 現在保持しているランキングの上位10人
+        let topTenMembers = Array(
+            rankingMembers.prefix(10)
+        )
+        
+        // 参加王
+        let attendanceKing =
+        topTenMembers.max {
+            first,
+            second in
+            
+            if first.attendanceCount
+                == second.attendanceCount {
+                return first.monthlyPoint
+                < second.monthlyPoint
+            }
+            
+            return first.attendanceCount
+            < second.attendanceCount
+        }
+        
+        // 設営王
+        let setupKing =
+        topTenMembers.max {
+            first,
+            second in
+            
+            if first.setupCount
+                == second.setupCount {
+                return first.monthlyPoint
+                < second.monthlyPoint
+            }
+            
+            return first.setupCount
+            < second.setupCount
+        }
+        
+        // Firestoreへ保存するTOP10データ
+        let topTenData: [[String: Any]] =
+        topTenMembers.enumerated().map {
+            index,
+            member in
+            
+            [
+                "rank": index + 1,
+                "memberId": member.id,
+                "name": member.name,
+                "point": member.monthlyPoint,
+                "profileImageBase64":
+                    member.profileImageBase64
+            ]
+        }
+        
+        var hallOfFameData: [String: Any] = [
+            "month": targetMonth,
+            
+            // ポイント王
+            "championId": firstMember.id,
+            "championName": firstMember.name,
+            "championPoint":
+                firstMember.monthlyPoint,
+            
+            "pointKingId": firstMember.id,
+            "pointKingName": firstMember.name,
+            "pointKingPoint":
+                firstMember.monthlyPoint,
+            
+            // ポイント2位
+            "secondId": secondMember.id,
+            "secondName": secondMember.name,
+            "secondPoint":
+                secondMember.monthlyPoint,
+            
+            // ポイント3位
+            "thirdId": thirdMember.id,
+            "thirdName": thirdMember.name,
+            "thirdPoint":
+                thirdMember.monthlyPoint,
+            
+            // 月間MVP
+            "mvpId": selectedMVP.id,
+            "mvpName": selectedMVP.name,
+            "mvpPoint":
+                selectedMVP.monthlyPoint,
+            
+            // TOP10
+            "pointRankingTop10": topTenData,
+            
+            "createdAt": Timestamp()
+        ]
+        
+        if let attendanceKing {
+            hallOfFameData[
+                "attendanceKingId"
+            ] = attendanceKing.id
+            
+            hallOfFameData[
+                "attendanceKingName"
+            ] = attendanceKing.name
+            
+            hallOfFameData[
+                "attendanceKingCount"
+            ] = attendanceKing.attendanceCount
+        } else {
+            hallOfFameData[
+                "attendanceKingId"
+            ] = ""
+            
+            hallOfFameData[
+                "attendanceKingName"
+            ] = ""
+            
+            hallOfFameData[
+                "attendanceKingCount"
+            ] = 0
+        }
+        
+        if let setupKing {
+            hallOfFameData[
+                "setupKingId"
+            ] = setupKing.id
+            
+            hallOfFameData[
+                "setupKingName"
+            ] = setupKing.name
+            
+            hallOfFameData[
+                "setupKingCount"
+            ] = setupKing.setupCount
+        } else {
+            hallOfFameData[
+                "setupKingId"
+            ] = ""
+            
+            hallOfFameData[
+                "setupKingName"
+            ] = ""
+            
+            hallOfFameData[
+                "setupKingCount"
+            ] = 0
+        }
+        
         db.collection("hallOfFame")
-            .document(currentMonth)
-            .setData([
-                "month": currentMonth,
-
-                "championId": rankingMembers[0].id,
-                "championName": rankingMembers[0].name,
-                "championPoint": rankingMembers[0].monthlyPoint,
-
-                "secondId": rankingMembers[1].id,
-                "secondName": rankingMembers[1].name,
-                "secondPoint": rankingMembers[1].monthlyPoint,
-
-                "thirdId": rankingMembers[2].id,
-                "thirdName": rankingMembers[2].name,
-                "thirdPoint": rankingMembers[2].monthlyPoint,
-
-                "createdAt": Timestamp()
-            ]) { error in
-                if let error = error {
-                    print("❌ hallOfFame保存失敗: \(error.localizedDescription)")
-                } else {
-                    print("✅ hallOfFame保存成功: \(currentMonth)")
+            .document(targetMonth)
+            .setData(
+                hallOfFameData
+            ) { error in
+                if let error {
+                    print(
+                        "hallOfFame保存失敗: "
+                        + error.localizedDescription
+                    )
+                    return
+                }
+                
+                print(
+                    "hallOfFame保存成功: "
+                    + targetMonth
+                )
+                
+                // 1位
+                PointService.shared.addMonthlyAward(
+                    memberId: firstMember.id,
+                    field: "monthlyChampionCount"
+                )
+                
+                db.collection("members")
+                    .document(firstMember.id)
+                    .updateData([
+                        "earnedBadges":
+                            FieldValue.arrayUnion([
+                                "monthlyChampion"
+                            ])
+                    ])
+                
+                // 2位
+                PointService.shared.addMonthlyAward(
+                    memberId: secondMember.id,
+                    field: "monthlySecondCount"
+                )
+                
+                // 3位
+                PointService.shared.addMonthlyAward(
+                    memberId: thirdMember.id,
+                    field: "monthlyThirdCount"
+                )
+                
+                // MVP受賞回数
+                PointService.shared.addMonthlyAward(
+                    memberId: selectedMVP.id,
+                    field: "mvpCount"
+                )
+                
+                // MVPバッジ
+                db.collection("members")
+                    .document(selectedMVP.id)
+                    .updateData([
+                        "earnedBadges":
+                            FieldValue.arrayUnion([
+                                "monthlyMVP"
+                            ])
+                    ]) { mvpError in
+                        if let mvpError {
+                            print(
+                                "MVPバッジ付与失敗: "
+                                + mvpError
+                                    .localizedDescription
+                            )
+                        }
+                    }
+                
+                // 今月ポイントをリセット
+                PointService.shared
+                    .resetAllMonthlyPoints()
+                
+                // 月間設定更新
+                db.collection("settings")
+                    .document("monthlyAward")
+                    .setData(
+                        [
+                            "lastAwardMonth":
+                                targetMonth,
+                            "activeMonth":
+                                newActiveMonth,
+                            "awardedAt":
+                                Timestamp()
+                        ],
+                        merge: true
+                    ) { settingsError in
+                        if let settingsError {
+                            print(
+                                "月間設定更新失敗: "
+                                + settingsError
+                                    .localizedDescription
+                            )
+                        }
+                    }
+                
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + 0.8
+                ) {
+                    loadMember()
+                    loadRanking()
+                    
+                    awardTargetMonth = ""
+                    celebrationMonthText =
+                    formattedAwardMonth(
+                        targetMonth
+                    )
+                    announcedMVPName = selectedMVP.name
+                    announcedMVPImageBase64 =
+                        selectedMVP.profileImageBase64
+                    self.selectedMVP = nil
+                    mvpCandidates = []
+                    
+                    withAnimation(.spring()) {
+                        showHallOfFameCelebration =
+                        true
+                    }
                 }
             }
-        PointService.shared.addMonthlyAward(
-            memberId: rankingMembers[0].id,
-            field: "monthlyChampionCount"
-        )
-        db.collection("members")
-            .document(rankingMembers[0].id)
-            .updateData([
-                "earnedBadges": FieldValue.arrayUnion(["monthlyChampion"])
-            ])
-
-        PointService.shared.addMonthlyAward(
-            memberId: rankingMembers[1].id,
-            field: "monthlySecondCount"
-        )
-
-        PointService.shared.addMonthlyAward(
-            memberId: rankingMembers[2].id,
-            field: "monthlyThirdCount"
-        )
-
-        PointService.shared.resetAllMonthlyPoints()
-
-        db.collection("settings")
-            .document("monthlyAward")
-            .setData([
-                "lastAwardMonth": currentMonth
-            ])
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            loadMember()
-            loadRanking()
-            showMonthlyAwardDoneAlert = true
-        }
     }
     func checkMonthlyAward() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let currentMonth = formatter.string(from: Date())
-
+        let currentMonth = monthKey(from: Date())
+        
         db.collection("settings")
             .document("monthlyAward")
-            .getDocument { snapshot, _ in
-                let lastMonth = snapshot?.data()?["lastAwardMonth"] as? String ?? ""
-
-                if lastMonth == currentMonth {
-                    showAlreadyAwardedAlert = true
-                } else {
-                    showMonthlyAwardAlert = true
+            .getDocument { snapshot, error in
+                if let error {
+                    print(
+                        "月間表彰設定の取得失敗: \(error.localizedDescription)"
+                    )
+                    return
+                }
+                
+                let data = snapshot?.data()
+                let activeMonth =
+                data?["activeMonth"] as? String ?? ""
+                
+                let lastAwardMonth =
+                data?["lastAwardMonth"] as? String ?? ""
+                
+                // 初回設定
+                // 現在のmonthlyPointは今月分として登録する
+                if activeMonth.isEmpty {
+                    db.collection("settings")
+                        .document("monthlyAward")
+                        .setData(
+                            [
+                                "activeMonth": currentMonth
+                            ],
+                            merge: true
+                        )
+                    
+                    DispatchQueue.main.async {
+                        showAwardNotReadyAlert = true
+                    }
+                    
+                    return
+                }
+                
+                // activeMonthと現在月が同じなら、
+                // まだその月は終了していない
+                if activeMonth == currentMonth {
+                    DispatchQueue.main.async {
+                        showAwardNotReadyAlert = true
+                    }
+                    
+                    return
+                }
+                
+                // すでに確定済み
+                if lastAwardMonth == activeMonth {
+                    DispatchQueue.main.async {
+                        showAlreadyAwardedAlert = true
+                    }
+                    
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    prepareMVPSelection(
+                        targetMonth: activeMonth
+                    )
                 }
             }
     }
 }
+import SwiftUI
+import FirebaseFirestore
+
+extension PointCardView {
+    // MARK: - MVP選択準備
+    
+    func prepareMVPSelection(
+        targetMonth: String
+    ) {
+        awardTargetMonth = targetMonth
+        selectedMVP = nil
+        mvpCandidates = []
+        
+        db.collection("members")
+            .whereField("isActive", isEqualTo: true)
+            .getDocuments { snapshot, error in
+                if let error {
+                    print(
+                        "MVP候補取得失敗: \(error.localizedDescription)"
+                    )
+                    
+                    DispatchQueue.main.async {
+                        showMVPRequiredAlert = true
+                    }
+                    return
+                }
+                
+                let members =
+                snapshot?.documents.compactMap {
+                    document -> Member? in
+                    
+                    let data = document.data()
+                    
+                    let name =
+                    data["name"] as? String
+                    ?? ""
+                    
+                    guard !name.isEmpty else {
+                        return nil
+                    }
+                    
+                    return Member(
+                        id: document.documentID,
+                        name: name,
+                        role:
+                            MemberRole(
+                                rawValue:
+                                    data["role"] as? String
+                                ?? ""
+                            )
+                        ?? .member,
+                        isAdmin:
+                            data["isAdmin"] as? Bool
+                        ?? false,
+                        isActive:
+                            data["isActive"] as? Bool
+                        ?? true,
+                        totalPoint:
+                            data["totalPoint"] as? Int
+                        ?? 0,
+                        availablePoint:
+                            data["availablePoint"] as? Int
+                        ?? 0,
+                        attendanceCount:
+                            data["attendanceCount"] as? Int
+                        ?? 0,
+                        setupCount:
+                            data["setupCount"] as? Int
+                        ?? 0,
+                        monthlyPoint:
+                            data["monthlyPoint"] as? Int
+                        ?? 0,
+                        profileImageBase64:
+                            data["profileImageBase64"]
+                        as? String
+                        ?? ""
+                    )
+                }
+                ?? []
+                
+                DispatchQueue.main.async {
+                    mvpCandidates = members.sorted {
+                        $0.name.localizedStandardCompare(
+                            $1.name
+                        ) == .orderedAscending
+                    }
+                    
+                    showMVPSelectionSheet = true
+                }
+            }
+    }
+    // MARK: - MVP選択テスト準備
+
+    func prepareMVPSelectionTest() {
+        isMVPSelectionTestMode = true
+        selectedMVP = nil
+
+        // すでにランキングで取得済みのメンバーを即座に利用
+        let cachedMembers = rankingMembers
+            .filter { member in
+                member.isActive && !member.name.isEmpty
+            }
+            .sorted {
+                $0.name.localizedStandardCompare(
+                    $1.name
+                ) == .orderedAscending
+            }
+
+        if !cachedMembers.isEmpty {
+            mvpCandidates = cachedMembers
+            showMVPSelectionSheet = true
+            return
+        }
+
+        // キャッシュが空の場合のみFirestoreから取得
+        mvpCandidates = []
+
+        db.collection("members")
+            .getDocuments { snapshot, error in
+                if let error {
+                    print(
+                        "MVPテスト候補取得失敗: "
+                        + error.localizedDescription
+                    )
+
+                    DispatchQueue.main.async {
+                        isMVPSelectionTestMode = false
+                        showMVPRequiredAlert = true
+                    }
+                    return
+                }
+
+                let members =
+                    snapshot?.documents.compactMap {
+                        document -> Member? in
+
+                        let data = document.data()
+
+                        let name =
+                            data["name"] as? String
+                            ?? ""
+
+                        let isActive =
+                            data["isActive"] as? Bool
+                            ?? true
+
+                        guard
+                            !name.isEmpty,
+                            isActive
+                        else {
+                            return nil
+                        }
+
+                        return Member(
+                            id: document.documentID,
+                            name: name,
+                            role:
+                                MemberRole(
+                                    rawValue:
+                                        data["role"] as? String
+                                        ?? ""
+                                )
+                                ?? .member,
+                            isAdmin:
+                                data["isAdmin"] as? Bool
+                                ?? false,
+                            isActive: isActive,
+                            totalPoint:
+                                data["totalPoint"] as? Int
+                                ?? 0,
+                            availablePoint:
+                                data["availablePoint"] as? Int
+                                ?? 0,
+                            attendanceCount:
+                                data["attendanceCount"] as? Int
+                                ?? 0,
+                            setupCount:
+                                data["setupCount"] as? Int
+                                ?? 0,
+                            monthlyPoint:
+                                data["monthlyPoint"] as? Int
+                                ?? 0,
+                            profileImageBase64:
+                                data["profileImageBase64"] as? String
+                                ?? ""
+                        )
+                    }
+                    ?? []
+
+                DispatchQueue.main.async {
+                    mvpCandidates = members.sorted {
+                        $0.name.localizedStandardCompare(
+                            $1.name
+                        ) == .orderedAscending
+                    }
+
+                    showMVPSelectionSheet = true
+                }
+            }
+    }
+    // MARK: - 演出テスト用月表示
+    
+    func testCelebrationMonthText() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy年M月"
+        
+        return formatter.string(from: Date())
+    }
+    func monthKey(
+        from date: Date
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale =
+        Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy-MM"
+        
+        return formatter.string(from: date)
+    }
+    
+    func formattedAwardMonth(
+        _ month: String
+    ) -> String {
+        let inputFormatter = DateFormatter()
+        inputFormatter.locale =
+        Locale(identifier: "ja_JP")
+        inputFormatter.dateFormat = "yyyy-MM"
+        
+        let outputFormatter = DateFormatter()
+        outputFormatter.locale =
+        Locale(identifier: "ja_JP")
+        outputFormatter.dateFormat = "yyyy年M月"
+        
+        guard
+            let date =
+                inputFormatter.date(from: month)
+        else {
+            return month
+        }
+        
+        return outputFormatter.string(from: date)
+    }
+}
+import SwiftUI
+
+// MARK: - MVP選択画面
+
+struct MVPSelectionView: View {
+    let candidates: [Member]
+    
+    @Binding var selectedMVP: Member?
+    
+    let onConfirm: () -> Void
+    
+    @Environment(\.dismiss)
+    private var dismiss
+    
+    var body: some View {
+        List {
+            Section {
+                if candidates.isEmpty {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        
+                        Text("メンバーを読み込み中...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: 120
+                    )
+                    
+                } else {
+                    ForEach(candidates) { member in
+                        Button {
+                            selectedMVP = member
+                        } label: {
+                            HStack(spacing: 14) {
+                                ProfileImageView(
+                                    imageBase64:
+                                        member.profileImageBase64,
+                                    size: 50
+                                )
+                                .overlay {
+                                    Circle()
+                                        .stroke(
+                                            selectedMVP?.id
+                                            == member.id
+                                            ? Color.orange
+                                            : Color.gray
+                                                .opacity(0.25),
+                                            lineWidth:
+                                                selectedMVP?.id
+                                            == member.id
+                                            ? 3
+                                            : 1
+                                        )
+                                }
+                                
+                                VStack(
+                                    alignment: .leading,
+                                    spacing: 4
+                                ) {
+                                    Text(member.name)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    
+                                    HStack(spacing: 10) {
+                                        Text(
+                                            "今月 \(member.monthlyPoint)pt"
+                                        )
+                                        
+                                        Text(
+                                            "参加 \(member.attendanceCount)回"
+                                        )
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                if selectedMVP?.id
+                                    == member.id {
+                                    Image(
+                                        systemName:
+                                            "checkmark.circle.fill"
+                                    )
+                                    .font(.title2)
+                                    .foregroundStyle(.orange)
+                                } else {
+                                    Image(
+                                        systemName: "circle"
+                                    )
+                                    .font(.title2)
+                                    .foregroundStyle(
+                                        .gray.opacity(0.35)
+                                    )
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 5)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } header: {
+                Text("今月もっとも活躍したメンバーを選択")
+            } footer: {
+                Text(
+                    "MVPは管理者の判断で1人選択します。"
+                )
+            }
+        }
+        .navigationTitle("月間MVPを選択")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(
+                placement: .cancellationAction
+            ) {
+                Button("キャンセル") {
+                    dismiss()
+                }
+            }
+            
+            ToolbarItem(
+                placement: .confirmationAction
+            ) {
+                Button("決定") {
+                    onConfirm()
+                }
+                .fontWeight(.bold)
+                .disabled(selectedMVP == nil)
+            }
+        }
+    }
+}
+import SwiftUI
+
+// MARK: - Premium Point Card Effects
+
+private struct PremiumPointCardTapFlash: View {
+    let isVisible: Bool
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .white.opacity(0.08),
+                    .white.opacity(0.92),
+                    .white.opacity(0.18),
+                    .clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .frame(width: 82, height: 520)
+            .rotationEffect(.degrees(-24))
+            .scaleEffect(isVisible ? 1.15 : 0.75)
+            .offset(x: isVisible ? 250 : -250)
+            .blur(radius: 2.6)
+
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(isVisible ? 0.95 : 0),
+                            .cyan.opacity(isVisible ? 0.55 : 0),
+                            .purple.opacity(isVisible ? 0.48 : 0),
+                            .white.opacity(isVisible ? 0.76 : 0)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: isVisible ? 2.0 : 0.8
+                )
+                .blur(radius: isVisible ? 0.8 : 2.5)
+        }
+        .opacity(isVisible ? 1 : 0)
+        .blendMode(.screen)
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.32), value: isVisible)
+    }
+}
+
+private struct PremiumPointCardEffects: View {
+    let rank: String
+    let shimmerOffset: CGFloat
+    let glowAnimation: Bool
+
+    var body: some View {
+        ZStack {
+            RadialGradient(
+                colors: auraColors,
+                center: glowAnimation ? .topTrailing : .bottomLeading,
+                startRadius: 10,
+                endRadius: 330
+            )
+            .scaleEffect(glowAnimation ? 1.08 : 0.94)
+            .opacity(glowAnimation ? 0.62 : 0.34)
+            .blur(radius: 13)
+
+            LinearGradient(
+                colors: hologramColors,
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 76, height: 520)
+            .rotationEffect(.degrees(-23))
+            .offset(x: shimmerOffset * 360)
+            .blur(radius: 6)
+
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .white.opacity(0.04),
+                    .white.opacity(0.32),
+                    .white.opacity(0.68),
+                    .white.opacity(0.20),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 30, height: 500)
+            .rotationEffect(.degrees(-23))
+            .offset(x: shimmerOffset * 405)
+            .blur(radius: 2.2)
+
+            PremiumPointCardParticles(rank: rank)
+        }
+        .compositingGroup()
+        .blendMode(.screen)
+        .allowsHitTesting(false)
+    }
+
+    private var auraColors: [Color] {
+        switch rank {
+        case "LEGEND":
+            return [.yellow.opacity(0.25), .pink.opacity(0.15), .cyan.opacity(0.13), .clear]
+        case "PLATINUM":
+            return [.cyan.opacity(0.20), .purple.opacity(0.14), .pink.opacity(0.10), .clear]
+        case "GOLD":
+            return [.yellow.opacity(0.27), .orange.opacity(0.15), .clear]
+        case "SILVER":
+            return [.white.opacity(0.29), .blue.opacity(0.13), .clear]
+        default:
+            return [.orange.opacity(0.18), .red.opacity(0.09), .clear]
+        }
+    }
+
+    private var hologramColors: [Color] {
+        switch rank {
+        case "LEGEND", "PLATINUM":
+            return [.clear, .cyan.opacity(0.32), .purple.opacity(0.30), .pink.opacity(0.29), .yellow.opacity(0.30), .clear]
+        case "GOLD":
+            return [.clear, .yellow.opacity(0.33), .white.opacity(0.43), .orange.opacity(0.27), .clear]
+        case "SILVER":
+            return [.clear, .blue.opacity(0.18), .white.opacity(0.48), .cyan.opacity(0.16), .clear]
+        default:
+            return [.clear, .orange.opacity(0.25), .white.opacity(0.34), .red.opacity(0.16), .clear]
+        }
+    }
+}
+
+private struct PremiumPointCardParticles: View {
+    let rank: String
+
+    private var count: Int {
+        switch rank {
+        case "LEGEND": return 14
+        case "PLATINUM": return 10
+        case "GOLD": return 8
+        case "SILVER": return 6
+        default: return 4
+        }
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+
+                for index in 0..<count {
+                    let seed = Double(index + 1)
+                    let x = random(seed * 17.13) * size.width
+                    let y = random(seed * 31.71) * size.height
+                    let pulse = (sin(time * (1.4 + random(seed * 9.07)) + seed) + 1) * 0.5
+                    let radius = 1.2 + random(seed * 4.11) * 2.2
+                    let center = CGPoint(x: x, y: y)
+
+                    context.opacity = 0.10 + pulse * 0.55
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)),
+                        with: .color(particleColor(index))
+                    )
+
+                    if index.isMultiple(of: 3) {
+                        let beam = radius * 2.7
+                        var path = Path()
+                        path.move(to: CGPoint(x: center.x - beam, y: center.y))
+                        path.addLine(to: CGPoint(x: center.x + beam, y: center.y))
+                        path.move(to: CGPoint(x: center.x, y: center.y - beam))
+                        path.addLine(to: CGPoint(x: center.x, y: center.y + beam))
+                        context.stroke(path, with: .color(.white.opacity(0.72)), lineWidth: 0.5)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func particleColor(_ index: Int) -> Color {
+        switch rank {
+        case "LEGEND", "GOLD": return index.isMultiple(of: 2) ? .yellow : .white
+        case "PLATINUM": return index.isMultiple(of: 2) ? .cyan : .white
+        case "SILVER": return index.isMultiple(of: 2) ? .blue.opacity(0.55) : .white
+        default: return index.isMultiple(of: 2) ? .orange : .white
+        }
+    }
+
+    private func random(_ value: Double) -> Double {
+        let raw = sin(value * 12.9898) * 43758.5453
+        return raw - floor(raw)
+    }
+}
 
 extension View {
-    func cardStyle(imageName: String) -> some View {
+    func cardStyle(imageName: String, rank: String) -> some View {
         self
             .foregroundStyle(.white)
             .frame(width: 340, height: 214)
@@ -862,21 +2143,55 @@ extension View {
                         .clipped()
 
                     LinearGradient(
-                        colors: [
-                            .black.opacity(0.32),
-                            .black.opacity(0.05),
-                            .black.opacity(0.32)
-                        ],
+                        colors: [.black.opacity(0.08), .clear, .black.opacity(0.27)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
+
+                    LinearGradient(
+                        colors: [.white.opacity(0.12), .clear, .white.opacity(0.025)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .blendMode(.screen)
+
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.065)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 24))
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: 24)
-                    .stroke(.white.opacity(0.16), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.42), radius: 22, x: 0, y: 14)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.78),
+                                premiumRankColor(rank).opacity(0.50),
+                                .white.opacity(0.10),
+                                .white.opacity(0.40)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.15
+                    )
+            }
+            .shadow(color: premiumRankColor(rank).opacity(0.16), radius: 18)
+            .shadow(color: .black.opacity(0.27), radius: 14, x: 0, y: 9)
+    }
+
+    func cardStyle(imageName: String) -> some View {
+        cardStyle(imageName: imageName, rank: "BRONZE")
+    }
+
+    private func premiumRankColor(_ rank: String) -> Color {
+        switch rank {
+        case "LEGEND": return .yellow
+        case "PLATINUM": return .cyan
+        case "GOLD": return .orange
+        case "SILVER": return Color(red: 0.78, green: 0.86, blue: 0.98)
+        default: return Color(red: 0.76, green: 0.35, blue: 0.14)
+        }
     }
 }

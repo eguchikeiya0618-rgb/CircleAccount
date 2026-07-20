@@ -11,11 +11,15 @@
 		5C6659E22FF2608F0098D6E8 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */; };
 		5C665A002FF3B5A40098D6E8 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */; };
 		5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C665A462FF61B000098D6E8 /* PointProgressCard.swift */; };
+		5C6EF6E43008BB4A00B834AB /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E33008BB4A00B834AB /* SoundManager.swift */; };
+		5C6EF6E530098BF600B834AB /* ラッパのファンファーレ.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		5C12CE0B2FEF9187007BB317 /* CircleAccount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CircleAccount.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C665A462FF61B000098D6E8 /* PointProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointProgressCard.swift; sourceTree = "<group>"; };
+		5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "ラッパのファンファーレ.mp3"; sourceTree = "<group>"; };
+		5C6EF6E33008BB4A00B834AB /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +47,7 @@
 		5C12CE022FEF9187007BB317 = {
 			isa = PBXGroup;
 			children = (
+				5C6EF6DF3008B3EB00B834AB /* Sounds */,
 				5C665A392FF5DC630098D6E8 /* Services */,
 				5C665A382FF5DC450098D6E8 /* Managers */,
 				5C665A372FF5DC2C0098D6E8 /* Components */,
@@ -78,6 +83,7 @@
 		5C665A382FF5DC450098D6E8 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				5C6EF6E33008BB4A00B834AB /* SoundManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -87,6 +93,14 @@
 			children = (
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		5C6EF6DF3008B3EB00B834AB /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */,
+			);
+			path = Sounds;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -159,6 +173,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C6EF6E530098BF600B834AB /* ラッパのファンファーレ.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -170,6 +185,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */,
+				5C6EF6E43008BB4A00B834AB /* SoundManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
