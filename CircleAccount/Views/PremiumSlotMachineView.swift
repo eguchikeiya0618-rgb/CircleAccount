@@ -22,6 +22,9 @@ struct PremiumSlotMachineView: View {
     @State private var lampPulse = false
     @State private var borderRotation = 0.0
     @State private var machinePulse = false
+    @State private var machineShakeX: CGFloat = 0
+    @State private var stopLineFlashOpacity = 0.0
+    @State private var flashingStopIndex: Int?
 
     private let reelPool = [
         "7", "⭐", "🎁", "🏸", "💰",
@@ -57,16 +60,23 @@ struct PremiumSlotMachineView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 520)
         .scaleEffect(machinePulse ? 1.012 : 1.0)
+        .offset(x: machineShakeX)
         .onAppear {
             startContinuousAnimations()
         }
         .onChange(of: heatLevel) { _, _ in
             pulseMachine()
         }
-        .onChange(of: stoppedReelCount) { _, newValue in
-            if newValue > 0 {
-                pulseMachine()
+        .onChange(of: stoppedReelCount) { oldValue, newValue in
+            guard newValue > oldValue else {
+                if newValue == 0 {
+                    flashingStopIndex = nil
+                    stopLineFlashOpacity = 0
+                }
+                return
             }
+
+            playStopImpact(stoppedCount: newValue)
         }
     }
 
@@ -271,16 +281,29 @@ struct PremiumSlotMachineView: View {
                     LinearGradient(
                         colors: [
                             Color.clear,
-                            machineGlow.opacity(0.44),
-                            Color.white.opacity(0.70),
-                            machineGlow.opacity(0.44),
+                            machineGlow.opacity(0.72),
+                            Color.white,
+                            machineGlow.opacity(0.72),
                             Color.clear
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(height: 2)
+                .frame(height: stopLineFlashOpacity > 0 ? 5 : 2)
+                .opacity(0.72 + stopLineFlashOpacity)
+                .shadow(
+                    color: machineGlow.opacity(stopLineFlashOpacity),
+                    radius: 16
+                )
+                .allowsHitTesting(false)
+
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                .stroke(
+                    Color.white.opacity(stopLineFlashOpacity * 0.85),
+                    lineWidth: 3
+                )
+                .padding(8)
                 .allowsHitTesting(false)
         }
         .frame(height: 154)
@@ -333,6 +356,7 @@ struct PremiumSlotMachineView: View {
 
     private func stopLamp(index: Int) -> some View {
         let isStopped = stoppedReelCount > index
+        let isFlashing = flashingStopIndex == index
 
         return VStack(spacing: 5) {
             ZStack {
@@ -353,7 +377,15 @@ struct PremiumSlotMachineView: View {
                     .stroke(Color.white.opacity(0.30), lineWidth: 1.5)
                     .frame(width: 34, height: 34)
             }
-            .shadow(color: isStopped ? machineGlow : Color.clear, radius: 9)
+            .scaleEffect(isFlashing ? 1.18 : 1.0)
+            .shadow(
+                color: isStopped ? machineGlow : Color.clear,
+                radius: isFlashing ? 18 : 9
+            )
+            .shadow(
+                color: isFlashing ? Color.white.opacity(0.85) : Color.clear,
+                radius: 8
+            )
 
             Text(["LEFT", "CENTER", "RIGHT"][index])
                 .font(.system(size: 7, weight: .black, design: .rounded))
@@ -451,6 +483,49 @@ struct PremiumSlotMachineView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             withAnimation(.spring(response: 0.30, dampingFraction: 0.66)) {
                 machinePulse = false
+            }
+        }
+    }
+
+    private func playStopImpact(stoppedCount: Int) {
+        let stoppedIndex = min(max(stoppedCount - 1, 0), 2)
+        flashingStopIndex = stoppedIndex
+        pulseMachine()
+
+        withAnimation(.easeOut(duration: 0.035)) {
+            machineShakeX = stoppedIndex == 1 ? -7 : 7
+            stopLineFlashOpacity = 1
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) {
+            withAnimation(.easeInOut(duration: 0.045)) {
+                machineShakeX = stoppedIndex == 1 ? 5 : -5
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.095) {
+            withAnimation(.easeInOut(duration: 0.055)) {
+                machineShakeX = 3
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.52)) {
+                machineShakeX = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeOut(duration: 0.24)) {
+                stopLineFlashOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+            if flashingStopIndex == stoppedIndex {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    flashingStopIndex = nil
+                }
             }
         }
     }
