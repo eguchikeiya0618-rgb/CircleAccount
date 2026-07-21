@@ -35,23 +35,42 @@ final class SlotAnimationController: ObservableObject {
     private let sound = SlotSoundManager.shared
 
     private var animationTask: Task<Void, Never>?
-    private var pushContinuation: CheckedContinuation<Void, Never>?
+    private var pushContinuation:
+        CheckedContinuation<Void, Never>?
+
     private(set) var isSequenceRunning = false
+
+    // MARK: - Prepare
 
     func prepare(soundEnabled: Bool) {
         sound.prepare(enabled: soundEnabled)
     }
 
-    func setLeverProgress(_ progress: CGFloat) {
+    // MARK: - Lever
+
+    func setLeverProgress(
+        _ progress: CGFloat
+    ) {
         guard !isSequenceRunning else { return }
-        leverProgress = min(1, max(0, progress))
+
+        leverProgress = min(
+            1,
+            max(0, progress)
+        )
     }
 
     func returnLever() {
-        withAnimation(.spring(response: 0.30, dampingFraction: 0.68)) {
+        withAnimation(
+            .spring(
+                response: 0.30,
+                dampingFraction: 0.68
+            )
+        ) {
             leverProgress = 0
         }
     }
+
+    // MARK: - Start
 
     func start(
         soundEnabled: Bool,
@@ -63,21 +82,33 @@ final class SlotAnimationController: ObservableObject {
 
         cancel()
 
-        sound.prepare(enabled: soundEnabled)
+        sound.prepare(
+            enabled: soundEnabled
+        )
 
         self.resultTitle = resultTitle
         self.resultSubtitle = resultSubtitle
         self.currentRoute = route
 
         animationTask = Task {
-            await runSequence(route: route)
+            await runSequence(
+                route: route
+            )
         }
     }
 
+    // MARK: - Push
+
     func pressPush() {
-        guard isPushVisible, isPushEnabled else { return }
+        guard
+            isPushVisible,
+            isPushEnabled
+        else {
+            return
+        }
 
         sound.playPush()
+
         isPushEnabled = false
         isPushVisible = false
 
@@ -85,23 +116,31 @@ final class SlotAnimationController: ObservableObject {
         pushContinuation = nil
     }
 
+    // MARK: - Reset
+
     func reset() {
         cancel()
 
         stage = .idle
         heatLevel = .normal
+
         isSpinning = false
         stoppedReelCount = 3
+
         statusText = "READY"
         subStatusText = "PULL THE LEVER"
+
         isPushVisible = false
         isPushEnabled = false
+
         leverProgress = 0
         shouldReverseReels = false
         shouldShowResult = false
+
         resultTitle = ""
         resultSubtitle = ""
         currentRoute = .normal
+
         isSequenceRunning = false
     }
 
@@ -113,242 +152,501 @@ final class SlotAnimationController: ObservableObject {
         pushContinuation = nil
 
         sound.stopAll()
+
         isSequenceRunning = false
     }
 
-    private func runSequence(route: SlotAnimationRoute) async {
+    // MARK: - Main Sequence
+
+    private func runSequence(
+        route: SlotAnimationRoute
+    ) async {
         isSequenceRunning = true
         shouldShowResult = false
         shouldReverseReels = false
 
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.70)) {
+        withAnimation(
+            .spring(
+                response: 0.32,
+                dampingFraction: 0.70
+            )
+        ) {
             leverProgress = 1
         }
 
         sound.playLever()
         await sleep(0.34)
 
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.66)) {
+        guard !Task.isCancelled else {
+            finishCancelledSequence()
+            return
+        }
+
+        withAnimation(
+            .spring(
+                response: 0.38,
+                dampingFraction: 0.66
+            )
+        ) {
             leverProgress = 0
         }
 
-        setInitialHeat(for: route)
+        setInitialHeat(
+            for: route
+        )
 
         stage = .idle
         statusText = "START"
         subStatusText = "REEL MOTOR ONLINE"
+
         isSpinning = true
         stoppedReelCount = 0
 
         sound.startSpin()
+
         await sleep(1.10)
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            finishCancelledSequence()
+            return
+        }
 
         switch route {
         case .normal:
             await runNormalRoute()
+
         case .chance:
             await runChanceRoute()
+
         case .superChance:
             await runSuperChanceRoute()
+
         case .warning:
             await runWarningRoute()
+
         case .reverse:
             await runReverseRoute()
+
         case .premium:
             await runPremiumRoute()
         }
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            finishCancelledSequence()
+            return
+        }
+
         isSequenceRunning = false
     }
 
+    // MARK: - Normal Route
+
     private func runNormalRoute() async {
         heatLevel = .normal
+
         statusText = "SPINNING"
         subStatusText = "GOOD LUCK"
 
         await sleep(3.20)
-        await stopReels(intervals: [0.82, 0.94, 1.12])
+
+        await stopReels(
+            intervals: [
+                0.82,
+                0.94,
+                1.12
+            ]
+        )
+
+        guard !Task.isCancelled else { return }
+
         await showCardAndFinish()
     }
 
+    // MARK: - Chance Route
+
     private func runChanceRoute() async {
+        heatLevel = .normal
+
+        statusText = "SPINNING"
+        subStatusText = "GOOD LUCK"
+
+        await sleep(2.10)
+
+        guard !Task.isCancelled else { return }
+
         heatLevel = .chance
         statusText = "CHANCE"
         subStatusText = "EXPECTATION RISING"
-
-        await sleep(2.10)
         stage = .chance
+
         await sleep(1.65)
 
+        guard !Task.isCancelled else { return }
+
         stage = .idle
+
         sound.intensifySpin()
+
         statusText = "CHANCE MODE"
         subStatusText = "DO NOT LOOK AWAY"
 
         await sleep(2.05)
-        await stopReels(intervals: [0.90, 1.05, 1.30])
+
+        await stopReels(
+            intervals: [
+                0.90,
+                1.05,
+                1.30
+            ]
+        )
+
+        guard !Task.isCancelled else { return }
+
         await showCardAndFinish()
     }
 
+    // MARK: - Super Chance Route
+
     private func runSuperChanceRoute() async {
+        heatLevel = .normal
+
+        statusText = "SPINNING"
+        subStatusText = "GOOD LUCK"
+
+        await sleep(1.75)
+
+        guard !Task.isCancelled else { return }
+
         heatLevel = .superChance
         statusText = "SUPER CHANCE"
         subStatusText = "HIGH EXPECTATION"
-
-        await sleep(1.75)
         stage = .superChance
         sound.playWarning()
+
         await sleep(2.15)
+
+        guard !Task.isCancelled else { return }
 
         stage = .idle
         sound.intensifySpin()
+
         statusText = "SUPER MODE"
         subStatusText = "FINAL PHASE"
 
         await sleep(2.25)
-        await stopReels(intervals: [1.00, 1.20, 1.55])
+
+        await stopReels(
+            intervals: [
+                1.00,
+                1.20,
+                1.55
+            ]
+        )
+
+        guard !Task.isCancelled else { return }
+
         await showPushSequence()
+
+        guard !Task.isCancelled else { return }
+
         await showJackpot()
+
+        guard !Task.isCancelled else { return }
+
         await showCardAndFinish()
     }
 
+    // MARK: - Warning Route
+
     private func runWarningRoute() async {
+        heatLevel = .normal
+
+        statusText = "SPINNING"
+        subStatusText = "GOOD LUCK"
+
+        await sleep(1.65)
+
+        guard !Task.isCancelled else { return }
+
         heatLevel = .warning
         statusText = "SYSTEM ERROR"
         subStatusText = "UNKNOWN SIGNAL"
-
-        await sleep(1.65)
         stage = .blackout
         sound.stopSpin()
+
         await sleep(1.55)
+
+        guard !Task.isCancelled else { return }
 
         stage = .warning
         sound.playWarning()
+
         await sleep(2.20)
+
+        guard !Task.isCancelled else { return }
 
         stage = .idle
         sound.intensifySpin()
+
         statusText = "WARNING MODE"
         subStatusText = "MAXIMUM EXPECTATION"
 
         await sleep(2.45)
-        await stopReels(intervals: [1.05, 1.35, 1.75])
+
+        await stopReels(
+            intervals: [
+                1.05,
+                1.35,
+                1.75
+            ]
+        )
+
+        guard !Task.isCancelled else { return }
+
         await showPushSequence()
+
+        guard !Task.isCancelled else { return }
+
         await showJackpot()
+
+        guard !Task.isCancelled else { return }
+
         await showCardAndFinish()
     }
 
+    // MARK: - Reverse Route
+
     private func runReverseRoute() async {
+        heatLevel = .normal
+
+        statusText = "SPINNING"
+        subStatusText = "GOOD LUCK"
+
+        await sleep(1.65)
+
+        guard !Task.isCancelled else { return }
+
         heatLevel = .premium
         statusText = "PREMIUM SIGNAL"
         subStatusText = "REVERSE LOCK DETECTED"
-
-        await sleep(1.65)
         stage = .blackout
         sound.stopSpin()
+
         await sleep(1.35)
+
+        guard !Task.isCancelled else { return }
 
         stage = .reverse
         shouldReverseReels = true
         sound.playWarning()
+
         await sleep(2.45)
+
+        guard !Task.isCancelled else { return }
 
         shouldReverseReels = false
         stage = .superChance
+
         sound.intensifySpin()
+
         await sleep(1.85)
 
+        guard !Task.isCancelled else { return }
+
         stage = .idle
+
         statusText = "REVERSE MODE"
         subStatusText = "PREMIUM POSSIBILITY"
 
         await sleep(2.40)
-        await stopReels(intervals: [1.10, 1.45, 1.90])
+
+        await stopReels(
+            intervals: [
+                1.10,
+                1.45,
+                1.90
+            ]
+        )
+
+        guard !Task.isCancelled else { return }
+
         await showPushSequence()
+
+        guard !Task.isCancelled else { return }
+
         await showJackpot()
+
+        guard !Task.isCancelled else { return }
+
         await showCardAndFinish()
     }
 
+    // MARK: - Premium Route
+
     private func runPremiumRoute() async {
+        heatLevel = .normal
+
+        statusText = "SPINNING"
+        subStatusText = "GOOD LUCK"
+
+        await sleep(1.50)
+
+        guard !Task.isCancelled else { return }
+
         heatLevel = .premium
         statusText = "PREMIUM"
         subStatusText = "ULTIMATE MODE"
-
-        await sleep(1.50)
         stage = .blackout
         sound.stopSpin()
+
         await sleep(1.50)
+
+        guard !Task.isCancelled else { return }
 
         stage = .warning
         sound.playWarning()
+
         await sleep(2.00)
 
+        guard !Task.isCancelled else { return }
+
         stage = .superChance
+
         await sleep(1.80)
+
+        guard !Task.isCancelled else { return }
 
         stage = .reverse
         shouldReverseReels = true
+
         sound.intensifySpin()
+
         await sleep(2.30)
+
+        guard !Task.isCancelled else { return }
 
         shouldReverseReels = false
         stage = .idle
+
         statusText = "PREMIUM LOCK"
         subStatusText = "JACKPOT APPROACHING"
 
         await sleep(2.65)
-        await stopReels(intervals: [1.15, 1.55, 2.10])
+
+        await stopReels(
+            intervals: [
+                1.15,
+                1.55,
+                2.10
+            ]
+        )
+
+        guard !Task.isCancelled else { return }
+
         await showPushSequence()
+
+        guard !Task.isCancelled else { return }
+
         await showJackpot()
+
+        guard !Task.isCancelled else { return }
+
         await showCardAndFinish()
     }
 
-    private func stopReels(intervals: [Double]) async {
+    // MARK: - Reel Stop
+
+    private func stopReels(
+        intervals: [Double]
+    ) async {
+        guard intervals.count >= 3 else {
+            isSpinning = false
+            sound.stopSpin()
+            return
+        }
+
         for index in 0..<3 {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
 
-            await sleep(intervals[index])
+            await sleep(
+                intervals[index]
+            )
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
             stoppedReelCount = index + 1
-            sound.playReelStop(index: index, isFinal: index == 2)
 
-            statusText = index == 2 ? "RESULT LOCKED" : "REEL \(index + 1) STOP"
-            subStatusText = index == 2 ? "FINAL JUDGEMENT" : "NEXT REEL STANDBY"
+            sound.playReelStop(
+                index: index,
+                isFinal: index == 2
+            )
+
+            if index == 2 {
+                statusText = "RESULT LOCKED"
+                subStatusText = "FINAL JUDGEMENT"
+            } else {
+                statusText =
+                    "REEL \(index + 1) STOP"
+
+                subStatusText =
+                    "NEXT REEL STANDBY"
+            }
         }
 
         isSpinning = false
         sound.stopSpin()
     }
 
+    // MARK: - Push Sequence
+
     private func showPushSequence() async {
         stage = .push
+
         statusText = "PUSH"
         subStatusText = "DECIDE YOUR FATE"
+
         isPushVisible = true
         isPushEnabled = true
 
-        await waitForPushOrTimeout(seconds: 5.0)
+        await waitForPushOrTimeout(
+            seconds: 5.0
+        )
 
         guard !Task.isCancelled else { return }
+
         isPushEnabled = false
         isPushVisible = false
     }
 
-    private func waitForPushOrTimeout(seconds: Double) async {
-        await withTaskGroup(of: Void.self) { group in
+    private func waitForPushOrTimeout(
+        seconds: Double
+    ) async {
+        await withTaskGroup(
+            of: Void.self
+        ) { group in
             group.addTask { [weak self] in
-                await withCheckedContinuation { continuation in
+                await withCheckedContinuation {
+                    continuation in
+
                     Task { @MainActor [weak self] in
-                        self?.pushContinuation = continuation
+                        self?.pushContinuation =
+                            continuation
                     }
                 }
             }
 
             group.addTask {
                 try? await Task.sleep(
-                    nanoseconds: UInt64(seconds * 1_000_000_000)
+                    nanoseconds: UInt64(
+                        seconds
+                        * 1_000_000_000
+                    )
                 )
             }
 
@@ -362,46 +660,78 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 
+    // MARK: - Jackpot
+
     private func showJackpot() async {
         stage = .jackpot
+
         statusText = "JACKPOT"
         subStatusText = "PREMIUM WIN"
+
         sound.playJackpot()
+
         await sleep(3.15)
     }
 
+    // MARK: - Result
+
     private func showCardAndFinish() async {
         stage = .cardReveal
+
         statusText = "PRIZE GET"
         subStatusText = "CONGRATULATIONS"
 
         await sleep(3.10)
+
+        guard !Task.isCancelled else { return }
+
         shouldShowResult = true
+
         await sleep(0.35)
+
+        guard !Task.isCancelled else { return }
+
         stage = .idle
     }
 
-    private func setInitialHeat(for route: SlotAnimationRoute) {
-        switch route {
-        case .normal:
-            heatLevel = .normal
-        case .chance:
-            heatLevel = .chance
-        case .superChance:
-            heatLevel = .superChance
-        case .warning:
-            heatLevel = .warning
-        case .reverse, .premium:
-            heatLevel = .premium
-        }
+    // MARK: - Heat Level
+
+    private func setInitialHeat(
+        for route: SlotAnimationRoute
+    ) {
+        // 回転開始直後は、抽選結果に関係なく必ず通常表示にする。
+        // 当たりルートの色・文字・演出は、回転が始まってから段階的に公開する。
+        heatLevel = .normal
     }
 
-    private func sleep(_ seconds: Double) async {
+    // MARK: - Cancel Handling
+
+    private func finishCancelledSequence() {
+        sound.stopAll()
+
+        isSpinning = false
+        isPushVisible = false
+        isPushEnabled = false
+        shouldReverseReels = false
+        isSequenceRunning = false
+    }
+
+    // MARK: - Sleep
+
+    private func sleep(
+        _ seconds: Double
+    ) async {
         guard seconds > 0 else { return }
 
-        try? await Task.sleep(
-            nanoseconds: UInt64(seconds * 1_000_000_000)
-        )
+        do {
+            try await Task.sleep(
+                nanoseconds: UInt64(
+                    seconds
+                    * 1_000_000_000
+                )
+            )
+        } catch {
+            return
+        }
     }
 }
-

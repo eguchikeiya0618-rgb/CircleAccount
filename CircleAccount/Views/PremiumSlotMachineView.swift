@@ -25,11 +25,26 @@ struct PremiumSlotMachineView: View {
     @State private var machineShakeX: CGFloat = 0
     @State private var stopLineFlashOpacity = 0.0
     @State private var flashingStopIndex: Int?
-    @State private var pushHeartbeat = false
-    @State private var pushRingProgress: CGFloat = 0
-    @State private var pushPressed = false
-    @State private var pushFlashOpacity = 0.0
-    @State private var pushRainbowRotation = 0.0
+    @State private var premiumFlashOpacity = 0.0
+    @State private var jackpotVisible = false
+    @State private var sparkBurstProgress: CGFloat = 0
+    @State private var sparkBurstOpacity = 0.0
+    @State private var glassSweepOffset: CGFloat = -1.2
+    @State private var machineFlashOpacity = 0.0
+    @State private var jackpotWhiteoutOpacity = 0.0
+    @State private var jackpotZoomScale: CGFloat = 1.0
+    @State private var frameSweepOffset: CGFloat = -1.4
+    @State private var risingLightOffset: CGFloat = 1.2
+    @State private var reachPulse = false
+    @State private var reachOverlayOpacity = 0.0
+    @State private var reachOverlayScale: CGFloat = 0.78
+    @State private var premiumBacklightPhase = 0.0
+    @State private var premiumBurstTrigger = 0
+    @State private var rewardCardVisible = false
+    @State private var pseudoRepeatVisible = false
+    @State private var pseudoRepeatCount = 0
+    @State private var freezeEffectVisible = false
+    @State private var freezeSequenceRunning = false
 
     private let reelPool = [
         "7", "⭐", "🎁", "🏸", "💰",
@@ -53,6 +68,67 @@ struct PremiumSlotMachineView: View {
             machineBody
                 .padding(.trailing, 46)
 
+            if heatLevel == .premium {
+                PremiumCelebrationOverlay(
+                    flashOpacity: premiumFlashOpacity
+                )
+                .padding(.trailing, 46)
+                .allowsHitTesting(false)
+            }
+
+            JackpotOverlay(
+                isVisible: jackpotVisible,
+                glowColor: machineGlow
+            )
+            .scaleEffect(jackpotZoomScale)
+            .padding(.trailing, 46)
+            .allowsHitTesting(false)
+
+            MachineFlashOverlay(
+                opacity: machineFlashOpacity,
+                glowColor: machineGlow
+            )
+            .allowsHitTesting(false)
+            .zIndex(50)
+
+            JackpotWhiteoutOverlay(
+                opacity: jackpotWhiteoutOpacity
+            )
+            .allowsHitTesting(false)
+            .zIndex(60)
+
+            PremiumBurstView(
+                trigger: premiumBurstTrigger,
+                glowColor: machineGlow
+            )
+            .zIndex(65)
+
+            RewardCardView(
+                isVisible: rewardCardVisible,
+                symbols: safeSymbols,
+                title: "JACKPOT",
+                subtitle: statusText.isEmpty ? "PREMIUM GET!" : statusText,
+                isPremium: heatLevel == .premium
+            )
+            .padding(.trailing, 46)
+            .zIndex(68)
+            .allowsHitTesting(false)
+
+            PseudoRepeatOverlay(
+                isVisible: pseudoRepeatVisible,
+                repeatCount: pseudoRepeatCount,
+                reelPool: safeSymbols,
+                isPremium: heatLevel == .premium
+            )
+            .padding(.trailing, 46)
+            .zIndex(69)
+            .allowsHitTesting(false)
+
+            FreezeEffectView(isVisible: freezeEffectVisible)
+                .padding(.trailing, 46)
+                .zIndex(70)
+                .allowsHitTesting(false)
+
             PremiumLeverControl(
                 progress: leverProgress,
                 glowColor: machineGlow,
@@ -69,25 +145,44 @@ struct PremiumSlotMachineView: View {
         .onAppear {
             startContinuousAnimations()
         }
-        .onChange(of: heatLevel) { _, _ in
+        .onChange(of: heatLevel) { _, newValue in
             pulseMachine()
+
+            if newValue == .premium {
+                playPremiumFlash()
+            }
         }
         .onChange(of: stoppedReelCount) { oldValue, newValue in
             guard newValue > oldValue else {
                 if newValue == 0 {
                     flashingStopIndex = nil
                     stopLineFlashOpacity = 0
+                    pseudoRepeatVisible = false
+                    freezeEffectVisible = false
+                    freezeSequenceRunning = false
+                    hideJackpot()
                 }
                 return
             }
 
             playStopImpact(stoppedCount: newValue)
+            playSparkBurst()
+            playMachineFlash()
+            playReachSequence(stoppedCount: newValue)
+
+            if newValue >= 3 && heatLevel == .premium {
+                playPremiumBurst()
+                playFreezeSequence()
+            }
         }
     }
 
     private var machineBody: some View {
         ZStack {
-            outerGlow
+            MachineOuterGlow(
+                glowColor: machineGlow,
+                isPulsing: lampPulse
+            )
 
             RoundedRectangle(cornerRadius: 34, style: .continuous)
                 .fill(
@@ -102,11 +197,41 @@ struct PremiumSlotMachineView: View {
                     )
                 )
 
-            animatedBorder
+            MachineAnimatedBorder(
+                heatLevel: heatLevel,
+                glowColor: machineGlow,
+                rotation: borderRotation
+            )
+
+            MovingMetalHighlight(
+                sweepOffset: frameSweepOffset
+            )
+            .allowsHitTesting(false)
+
+            RisingCabinetLight(
+                glowColor: machineGlow,
+                lightOffset: risingLightOffset
+            )
+            .allowsHitTesting(false)
+
+            SideLEDView(
+                heatLevel: heatLevel,
+                machineGlow: machineGlow,
+                isSpinning: isSpinning
+            )
 
             VStack(spacing: 15) {
-                marqueeHeader
-                statusPanel
+                MarqueeHeaderView(
+                    heatLevel: heatLevel,
+                    machineGlow: machineGlow
+                )
+
+                SlotStatusPanelView(
+                    statusText: statusText,
+                    subStatusText: subStatusText,
+                    heatLevel: heatLevel,
+                    machineGlow: machineGlow
+                )
                 reelHousing
                 controlPanel
                 brandFooter
@@ -119,224 +244,51 @@ struct PremiumSlotMachineView: View {
         .shadow(color: machineGlow.opacity(0.32), radius: 26)
     }
 
-    private var outerGlow: some View {
-        RoundedRectangle(cornerRadius: 38, style: .continuous)
-            .fill(machineGlow.opacity(lampPulse ? 0.17 : 0.08))
-            .blur(radius: 20)
-            .scaleEffect(lampPulse ? 1.035 : 1.0)
-    }
-
-    private var animatedBorder: some View {
-        RoundedRectangle(cornerRadius: 34, style: .continuous)
-            .stroke(
-                AngularGradient(
-                    colors: [
-                        machineGlow.opacity(0.25),
-                        Color.white.opacity(0.80),
-                        heatLevel.lampColor,
-                        machineGlow,
-                        Color.white.opacity(0.35),
-                        machineGlow.opacity(0.25)
-                    ],
-                    center: .center,
-                    angle: .degrees(borderRotation)
-                ),
-                lineWidth: heatLevel == .premium ? 4 : 2.5
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 29, style: .continuous)
-                    .stroke(Color.white.opacity(0.09), lineWidth: 1)
-                    .padding(7)
-            }
-    }
-
-    private var marqueeHeader: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                ForEach(0..<11, id: \.self) { index in
-                    Circle()
-                        .fill(index.isMultiple(of: 2) ? heatLevel.lampColor : machineGlow)
-                        .frame(width: 9, height: 9)
-                        .shadow(color: lampPulse ? machineGlow : Color.clear, radius: 7)
-                        .opacity(lampPulse ? 1.0 : 0.48)
-                }
-            }
-
-            VStack(spacing: -2) {
-                Text("SiRiUS")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .tracking(6)
-                    .foregroundStyle(Color.white.opacity(0.82))
-
-                Text("LUCKY SLOT")
-                    .font(.system(size: 31, weight: .black, design: .rounded))
-                    .tracking(1.5)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color.white,
-                                heatLevel.lampColor,
-                                machineGlow,
-                                Color.white
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: machineGlow, radius: 9)
-            }
-
-            HStack(spacing: 8) {
-                ForEach(0..<11, id: \.self) { index in
-                    Circle()
-                        .fill(index.isMultiple(of: 2) ? machineGlow : heatLevel.lampColor)
-                        .frame(width: 9, height: 9)
-                        .shadow(color: lampPulse ? heatLevel.lampColor : Color.clear, radius: 7)
-                        .opacity(lampPulse ? 0.82 : 0.42)
-                }
-            }
-        }
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.62))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(machineGlow.opacity(0.58), lineWidth: 1.5)
-                }
-        )
-    }
-
-    private var statusPanel: some View {
-        VStack(spacing: 4) {
-            Text(statusText)
-                .font(.system(size: 17, weight: .black, design: .monospaced))
-                .tracking(1.3)
-                .foregroundStyle(heatLevel.displayColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-                .shadow(color: machineGlow, radius: 6)
-
-            Text(subStatusText)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(Color.white.opacity(0.58))
-                .lineLimit(1)
-                .minimumScaleFactor(0.70)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 52)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.black,
-                            machineGlow.opacity(0.10),
-                            Color.black
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.13), lineWidth: 1)
-                }
-        )
-    }
-
     private var reelHousing: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.34, green: 0.35, blue: 0.39),
-                            Color(red: 0.07, green: 0.075, blue: 0.095),
-                            Color.black
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-            RoundedRectangle(cornerRadius: 17, style: .continuous)
-                .fill(Color.black)
-                .padding(8)
-
-            HStack(spacing: 7) {
-                ForEach(0..<3, id: \.self) { index in
-                    PremiumReelColumn(
-                        finalSymbol: safeSymbols[index],
-                        symbolPool: reelPool,
-                        isSpinning: isSpinning && stoppedReelCount <= index,
-                        isStopped: stoppedReelCount > index,
-                        reelIndex: index,
-                        glowColor: machineGlow
-                    )
-                }
-            }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 15)
-
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            machineGlow.opacity(0.72),
-                            Color.white,
-                            machineGlow.opacity(0.72),
-                            Color.clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(height: stopLineFlashOpacity > 0 ? 5 : 2)
-                .opacity(0.72 + stopLineFlashOpacity)
-                .shadow(
-                    color: machineGlow.opacity(stopLineFlashOpacity),
-                    radius: 16
-                )
-                .allowsHitTesting(false)
-
-            RoundedRectangle(cornerRadius: 17, style: .continuous)
-                .stroke(
-                    Color.white.opacity(stopLineFlashOpacity * 0.85),
-                    lineWidth: 3
-                )
-                .padding(8)
-                .allowsHitTesting(false)
-        }
-        .frame(height: 154)
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.55),
-                            Color.gray.opacity(0.25),
-                            Color.black
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 3
-                )
-        }
+        ReelHousingView(
+            symbols: safeSymbols,
+            reelPool: reelPool,
+            isSpinning: isSpinning,
+            stoppedReelCount: stoppedReelCount,
+            heatLevel: heatLevel,
+            machineGlow: machineGlow,
+            stopLineFlashOpacity: stopLineFlashOpacity,
+            glassSweepOffset: glassSweepOffset,
+            sparkBurstProgress: sparkBurstProgress,
+            sparkBurstOpacity: sparkBurstOpacity,
+            premiumBacklightPhase: premiumBacklightPhase,
+            reachPulse: reachPulse,
+            reachOverlayOpacity: reachOverlayOpacity,
+            reachOverlayScale: reachOverlayScale
+        )
     }
 
     private var controlPanel: some View {
         HStack(spacing: 13) {
             ForEach(0..<3, id: \.self) { index in
-                stopLamp(index: index)
+                StopLampView(
+                    index: index,
+                    isSpinning: isSpinning,
+                    stoppedReelCount: stoppedReelCount,
+                    flashingStopIndex: flashingStopIndex,
+                    heatLevel: heatLevel
+                )
             }
 
             Spacer(minLength: 3)
-            pushButton
+
+            PushButtonView(
+                isVisible: isPushVisible,
+                isEnabled: isPushEnabled,
+                heatLevel: heatLevel,
+                machineGlow: machineGlow,
+                onPush: onPush,
+                onImpact: { offset in
+                    withAnimation(.easeOut(duration: 0.10)) {
+                        machineShakeX = offset
+                    }
+                }
+            )
         }
         .frame(height: 74)
         .padding(.horizontal, 12)
@@ -357,152 +309,6 @@ struct PremiumSlotMachineView: View {
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 }
         )
-    }
-
-    private func stopLamp(index: Int) -> some View {
-        let isStopped = stoppedReelCount > index
-        let isFlashing = flashingStopIndex == index
-
-        return VStack(spacing: 5) {
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: isStopped
-                                ? [Color.white, heatLevel.lampColor, machineGlow]
-                                : [Color.gray.opacity(0.52), Color.black],
-                            center: .topLeading,
-                            startRadius: 0,
-                            endRadius: 25
-                        )
-                    )
-                    .frame(width: 34, height: 34)
-
-                Circle()
-                    .stroke(Color.white.opacity(0.30), lineWidth: 1.5)
-                    .frame(width: 34, height: 34)
-            }
-            .scaleEffect(isFlashing ? 1.18 : 1.0)
-            .shadow(
-                color: isStopped ? machineGlow : Color.clear,
-                radius: isFlashing ? 18 : 9
-            )
-            .shadow(
-                color: isFlashing ? Color.white.opacity(0.85) : Color.clear,
-                radius: 8
-            )
-
-            Text(["LEFT", "CENTER", "RIGHT"][index])
-                .font(.system(size: 7, weight: .black, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.58))
-        }
-    }
-
-    private var pushButton: some View {
-        Button(action: handlePush) {
-            ZStack {
-                if isPushVisible {
-                    Circle()
-                        .stroke(
-                            heatLevel == .premium
-                                ? AnyShapeStyle(
-                                    AngularGradient(
-                                        colors: [
-                                            .red, .orange, .yellow, .green,
-                                            .cyan, .blue, .purple, .red
-                                        ],
-                                        center: .center,
-                                        angle: .degrees(pushRainbowRotation)
-                                    )
-                                )
-                                : AnyShapeStyle(machineGlow.opacity(0.85)),
-                            lineWidth: 3
-                        )
-                        .frame(width: 76, height: 76)
-                        .scaleEffect(0.72 + pushRingProgress * 0.52)
-                        .opacity(1.0 - Double(pushRingProgress))
-                        .shadow(color: machineGlow, radius: 12)
-                }
-
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: isPushVisible
-                                ? [Color.white, heatLevel.lampColor, machineGlow, Color.black]
-                                : [Color.gray.opacity(0.52), Color.black],
-                            center: .topLeading,
-                            startRadius: 0,
-                            endRadius: 42
-                        )
-                    )
-
-                if heatLevel == .premium && isPushVisible {
-                    Circle()
-                        .stroke(
-                            AngularGradient(
-                                colors: [
-                                    .red, .orange, .yellow, .green,
-                                    .cyan, .blue, .purple, .red
-                                ],
-                                center: .center,
-                                angle: .degrees(pushRainbowRotation)
-                            ),
-                            lineWidth: 4
-                        )
-                } else {
-                    Circle()
-                        .stroke(
-                            isPushVisible
-                                ? Color.white.opacity(0.78)
-                                : Color.white.opacity(0.20),
-                            lineWidth: 3
-                        )
-                }
-
-                Circle()
-                    .fill(Color.white.opacity(pushFlashOpacity))
-                    .blur(radius: 2)
-
-                VStack(spacing: -2) {
-                    Text("PUSH")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
-                    Text("BUTTON")
-                        .font(.system(size: 6, weight: .black, design: .rounded))
-                        .tracking(1)
-                }
-                .foregroundStyle(
-                    isPushVisible
-                        ? Color.white
-                        : Color.white.opacity(0.32)
-                )
-                .shadow(
-                    color: isPushVisible ? Color.white.opacity(0.7) : Color.clear,
-                    radius: 4
-                )
-            }
-            .frame(width: 59, height: 59)
-            .scaleEffect(
-                pushPressed
-                    ? 0.88
-                    : (isPushVisible && pushHeartbeat ? 1.11 : 1.0)
-            )
-            .offset(y: pushPressed ? 4 : 0)
-            .shadow(
-                color: isPushVisible
-                    ? machineGlow.opacity(0.95)
-                    : Color.clear,
-                radius: pushHeartbeat ? 20 : 12
-            )
-            .shadow(
-                color: heatLevel == .premium && isPushVisible
-                    ? heatLevel.lampColor.opacity(0.9)
-                    : Color.clear,
-                radius: 17
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(!isPushEnabled)
-        .accessibilityLabel("PUSHボタン")
     }
 
     private var brandFooter: some View {
@@ -537,55 +343,253 @@ struct PremiumSlotMachineView: View {
         }
 
         withAnimation(
-            .easeInOut(duration: 0.72)
+            .linear(duration: 3.2)
+                .repeatForever(autoreverses: false)
+        ) {
+            glassSweepOffset = 1.6
+        }
+
+        withAnimation(
+            .linear(duration: 4.6)
+                .repeatForever(autoreverses: false)
+        ) {
+            frameSweepOffset = 1.65
+        }
+
+        withAnimation(
+            .easeInOut(duration: 2.8)
+                .repeatForever(autoreverses: false)
+        ) {
+            risingLightOffset = -0.45
+        }
+
+        withAnimation(
+            .linear(duration: 1.18)
+                .repeatForever(autoreverses: false)
+        ) {
+            premiumBacklightPhase = .pi * 2
+        }
+
+        withAnimation(
+            .easeInOut(duration: 0.26)
                 .repeatForever(autoreverses: true)
         ) {
-            pushHeartbeat = true
+            reachPulse = true
         }
 
-        withAnimation(
-            .linear(duration: 1.15)
-                .repeatForever(autoreverses: false)
-        ) {
-            pushRingProgress = 1
-        }
-
-        withAnimation(
-            .linear(duration: 2.8)
-                .repeatForever(autoreverses: false)
-        ) {
-            pushRainbowRotation = 360
-        }
     }
 
-    private func handlePush() {
-        guard isPushEnabled else { return }
+    private func playSparkBurst() {
+        sparkBurstProgress = 0
+        sparkBurstOpacity = 1
 
-        withAnimation(.easeOut(duration: 0.055)) {
-            pushPressed = true
-            pushFlashOpacity = 0.92
-        }
-
-        withAnimation(.easeOut(duration: 0.10)) {
-            machineShakeX = -4
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.48)) {
-                pushPressed = false
-                machineShakeX = 3
-            }
+        withAnimation(.easeOut(duration: 0.34)) {
+            sparkBurstProgress = 1
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.easeOut(duration: 0.22)) {
-                pushFlashOpacity = 0
+            withAnimation(.easeOut(duration: 0.24)) {
+                sparkBurstOpacity = 0
+            }
+        }
+    }
+
+    private func playFreezeSequence() {
+        guard !freezeSequenceRunning else { return }
+
+        freezeSequenceRunning = true
+        freezeEffectVisible = false
+
+        machineShakeX = 0
+        pseudoRepeatVisible = false
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            freezeEffectVisible = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+            withAnimation(.easeOut(duration: 0.08)) {
+                machineShakeX = -4
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.easeInOut(duration: 0.08)) {
+                machineShakeX = 4
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            withAnimation(.easeOut(duration: 0.10)) {
                 machineShakeX = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) {
-            onPush()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.72) {
+            freezeEffectVisible = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.88) {
+            freezeSequenceRunning = false
+            playPseudoRepeatSequence()
+        }
+    }
+
+    private func playPseudoRepeatSequence() {
+        pseudoRepeatCount += 1
+        pseudoRepeatVisible = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.85) {
+            pseudoRepeatVisible = false
+            playJackpot()
+        }
+    }
+
+    private func playRewardCardReveal() {
+        rewardCardVisible = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            rewardCardVisible = false
+        }
+    }
+
+    private func playJackpot() {
+        playJackpotWhiteout()
+        jackpotVisible = true
+
+        withAnimation(.easeOut(duration: 0.08)) {
+            premiumFlashOpacity = 1
+            machineShakeX = -9
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(
+                .spring(
+                    response: 0.34,
+                    dampingFraction: 0.48
+                )
+            ) {
+                machineShakeX = 8
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
+            playRewardCardReveal()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            withAnimation(.easeOut(duration: 0.30)) {
+                premiumFlashOpacity = 0
+                machineShakeX = 0
+            }
+        }
+    }
+
+    private func hideJackpot() {
+        guard jackpotVisible else { return }
+        jackpotVisible = false
+    }
+
+    private func playPremiumFlash() {
+        premiumFlashOpacity = 0
+
+        withAnimation(.easeOut(duration: 0.06)) {
+            premiumFlashOpacity = 0.92
+            machineShakeX = -6
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            withAnimation(.easeInOut(duration: 0.06)) {
+                machineShakeX = 6
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+            withAnimation(.easeOut(duration: 0.32)) {
+                premiumFlashOpacity = 0
+                machineShakeX = 0
+            }
+        }
+    }
+
+    private func playReachSequence(stoppedCount: Int) {
+        guard isSpinning else { return }
+
+        switch stoppedCount {
+        case 1:
+            reachOverlayScale = 0.82
+            reachOverlayOpacity = 0.38
+
+            withAnimation(.easeOut(duration: 0.18)) {
+                reachOverlayScale = 1.0
+            }
+
+            withAnimation(.easeOut(duration: 0.34)) {
+                reachOverlayOpacity = 0
+            }
+
+        case 2:
+            reachOverlayScale = 0.76
+            reachOverlayOpacity = heatLevel == .premium ? 1.0 : 0.72
+
+            withAnimation(
+                .spring(
+                    response: 0.30,
+                    dampingFraction: 0.48
+                )
+            ) {
+                reachOverlayScale = 1.0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+                withAnimation(.easeOut(duration: 0.28)) {
+                    reachOverlayOpacity = 0
+                }
+            }
+
+        default:
+            reachOverlayOpacity = 0
+        }
+    }
+
+    private func playPremiumBurst() {
+        premiumBurstTrigger += 1
+    }
+
+    private func playMachineFlash() {
+        machineFlashOpacity = 0.88
+
+        withAnimation(.easeOut(duration: 0.20)) {
+            machineFlashOpacity = 0
+        }
+    }
+
+    private func playJackpotWhiteout() {
+        jackpotWhiteoutOpacity = 1
+        jackpotZoomScale = 0.88
+
+        withAnimation(.easeOut(duration: 0.18)) {
+            jackpotWhiteoutOpacity = 0
+        }
+
+        withAnimation(
+            .spring(
+                response: 0.42,
+                dampingFraction: 0.52
+            )
+        ) {
+            jackpotZoomScale = 1.08
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            withAnimation(
+                .spring(
+                    response: 0.34,
+                    dampingFraction: 0.68
+                )
+            ) {
+                jackpotZoomScale = 1.0
+            }
         }
     }
 
@@ -645,273 +649,18 @@ struct PremiumSlotMachineView: View {
     }
 }
 
-private struct PremiumReelColumn: View {
-    let finalSymbol: String
-    let symbolPool: [String]
-    let isSpinning: Bool
-    let isStopped: Bool
-    let reelIndex: Int
-    let glowColor: Color
 
-    @State private var stopBounce = false
-    @State private var settlingOffset: CGFloat = 0
-    @State private var flashOpacity = 0.0
-
-    private let visibleRows = 5
-    private let rowHeight: CGFloat = 58
-
-    var body: some View {
-        GeometryReader { proxy in
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isSpinning)) { context in
-                let phase = spinPhase(at: context.date)
-                let baseIndex = Int(floor(phase))
-                let fractional = phase - floor(phase)
-                let verticalOffset = CGFloat(fractional) * rowHeight
-
-                ZStack {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white,
-                                    Color(red: 0.90, green: 0.91, blue: 0.94),
-                                    Color.white
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-
-                    if isSpinning {
-                        VStack(spacing: 0) {
-                            ForEach(0..<visibleRows, id: \.self) { row in
-                                Text(symbolForRollingRow(baseIndex: baseIndex, row: row))
-                                    .font(.system(size: row == 2 ? 46 : 31))
-                                    .frame(height: rowHeight)
-                                    .frame(maxWidth: .infinity)
-                                    .opacity(row == 2 ? 1.0 : 0.42)
-                                    .blur(radius: row == 2 ? 0.5 : 1.5)
-                            }
-                        }
-                        .offset(y: -rowHeight - verticalOffset)
-                    } else {
-                        VStack(spacing: 0) {
-                            Text(previousSymbol(for: finalSymbol))
-                                .font(.system(size: 25))
-                                .frame(height: rowHeight)
-                                .opacity(0.16)
-
-                            Text(finalSymbol)
-                                .font(.system(size: 49))
-                                .frame(height: rowHeight)
-                                .scaleEffect(stopBounce ? 1.16 : 1.0)
-                                .shadow(
-                                    color: isStopped ? glowColor.opacity(0.62) : Color.clear,
-                                    radius: 8
-                                )
-
-                            Text(nextSymbol(for: finalSymbol))
-                                .font(.system(size: 25))
-                                .frame(height: rowHeight)
-                                .opacity(0.16)
-                        }
-                        .offset(y: settlingOffset)
-                    }
-
-                    Rectangle()
-                        .fill(glowColor.opacity(flashOpacity))
-                        .blendMode(.screen)
-
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(0.34),
-                            Color.clear,
-                            Color.clear,
-                            Color.black.opacity(0.34)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .allowsHitTesting(false)
-                }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            }
-        }
-        .onChange(of: isStopped) { _, stopped in
-            guard stopped else { return }
-            playStopAnimation()
-        }
-    }
-
-    private func spinPhase(at date: Date) -> Double {
-        let baseSpeed = 18.0 + Double(reelIndex) * 2.7
-        let wobble = sin(date.timeIntervalSinceReferenceDate * 4.0 + Double(reelIndex)) * 0.35
-        return date.timeIntervalSinceReferenceDate * (baseSpeed + wobble)
-    }
-
-    private func symbolForRollingRow(baseIndex: Int, row: Int) -> String {
-        guard !symbolPool.isEmpty else { return finalSymbol }
-        let index = positiveModulo(baseIndex + row + reelIndex * 2, symbolPool.count)
-        return symbolPool[index]
-    }
-
-    private func playStopAnimation() {
-        settlingOffset = -14
-        flashOpacity = 0.55
-
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.34)) {
-            stopBounce = true
-            settlingOffset = 6
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.62)) {
-                settlingOffset = 0
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            withAnimation(.spring(response: 0.26, dampingFraction: 0.68)) {
-                stopBounce = false
-            }
-
-            withAnimation(.easeOut(duration: 0.22)) {
-                flashOpacity = 0
-            }
-        }
-    }
-
-    private func previousSymbol(for symbol: String) -> String {
-        guard let index = symbolPool.firstIndex(of: symbol),
-              !symbolPool.isEmpty else {
-            return "⭐"
-        }
-
-        let previous = positiveModulo(index - 1, symbolPool.count)
-        return symbolPool[previous]
-    }
-
-    private func nextSymbol(for symbol: String) -> String {
-        guard let index = symbolPool.firstIndex(of: symbol),
-              !symbolPool.isEmpty else {
-            return "🎁"
-        }
-
-        return symbolPool[(index + 1) % symbolPool.count]
-    }
-
-    private func positiveModulo(_ value: Int, _ divisor: Int) -> Int {
-        guard divisor > 0 else { return 0 }
-        let remainder = value % divisor
-        return remainder >= 0 ? remainder : remainder + divisor
-    }
-}
-
-private struct PremiumLeverControl: View {
-    let progress: CGFloat
-    let glowColor: Color
-    let enabled: Bool
-    let onChanged: (CGFloat) -> Void
-    let onReleased: () -> Void
-
-    @State private var dragStartProgress: CGFloat?
-
-    private var clampedProgress: CGFloat {
-        min(1, max(0, progress))
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack(alignment: .top) {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.48),
-                                Color.gray,
-                                Color.black
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 18, height: 128)
-
-                Capsule()
-                    .fill(Color.black.opacity(0.55))
-                    .frame(width: 6, height: 112)
-                    .padding(.top, 8)
-
-                leverKnob
-                    .offset(y: clampedProgress * 82)
-            }
-            .frame(width: 60, height: 150)
-
-            Text("LEVER")
-                .font(.system(size: 8, weight: .black, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.55))
-        }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    guard enabled else { return }
-
-                    if dragStartProgress == nil {
-                        dragStartProgress = clampedProgress
-                    }
-
-                    let startingProgress = dragStartProgress ?? 0
-                    let nextProgress = startingProgress + value.translation.height / 96
-
-                    onChanged(min(1, max(0, nextProgress)))
-                }
-                .onEnded { _ in
-                    guard enabled else {
-                        dragStartProgress = nil
-                        return
-                    }
-
-                    dragStartProgress = nil
-                    onReleased()
-                }
-        )
-        .accessibilityLabel("スロットレバー")
-        .accessibilityHint("下に引いてガチャを開始します")
-    }
-
-    private var leverKnob: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white,
-                            Color.red,
-                            Color(red: 0.43, green: 0.0, blue: 0.0)
-                        ],
-                        center: .topLeading,
-                        startRadius: 0,
-                        endRadius: 32
-                    )
-                )
-                .frame(width: 52, height: 52)
-
-            Circle()
-                .stroke(Color.white.opacity(0.45), lineWidth: 2)
-                .frame(width: 52, height: 52)
-
-            Circle()
-                .fill(Color.white.opacity(0.35))
-                .frame(width: 14, height: 8)
-                .offset(x: -10, y: -11)
-                .blur(radius: 1)
-        }
-        .shadow(color: Color.red.opacity(0.65), radius: 10)
-        .shadow(color: glowColor.opacity(0.55), radius: 14)
+private extension View {
+    func strokeText(color: Color, width: CGFloat) -> some View {
+        self
+            .shadow(color: color, radius: 0, x: width, y: 0)
+            .shadow(color: color, radius: 0, x: -width, y: 0)
+            .shadow(color: color, radius: 0, x: 0, y: width)
+            .shadow(color: color, radius: 0, x: 0, y: -width)
+            .shadow(color: color, radius: 0, x: width * 0.7, y: width * 0.7)
+            .shadow(color: color, radius: 0, x: -width * 0.7, y: width * 0.7)
+            .shadow(color: color, radius: 0, x: width * 0.7, y: -width * 0.7)
+            .shadow(color: color, radius: 0, x: -width * 0.7, y: -width * 0.7)
     }
 }
 
