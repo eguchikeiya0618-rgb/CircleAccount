@@ -140,18 +140,9 @@ struct PremiumSlotMachineView: View {
             HStack(spacing: 8) {
                 ForEach(0..<11, id: \.self) { index in
                     Circle()
-                        .fill(
-                            index.isMultiple(of: 2)
-                                ? heatLevel.lampColor
-                                : machineGlow
-                        )
+                        .fill(index.isMultiple(of: 2) ? heatLevel.lampColor : machineGlow)
                         .frame(width: 9, height: 9)
-                        .shadow(
-                            color: lampPulse
-                                ? machineGlow
-                                : Color.clear,
-                            radius: 7
-                        )
+                        .shadow(color: lampPulse ? machineGlow : Color.clear, radius: 7)
                         .opacity(lampPulse ? 1.0 : 0.48)
                 }
             }
@@ -183,18 +174,9 @@ struct PremiumSlotMachineView: View {
             HStack(spacing: 8) {
                 ForEach(0..<11, id: \.self) { index in
                     Circle()
-                        .fill(
-                            index.isMultiple(of: 2)
-                                ? machineGlow
-                                : heatLevel.lampColor
-                        )
+                        .fill(index.isMultiple(of: 2) ? machineGlow : heatLevel.lampColor)
                         .frame(width: 9, height: 9)
-                        .shadow(
-                            color: lampPulse
-                                ? heatLevel.lampColor
-                                : Color.clear,
-                            radius: 7
-                        )
+                        .shadow(color: lampPulse ? heatLevel.lampColor : Color.clear, radius: 7)
                         .opacity(lampPulse ? 0.82 : 0.42)
                 }
             }
@@ -371,10 +353,7 @@ struct PremiumSlotMachineView: View {
                     .stroke(Color.white.opacity(0.30), lineWidth: 1.5)
                     .frame(width: 34, height: 34)
             }
-            .shadow(
-                color: isStopped ? machineGlow : Color.clear,
-                radius: 9
-            )
+            .shadow(color: isStopped ? machineGlow : Color.clear, radius: 9)
 
             Text(["LEFT", "CENTER", "RIGHT"][index])
                 .font(.system(size: 7, weight: .black, design: .rounded))
@@ -486,11 +465,19 @@ private struct PremiumReelColumn: View {
     let glowColor: Color
 
     @State private var stopBounce = false
+    @State private var settlingOffset: CGFloat = 0
+    @State private var flashOpacity = 0.0
+
+    private let visibleRows = 5
+    private let rowHeight: CGFloat = 58
 
     var body: some View {
         GeometryReader { proxy in
-            TimelineView(.animation(minimumInterval: 0.055)) { context in
-                let symbol = displayedSymbol(at: context.date)
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isSpinning)) { context in
+                let phase = spinPhase(at: context.date)
+                let baseIndex = Int(floor(phase))
+                let fractional = phase - floor(phase)
+                let verticalOffset = CGFloat(fractional) * rowHeight
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -506,79 +493,105 @@ private struct PremiumReelColumn: View {
                             )
                         )
 
-                    VStack(spacing: 0) {
-                        Text(previousSymbol(for: symbol))
-                            .font(.system(size: 24))
-                            .frame(maxHeight: .infinity)
-                            .opacity(isSpinning ? 0.30 : 0.14)
-                            .blur(radius: isSpinning ? 1.4 : 0)
+                    if isSpinning {
+                        VStack(spacing: 0) {
+                            ForEach(0..<visibleRows, id: \.self) { row in
+                                Text(symbolForRollingRow(baseIndex: baseIndex, row: row))
+                                    .font(.system(size: row == 2 ? 46 : 31))
+                                    .frame(height: rowHeight)
+                                    .frame(maxWidth: .infinity)
+                                    .opacity(row == 2 ? 1.0 : 0.42)
+                                    .blur(radius: row == 2 ? 0.5 : 1.5)
+                            }
+                        }
+                        .offset(y: -rowHeight - verticalOffset)
+                    } else {
+                        VStack(spacing: 0) {
+                            Text(previousSymbol(for: finalSymbol))
+                                .font(.system(size: 25))
+                                .frame(height: rowHeight)
+                                .opacity(0.16)
 
-                        Divider().opacity(0.12)
+                            Text(finalSymbol)
+                                .font(.system(size: 49))
+                                .frame(height: rowHeight)
+                                .scaleEffect(stopBounce ? 1.16 : 1.0)
+                                .shadow(
+                                    color: isStopped ? glowColor.opacity(0.62) : Color.clear,
+                                    radius: 8
+                                )
 
-                        Text(symbol)
-                            .font(.system(size: isSpinning ? 42 : 48))
-                            .frame(maxHeight: .infinity)
-                            .scaleEffect(stopBounce ? 1.15 : 1.0)
-                            .blur(radius: isSpinning ? 0.85 : 0)
-                            .shadow(
-                                color: isStopped
-                                    ? glowColor.opacity(0.55)
-                                    : Color.clear,
-                                radius: 7
-                            )
-
-                        Divider().opacity(0.12)
-
-                        Text(nextSymbol(for: symbol))
-                            .font(.system(size: 24))
-                            .frame(maxHeight: .infinity)
-                            .opacity(isSpinning ? 0.30 : 0.14)
-                            .blur(radius: isSpinning ? 1.4 : 0)
+                            Text(nextSymbol(for: finalSymbol))
+                                .font(.system(size: 25))
+                                .frame(height: rowHeight)
+                                .opacity(0.16)
+                        }
+                        .offset(y: settlingOffset)
                     }
-                    .padding(.vertical, 4)
+
+                    Rectangle()
+                        .fill(glowColor.opacity(flashOpacity))
+                        .blendMode(.screen)
 
                     LinearGradient(
                         colors: [
-                            Color.black.opacity(0.25),
+                            Color.black.opacity(0.34),
                             Color.clear,
                             Color.clear,
-                            Color.black.opacity(0.25)
+                            Color.black.opacity(0.34)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 11))
                     .allowsHitTesting(false)
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             }
         }
         .onChange(of: isStopped) { _, stopped in
             guard stopped else { return }
-
-            withAnimation(.spring(response: 0.20, dampingFraction: 0.38)) {
-                stopBounce = true
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                withAnimation(.spring(response: 0.26, dampingFraction: 0.65)) {
-                    stopBounce = false
-                }
-            }
+            playStopAnimation()
         }
     }
 
-    private func displayedSymbol(at date: Date) -> String {
-        guard isSpinning, !symbolPool.isEmpty else {
-            return finalSymbol
+    private func spinPhase(at date: Date) -> Double {
+        let baseSpeed = 18.0 + Double(reelIndex) * 2.7
+        let wobble = sin(date.timeIntervalSinceReferenceDate * 4.0 + Double(reelIndex)) * 0.35
+        return date.timeIntervalSinceReferenceDate * (baseSpeed + wobble)
+    }
+
+    private func symbolForRollingRow(baseIndex: Int, row: Int) -> String {
+        guard !symbolPool.isEmpty else { return finalSymbol }
+        let index = positiveModulo(baseIndex + row + reelIndex * 2, symbolPool.count)
+        return symbolPool[index]
+    }
+
+    private func playStopAnimation() {
+        settlingOffset = -14
+        flashOpacity = 0.55
+
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.34)) {
+            stopBounce = true
+            settlingOffset = 6
         }
 
-        let speed = 19.0 + Double(reelIndex) * 3.2
-        let value = date.timeIntervalSinceReferenceDate * speed
-        let index = abs(Int(value.rounded(.down)) + reelIndex * 3)
-            % symbolPool.count
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.62)) {
+                settlingOffset = 0
+            }
+        }
 
-        return symbolPool[index]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.68)) {
+                stopBounce = false
+            }
+
+            withAnimation(.easeOut(duration: 0.22)) {
+                flashOpacity = 0
+            }
+        }
     }
 
     private func previousSymbol(for symbol: String) -> String {
@@ -587,7 +600,7 @@ private struct PremiumReelColumn: View {
             return "⭐"
         }
 
-        let previous = (index - 1 + symbolPool.count) % symbolPool.count
+        let previous = positiveModulo(index - 1, symbolPool.count)
         return symbolPool[previous]
     }
 
@@ -598,6 +611,12 @@ private struct PremiumReelColumn: View {
         }
 
         return symbolPool[(index + 1) % symbolPool.count]
+    }
+
+    private func positiveModulo(_ value: Int, _ divisor: Int) -> Int {
+        guard divisor > 0 else { return 0 }
+        let remainder = value % divisor
+        return remainder >= 0 ? remainder : remainder + divisor
     }
 }
 
@@ -657,8 +676,7 @@ private struct PremiumLeverControl: View {
                     }
 
                     let startingProgress = dragStartProgress ?? 0
-                    let nextProgress =
-                        startingProgress + value.translation.height / 96
+                    let nextProgress = startingProgress + value.translation.height / 96
 
                     onChanged(min(1, max(0, nextProgress)))
                 }
