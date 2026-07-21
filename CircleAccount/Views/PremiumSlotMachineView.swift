@@ -25,6 +25,11 @@ struct PremiumSlotMachineView: View {
     @State private var machineShakeX: CGFloat = 0
     @State private var stopLineFlashOpacity = 0.0
     @State private var flashingStopIndex: Int?
+    @State private var pushHeartbeat = false
+    @State private var pushRingProgress: CGFloat = 0
+    @State private var pushPressed = false
+    @State private var pushFlashOpacity = 0.0
+    @State private var pushRainbowRotation = 0.0
 
     private let reelPool = [
         "7", "⭐", "🎁", "🏸", "💰",
@@ -394,8 +399,31 @@ struct PremiumSlotMachineView: View {
     }
 
     private var pushButton: some View {
-        Button(action: onPush) {
+        Button(action: handlePush) {
             ZStack {
+                if isPushVisible {
+                    Circle()
+                        .stroke(
+                            heatLevel == .premium
+                                ? AnyShapeStyle(
+                                    AngularGradient(
+                                        colors: [
+                                            .red, .orange, .yellow, .green,
+                                            .cyan, .blue, .purple, .red
+                                        ],
+                                        center: .center,
+                                        angle: .degrees(pushRainbowRotation)
+                                    )
+                                )
+                                : AnyShapeStyle(machineGlow.opacity(0.85)),
+                            lineWidth: 3
+                        )
+                        .frame(width: 76, height: 76)
+                        .scaleEffect(0.72 + pushRingProgress * 0.52)
+                        .opacity(1.0 - Double(pushRingProgress))
+                        .shadow(color: machineGlow, radius: 12)
+                }
+
                 Circle()
                     .fill(
                         RadialGradient(
@@ -408,13 +436,32 @@ struct PremiumSlotMachineView: View {
                         )
                     )
 
+                if heatLevel == .premium && isPushVisible {
+                    Circle()
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    .red, .orange, .yellow, .green,
+                                    .cyan, .blue, .purple, .red
+                                ],
+                                center: .center,
+                                angle: .degrees(pushRainbowRotation)
+                            ),
+                            lineWidth: 4
+                        )
+                } else {
+                    Circle()
+                        .stroke(
+                            isPushVisible
+                                ? Color.white.opacity(0.78)
+                                : Color.white.opacity(0.20),
+                            lineWidth: 3
+                        )
+                }
+
                 Circle()
-                    .stroke(
-                        isPushVisible
-                            ? Color.white.opacity(0.78)
-                            : Color.white.opacity(0.20),
-                        lineWidth: 3
-                    )
+                    .fill(Color.white.opacity(pushFlashOpacity))
+                    .blur(radius: 2)
 
                 VStack(spacing: -2) {
                     Text("PUSH")
@@ -428,14 +475,29 @@ struct PremiumSlotMachineView: View {
                         ? Color.white
                         : Color.white.opacity(0.32)
                 )
+                .shadow(
+                    color: isPushVisible ? Color.white.opacity(0.7) : Color.clear,
+                    radius: 4
+                )
             }
             .frame(width: 59, height: 59)
-            .scaleEffect(isPushVisible && lampPulse ? 1.08 : 1.0)
+            .scaleEffect(
+                pushPressed
+                    ? 0.88
+                    : (isPushVisible && pushHeartbeat ? 1.11 : 1.0)
+            )
+            .offset(y: pushPressed ? 4 : 0)
             .shadow(
                 color: isPushVisible
                     ? machineGlow.opacity(0.95)
                     : Color.clear,
-                radius: 14
+                radius: pushHeartbeat ? 20 : 12
+            )
+            .shadow(
+                color: heatLevel == .premium && isPushVisible
+                    ? heatLevel.lampColor.opacity(0.9)
+                    : Color.clear,
+                radius: 17
             )
         }
         .buttonStyle(.plain)
@@ -472,6 +534,58 @@ struct PremiumSlotMachineView: View {
                 .repeatForever(autoreverses: false)
         ) {
             borderRotation = 360
+        }
+
+        withAnimation(
+            .easeInOut(duration: 0.72)
+                .repeatForever(autoreverses: true)
+        ) {
+            pushHeartbeat = true
+        }
+
+        withAnimation(
+            .linear(duration: 1.15)
+                .repeatForever(autoreverses: false)
+        ) {
+            pushRingProgress = 1
+        }
+
+        withAnimation(
+            .linear(duration: 2.8)
+                .repeatForever(autoreverses: false)
+        ) {
+            pushRainbowRotation = 360
+        }
+    }
+
+    private func handlePush() {
+        guard isPushEnabled else { return }
+
+        withAnimation(.easeOut(duration: 0.055)) {
+            pushPressed = true
+            pushFlashOpacity = 0.92
+        }
+
+        withAnimation(.easeOut(duration: 0.10)) {
+            machineShakeX = -4
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.48)) {
+                pushPressed = false
+                machineShakeX = 3
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                pushFlashOpacity = 0
+                machineShakeX = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) {
+            onPush()
         }
     }
 
