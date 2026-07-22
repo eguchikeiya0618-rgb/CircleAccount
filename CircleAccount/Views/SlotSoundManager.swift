@@ -7,6 +7,7 @@ final class SlotSoundManager {
     private let engine = AVAudioEngine()
     private let spinPlayer = AVAudioPlayerNode()
     private let accentPlayer = AVAudioPlayerNode()
+    private let resultPlayer = AVAudioPlayerNode()
 
     private var spinBuffer: AVAudioPCMBuffer?
     private var intenseSpinBuffer: AVAudioPCMBuffer?
@@ -16,6 +17,10 @@ final class SlotSoundManager {
     private var pushBuffer: AVAudioPCMBuffer?
     private var warningBuffer: AVAudioPCMBuffer?
     private var jackpotBuffer: AVAudioPCMBuffer?
+    private var bellBuffer: AVAudioPCMBuffer?
+    private var grapeBuffer: AVAudioPCMBuffer?
+    private var sevenBuffer: AVAudioPCMBuffer?
+    private var rainbowSevenBuffer: AVAudioPCMBuffer?
 
     private var isPrepared = false
     private var isSoundEnabled = true
@@ -153,6 +158,50 @@ final class SlotSoundManager {
         )
     }
 
+    func playBell() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+        playResultOneShot(
+            buffer: bellBuffer,
+            volume: 0.82
+        )
+    }
+
+    func playGrape() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+        playResultOneShot(
+            buffer: grapeBuffer,
+            volume: 0.78
+        )
+    }
+
+    func playSeven() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+        stopSpin()
+
+        playResultOneShot(
+            buffer: sevenBuffer,
+            volume: 0.94
+        )
+    }
+
+    func playRainbowSeven() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+        stopSpin()
+
+        playResultOneShot(
+            buffer: rainbowSevenBuffer,
+            volume: 0.98
+        )
+    }
+
     func stopSpin() {
         if spinPlayer.isPlaying {
             spinPlayer.stop()
@@ -162,6 +211,7 @@ final class SlotSoundManager {
     func stopAll() {
         spinPlayer.stop()
         accentPlayer.stop()
+        resultPlayer.stop()
 
         if engine.isRunning {
             engine.pause()
@@ -212,6 +262,7 @@ final class SlotSoundManager {
 
         engine.attach(spinPlayer)
         engine.attach(accentPlayer)
+        engine.attach(resultPlayer)
 
         engine.connect(
             spinPlayer,
@@ -221,6 +272,12 @@ final class SlotSoundManager {
 
         engine.connect(
             accentPlayer,
+            to: engine.mainMixerNode,
+            format: format
+        )
+
+        engine.connect(
+            resultPlayer,
             to: engine.mainMixerNode,
             format: format
         )
@@ -261,6 +318,24 @@ final class SlotSoundManager {
             format: format
         )
 
+        bellBuffer = makeBellSound(
+            format: format
+        )
+
+        grapeBuffer = makeGrapeSound(
+            format: format
+        )
+
+        sevenBuffer = makeSevenSound(
+            format: format,
+            rainbow: false
+        )
+
+        rainbowSevenBuffer = makeSevenSound(
+            format: format,
+            rainbow: true
+        )
+
         engine.prepare()
         isPrepared = true
     }
@@ -282,6 +357,25 @@ final class SlotSoundManager {
 
         accentPlayer.volume = volume
         accentPlayer.play()
+    }
+
+    private func playResultOneShot(
+        buffer: AVAudioPCMBuffer?,
+        volume: Float
+    ) {
+        guard let buffer else { return }
+
+        resultPlayer.stop()
+
+        resultPlayer.scheduleBuffer(
+            buffer,
+            at: nil,
+            options: [],
+            completionHandler: nil
+        )
+
+        resultPlayer.volume = volume
+        resultPlayer.play()
     }
 
     // MARK: - Spin Loop
@@ -752,6 +846,236 @@ final class SlotSoundManager {
                 * 0.22
 
             return output + sweep + bass
+        }
+    }
+
+    // MARK: - Bell
+
+    private func makeBellSound(
+        format: AVAudioFormat
+    ) -> AVAudioPCMBuffer? {
+        let frequencies = [
+            1_046.50,
+            1_318.51,
+            1_568.00
+        ]
+
+        return renderBuffer(
+            format: format,
+            duration: 1.05
+        ) { t in
+            var output = 0.0
+
+            for (index, frequency) in frequencies.enumerated() {
+                let start = Double(index) * 0.10
+                let localTime = t - start
+
+                guard localTime >= 0 else { continue }
+
+                let envelope =
+                    min(1.0, localTime * 42.0)
+                    * exp(-localTime * 4.6)
+
+                output +=
+                    sin(2.0 * .pi * frequency * localTime)
+                    * envelope
+                    * 0.20
+
+                output +=
+                    sin(2.0 * .pi * frequency * 2.01 * localTime)
+                    * envelope
+                    * 0.055
+            }
+
+            return output
+        }
+    }
+
+    // MARK: - Grape payout
+
+    private func makeGrapeSound(
+        format: AVAudioFormat
+    ) -> AVAudioPCMBuffer? {
+        return renderBuffer(
+            format: format,
+            duration: 1.30
+        ) { t in
+            let tickRate = 17.0
+            let tickPosition = t * tickRate
+            let tickTime =
+                tickPosition - floor(tickPosition)
+
+            let tickEnvelope =
+                exp(-tickTime * 34.0)
+
+            let risingFrequency =
+                720.0 + 520.0 * min(1.0, t / 1.05)
+
+            let coin =
+                sin(
+                    2.0
+                    * .pi
+                    * risingFrequency
+                    * t
+                )
+                * tickEnvelope
+                * 0.14
+
+            let shimmer =
+                sin(
+                    2.0
+                    * .pi
+                    * 2_240.0
+                    * t
+                )
+                * tickEnvelope
+                * 0.045
+
+            let body =
+                sin(
+                    2.0
+                    * .pi
+                    * 120.0
+                    * t
+                )
+                * exp(-t * 3.8)
+                * 0.10
+
+            return coin + shimmer + body
+        }
+    }
+
+    // MARK: - Seven / Rainbow Seven
+
+    private func makeSevenSound(
+        format: AVAudioFormat,
+        rainbow: Bool
+    ) -> AVAudioPCMBuffer? {
+        let duration = rainbow ? 3.15 : 2.20
+
+        return renderBuffer(
+            format: format,
+            duration: duration
+        ) { t in
+            let sweepDuration =
+                rainbow ? 2.15 : 1.38
+
+            let progress =
+                min(1.0, t / sweepDuration)
+
+            let startFrequency =
+                rainbow ? 430.0 : 520.0
+
+            let endFrequency =
+                rainbow ? 4_600.0 : 3_350.0
+
+            let sweepFrequency =
+                startFrequency
+                + (endFrequency - startFrequency)
+                * pow(progress, 1.72)
+
+            let sweepEnvelope =
+                sin(
+                    .pi
+                    * min(1.0, t / sweepDuration)
+                )
+                * exp(
+                    -max(0.0, t - sweepDuration)
+                    * 2.1
+                )
+
+            let sweep =
+                sin(
+                    2.0
+                    * .pi
+                    * sweepFrequency
+                    * t
+                )
+                * sweepEnvelope
+                * (rainbow ? 0.22 : 0.19)
+
+            let sparkleRate =
+                rainbow ? 15.0 : 11.0
+
+            let sparklePosition =
+                t * sparkleRate
+
+            let sparkleTime =
+                sparklePosition
+                - floor(sparklePosition)
+
+            let sparkleEnvelope =
+                exp(-sparkleTime * 30.0)
+
+            let sparkle =
+                sin(
+                    2.0
+                    * .pi
+                    * (rainbow ? 2_950.0 : 2_350.0)
+                    * t
+                )
+                * sparkleEnvelope
+                * (rainbow ? 0.075 : 0.050)
+
+            let bass =
+                sin(
+                    2.0
+                    * .pi
+                    * (rainbow ? 68.0 : 82.0)
+                    * t
+                )
+                * exp(-t * 2.4)
+                * 0.18
+
+            let rainbowChord: Double
+
+            if rainbow {
+                let notes = [
+                    523.25,
+                    659.25,
+                    783.99,
+                    1_046.50
+                ]
+
+                rainbowChord =
+                    notes.enumerated().reduce(0.0) {
+                        partial,
+                        item in
+
+                        let start =
+                            1.20
+                            + Double(item.offset)
+                            * 0.18
+
+                        let localTime = t - start
+
+                        guard localTime >= 0 else {
+                            return partial
+                        }
+
+                        let envelope =
+                            min(1.0, localTime * 20.0)
+                            * exp(-localTime * 1.65)
+
+                        return partial
+                            + sin(
+                                2.0
+                                * .pi
+                                * item.element
+                                * localTime
+                            )
+                            * envelope
+                            * 0.10
+                    }
+            } else {
+                rainbowChord = 0
+            }
+
+            return
+                sweep
+                + sparkle
+                + bass
+                + rainbowChord
         }
     }
 

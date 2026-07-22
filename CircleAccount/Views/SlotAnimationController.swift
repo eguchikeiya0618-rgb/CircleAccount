@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 enum SlotAnimationRoute: Equatable {
     case normal
@@ -587,9 +588,23 @@ final class SlotAnimationController: ObservableObject {
                 isFinal: index == 2
             )
 
+            playStopHaptic(
+                index: index,
+                isFinal: index == 2
+            )
+
             if index == 2 {
                 statusText = "RESULT LOCKED"
                 subStatusText = "FINAL JUDGEMENT"
+
+                await sleep(0.24)
+
+                guard !Task.isCancelled else {
+                    sound.stopSpin()
+                    return
+                }
+
+                playResultSound()
             } else {
                 statusText =
                     "REEL \(index + 1) STOP"
@@ -601,6 +616,71 @@ final class SlotAnimationController: ObservableObject {
 
         isSpinning = false
         sound.stopSpin()
+    }
+
+    // MARK: - Haptics
+
+    private func playStopHaptic(
+        index: Int,
+        isFinal: Bool
+    ) {
+        let style: UIImpactFeedbackGenerator.FeedbackStyle
+
+        switch index {
+        case 0:
+            style = .light
+
+        case 1:
+            style = .medium
+
+        default:
+            style = .heavy
+        }
+
+        let impact = UIImpactFeedbackGenerator(style: style)
+        impact.prepare()
+        impact.impactOccurred(
+            intensity: isFinal ? 1.0 : 0.82
+        )
+
+        guard isFinal else { return }
+
+        let notification = UINotificationFeedbackGenerator()
+        notification.prepare()
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.10
+        ) {
+            switch self.resultTitle {
+            case "参加費無料券",
+                 "ガット張り工賃無料券":
+                notification.notificationOccurred(.success)
+
+            default:
+                break
+            }
+        }
+    }
+
+    // MARK: - Result Sound
+
+    private func playResultSound() {
+        switch resultTitle {
+        case "参加費無料券":
+            sound.playRainbowSeven()
+
+        case "ガット張り工賃無料券":
+            sound.playSeven()
+
+        case "対戦指名券":
+            sound.playBell()
+
+        case "優先ゲーム券":
+            sound.playGrape()
+
+        default:
+            break
+        }
     }
 
     // MARK: - Push Sequence

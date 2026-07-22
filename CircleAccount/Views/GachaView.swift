@@ -33,8 +33,32 @@ struct GachaView: View {
     }
 
     private var reelSymbols: [String] {
-        let icon = pendingPrize?.icon ?? "7"
-        return [icon, icon, icon]
+        guard let prize = pendingPrize else {
+            return ["BAR", "🔔", "🍇"]
+        }
+
+        switch prize.title {
+        case "ガット張り工賃無料券":
+            return ["7", "7", "7"]
+
+        case "参加費無料券":
+            return ["🌈7", "🌈7", "🌈7"]
+
+        case "参加費半額券":
+            return ["7", "7", "BAR"]
+
+        case "参加費500円券":
+            return ["BAR", "BAR", "BAR"]
+
+        case "対戦指名券":
+            return ["🔔", "🔔", "🔔"]
+
+        case "優先ゲーム券":
+            return ["🍇", "🍇", "🍇"]
+
+        default:
+            return ["BAR", "🔔", "🍇"]
+        }
     }
 
     var body: some View {
@@ -415,15 +439,23 @@ struct GachaView: View {
 
                 switch gachaResult {
                 case .success(let prize):
-                    pendingPrize = prize
                     availablePoint = max(availablePoint - 100, 0)
 
+                    // 先に回転を開始する。
+                    // この時点では pendingPrize を更新しないため、
+                    // 当たり絵柄が回転開始前に一瞬表示されることを防げる。
                     animation.start(
                         soundEnabled: gachaSoundEnabled,
                         resultTitle: prize.title,
                         resultSubtitle: resultSubtitle(for: prize),
                         route: animationRoute(for: prize)
                     )
+
+                    // 回転状態が画面へ反映された次の更新で、
+                    // 停止時に使用する本当の絵柄を渡す。
+                    DispatchQueue.main.async {
+                        pendingPrize = prize
+                    }
 
                     heavyHaptic()
 

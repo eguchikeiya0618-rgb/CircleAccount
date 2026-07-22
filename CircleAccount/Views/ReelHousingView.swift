@@ -6,7 +6,8 @@
 import SwiftUI
 
 struct ReelHousingView: View {
-    let symbols: [String]
+    let resultSymbols: [String]
+    let displaySymbols: [String]
     let reelPool: [String]
     let isSpinning: Bool
     let stoppedReelCount: Int
@@ -21,11 +22,19 @@ struct ReelHousingView: View {
     let reachOverlayOpacity: Double
     let reachOverlayScale: CGFloat
 
-    private var safeSymbols: [String] {
+    private var safeResultSymbols: [String] {
         [
-            symbols.indices.contains(0) ? symbols[0] : "7",
-            symbols.indices.contains(1) ? symbols[1] : "7",
-            symbols.indices.contains(2) ? symbols[2] : "7"
+            resultSymbols.indices.contains(0) ? resultSymbols[0] : "7",
+            resultSymbols.indices.contains(1) ? resultSymbols[1] : "7",
+            resultSymbols.indices.contains(2) ? resultSymbols[2] : "7"
+        ]
+    }
+
+    private var safeDisplaySymbols: [String] {
+        [
+            displaySymbols.indices.contains(0) ? displaySymbols[0] : "⭐",
+            displaySymbols.indices.contains(1) ? displaySymbols[1] : "🏸",
+            displaySymbols.indices.contains(2) ? displaySymbols[2] : "💰"
         ]
     }
 
@@ -51,7 +60,8 @@ struct ReelHousingView: View {
             HStack(spacing: 7) {
                 ForEach(0..<3, id: \.self) { index in
                     PremiumReelColumn(
-                        finalSymbol: safeSymbols[index],
+                        finalSymbol: safeResultSymbols[index],
+                        initialDisplaySymbol: safeDisplaySymbols[index],
                         symbolPool: reelPool,
                         isSpinning: isSpinning && stoppedReelCount <= index,
                         isStopped: stoppedReelCount > index,
@@ -63,27 +73,65 @@ struct ReelHousingView: View {
             .padding(.horizontal, 13)
             .padding(.vertical, 15)
 
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            machineGlow.opacity(0.72),
-                            Color.white,
-                            machineGlow.opacity(0.72),
-                            Color.clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+            GeometryReader { proxy in
+                ZStack {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.red.opacity(0.30),
+                                    Color.white.opacity(0.92),
+                                    Color.red.opacity(0.30),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(
+                            width: max(proxy.size.width - 42, 0),
+                            height: 2
+                        )
+                        .opacity(0)
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    machineGlow.opacity(0.46),
+                                    Color.white,
+                                    machineGlow.opacity(0.46),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(
+                            width: max(proxy.size.width - 42, 0),
+                            height: stopLineFlashOpacity > 0 ? 3 : 1
+                        )
+                        .opacity(stopLineFlashOpacity)
+                        .shadow(
+                            color: machineGlow.opacity(0.95),
+                            radius: 10
+                        )
+                }
+                .frame(
+                    width: proxy.size.width,
+                    height: proxy.size.height
                 )
-                .frame(height: stopLineFlashOpacity > 0 ? 5 : 2)
-                .opacity(0.72 + stopLineFlashOpacity)
-                .shadow(
-                    color: machineGlow.opacity(stopLineFlashOpacity),
-                    radius: 16
+            }
+            .padding(8)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 17,
+                    style: .continuous
                 )
-                .allowsHitTesting(false)
+            )
+            .allowsHitTesting(false)
 
             RoundedRectangle(cornerRadius: 17, style: .continuous)
                 .stroke(
@@ -323,4 +371,3 @@ struct ReelHousingView: View {
         .padding(8)
     }
 }
-

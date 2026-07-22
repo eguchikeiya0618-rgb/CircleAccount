@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct PremiumSlotMachineView: View {
     let symbols: [String]
@@ -45,10 +46,31 @@ struct PremiumSlotMachineView: View {
     @State private var pseudoRepeatCount = 0
     @State private var freezeEffectVisible = false
     @State private var freezeSequenceRunning = false
+    @State private var resultCelebrationTrigger = 0
+    @State private var resultCelebrationKind: SlotResultCelebrationKind?
+    @State private var isConfettiVisible = false
+    @State private var confettiResetToken = 0
+    @State private var enhancedStopFlashOpacity = 0.0
+    @State private var enhancedStopFlashScale: CGFloat = 0.92
+    @State private var enhancedStopFlashColor = Color.white
+    @State private var enhancedStopFlashRotation = 0.0
+    
+    @State private var luckyLampMode: SlotLuckyLampMode = .off
+    @State private var luckyLampTrigger = 0
+    @State private var blackoutTrigger = 0
+    @State private var pushChanceTrigger = 0
+    @State private var pushPressTrigger = 0
+    @State private var pushPressed = false
+
+    @State private var displaySymbols = ["⭐", "🏸", "💰"]
 
     private let reelPool = [
-        "7", "⭐", "🎁", "🏸", "💰",
-        "🚀", "🎾", "🧹", "🔥", "💎"
+        "7",
+        "BAR",
+        "🔔",
+        "🍇",
+        "🍒",
+        "🌈7"
     ]
 
     private var machineGlow: Color {
@@ -61,6 +83,11 @@ struct PremiumSlotMachineView: View {
             symbols.indices.contains(1) ? symbols[1] : "7",
             symbols.indices.contains(2) ? symbols[2] : "7"
         ]
+    }
+
+    private var isSevenJackpot: Bool {
+        safeSymbols == ["7", "7", "7"]
+        || safeSymbols == ["🌈7", "🌈7", "🌈7"]
     }
 
     var body: some View {
@@ -91,11 +118,39 @@ struct PremiumSlotMachineView: View {
             .allowsHitTesting(false)
             .zIndex(50)
 
+            EnhancedReelStopFlashOverlay(
+                opacity: enhancedStopFlashOpacity,
+                scale: enhancedStopFlashScale,
+                color: enhancedStopFlashColor,
+                rotation: enhancedStopFlashRotation
+            )
+            .padding(.trailing, 46)
+            .allowsHitTesting(false)
+            .zIndex(55)
+
             JackpotWhiteoutOverlay(
                 opacity: jackpotWhiteoutOpacity
             )
             .allowsHitTesting(false)
             .zIndex(60)
+
+            SlotBlackoutOverlay(
+                trigger: blackoutTrigger
+            )
+            .padding(.trailing, 46)
+            .allowsHitTesting(false)
+            .zIndex(63)
+
+            SlotPushChanceOverlay(
+                isVisible: isPushVisible,
+                isEnabled: isPushEnabled && !pushPressed,
+                appearanceTrigger: pushChanceTrigger,
+                pressTrigger: pushPressTrigger,
+                isPremium: heatLevel == .premium,
+                onPush: handlePremiumPush
+            )
+            .padding(.trailing, 46)
+            .zIndex(64)
 
             PremiumBurstView(
                 trigger: premiumBurstTrigger,
@@ -103,16 +158,35 @@ struct PremiumSlotMachineView: View {
             )
             .zIndex(65)
 
-            RewardCardView(
-                isVisible: rewardCardVisible,
-                symbols: safeSymbols,
-                title: "JACKPOT",
-                subtitle: statusText.isEmpty ? "PREMIUM GET!" : statusText,
-                isPremium: heatLevel == .premium
+            SlotResultCelebrationOverlay(
+                trigger: resultCelebrationTrigger,
+                kind: resultCelebrationKind
             )
             .padding(.trailing, 46)
-            .zIndex(68)
+            .zIndex(66)
             .allowsHitTesting(false)
+
+            if isConfettiVisible {
+                ConfettiView()
+                    .id(confettiResetToken)
+                    .padding(.trailing, 46)
+                    .transition(.opacity)
+                    .zIndex(67)
+                    .allowsHitTesting(false)
+            }
+
+            if isSevenJackpot {
+                RewardCardView(
+                    isVisible: rewardCardVisible,
+                    symbols: safeSymbols,
+                    title: "JACKPOT",
+                    subtitle: statusText.isEmpty ? "PREMIUM GET!" : statusText,
+                    isPremium: true
+                )
+                .padding(.trailing, 46)
+                .zIndex(68)
+                .allowsHitTesting(false)
+            }
 
             PseudoRepeatOverlay(
                 isVisible: pseudoRepeatVisible,
@@ -143,13 +217,27 @@ struct PremiumSlotMachineView: View {
         .scaleEffect(machinePulse ? 1.012 : 1.0)
         .offset(x: machineShakeX)
         .onAppear {
+            prepareDisplaySymbols()
             startContinuousAnimations()
+        }
+        .onChange(of: isSpinning) { _, spinning in
+            if spinning {
+                prepareDisplaySymbols()
+            }
         }
         .onChange(of: heatLevel) { _, newValue in
             pulseMachine()
 
             if newValue == .premium {
                 playPremiumFlash()
+            }
+        }
+        .onChange(of: isPushVisible) { _, visible in
+            if visible {
+                pushPressed = false
+                pushChanceTrigger += 1
+            } else {
+                pushPressed = false
             }
         }
         .onChange(of: stoppedReelCount) { oldValue, newValue in
@@ -160,17 +248,36 @@ struct PremiumSlotMachineView: View {
                     pseudoRepeatVisible = false
                     freezeEffectVisible = false
                     freezeSequenceRunning = false
+                    resultCelebrationKind = nil
+                    isConfettiVisible = false
+                    
+                    luckyLampMode = .off
+                    
                     hideJackpot()
                 }
                 return
             }
 
             playStopImpact(stoppedCount: newValue)
+            playEnhancedStopFlash(stoppedCount: newValue)
             playSparkBurst()
             playMachineFlash()
             playReachSequence(stoppedCount: newValue)
 
-            if newValue >= 3 && heatLevel == .premium {
+            if newValue == 1 {
+                lightLuckyLamp()
+            }
+
+            if newValue == 2,
+               safeSymbols == ["🌈7", "🌈7", "🌈7"] {
+                playBlackoutSequence()
+            }
+
+            if newValue >= 3 {
+                playResultCelebration()
+            }
+
+            if newValue >= 3 && isSevenJackpot {
                 playPremiumBurst()
                 playFreezeSequence()
             }
@@ -203,10 +310,10 @@ struct PremiumSlotMachineView: View {
                 rotation: borderRotation
             )
 
-            MovingMetalHighlight(
-                sweepOffset: frameSweepOffset
-            )
-            .allowsHitTesting(false)
+            // MovingMetalHighlight(
+            //     sweepOffset: frameSweepOffset
+            // )
+            // .allowsHitTesting(false)
 
             RisingCabinetLight(
                 glowColor: machineGlow,
@@ -219,7 +326,6 @@ struct PremiumSlotMachineView: View {
                 machineGlow: machineGlow,
                 isSpinning: isSpinning
             )
-
             VStack(spacing: 15) {
                 MarqueeHeaderView(
                     heatLevel: heatLevel,
@@ -232,6 +338,15 @@ struct PremiumSlotMachineView: View {
                     heatLevel: heatLevel,
                     machineGlow: machineGlow
                 )
+                HStack {
+                    SlotLuckyLampView(
+                        mode: luckyLampMode,
+                        trigger: luckyLampTrigger
+                    )
+
+                    Spacer()
+                }
+                .frame(height: 78)
                 reelHousing
                 controlPanel
                 brandFooter
@@ -246,7 +361,8 @@ struct PremiumSlotMachineView: View {
 
     private var reelHousing: some View {
         ReelHousingView(
-            symbols: safeSymbols,
+            resultSymbols: safeSymbols,
+            displaySymbols: displaySymbols,
             reelPool: reelPool,
             isSpinning: isSpinning,
             stoppedReelCount: stoppedReelCount,
@@ -264,50 +380,20 @@ struct PremiumSlotMachineView: View {
     }
 
     private var controlPanel: some View {
-        HStack(spacing: 13) {
-            ForEach(0..<3, id: \.self) { index in
-                StopLampView(
-                    index: index,
-                    isSpinning: isSpinning,
-                    stoppedReelCount: stoppedReelCount,
-                    flashingStopIndex: flashingStopIndex,
-                    heatLevel: heatLevel
-                )
+        MachineControlPanelView(
+            isSpinning: isSpinning,
+            stoppedReelCount: stoppedReelCount,
+            flashingStopIndex: flashingStopIndex,
+            heatLevel: heatLevel,
+            machineGlow: machineGlow,
+            isPushVisible: false,
+            isPushEnabled: false,
+            onPush: onPush,
+            onImpact: { offset in
+                withAnimation(.easeOut(duration: 0.10)) {
+                    machineShakeX = offset
+                }
             }
-
-            Spacer(minLength: 3)
-
-            PushButtonView(
-                isVisible: isPushVisible,
-                isEnabled: isPushEnabled,
-                heatLevel: heatLevel,
-                machineGlow: machineGlow,
-                onPush: onPush,
-                onImpact: { offset in
-                    withAnimation(.easeOut(duration: 0.10)) {
-                        machineShakeX = offset
-                    }
-                }
-            )
-        }
-        .frame(height: 74)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.12, green: 0.13, blue: 0.17),
-                            Color.black
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                }
         )
     }
 
@@ -325,6 +411,34 @@ struct PremiumSlotMachineView: View {
         }
         .foregroundStyle(Color.white.opacity(0.42))
         .padding(.horizontal, 4)
+    }
+
+    private func prepareDisplaySymbols() {
+        var candidates = reelPool.shuffled()
+
+        while candidates.count < 3 {
+            candidates.append(contentsOf: reelPool.shuffled())
+        }
+
+        var selected = Array(candidates.prefix(3))
+
+        for index in 0..<3 {
+            if selected[index] == safeSymbols[index],
+               let replacement = reelPool.first(where: {
+                   $0 != safeSymbols[index]
+               }) {
+                selected[index] = replacement
+            }
+        }
+
+        if Set(selected).count == 1,
+           reelPool.count > 1 {
+            selected[1] = reelPool.first(where: {
+                $0 != selected[0]
+            }) ?? selected[1]
+        }
+
+        displaySymbols = selected
     }
 
     private func startContinuousAnimations() {
@@ -552,6 +666,181 @@ struct PremiumSlotMachineView: View {
         }
     }
 
+    private func handlePremiumPush() {
+        guard isPushVisible, isPushEnabled, !pushPressed else { return }
+
+        pushPressed = true
+        pushPressTrigger += 1
+
+        let impact = UIImpactFeedbackGenerator(style: .heavy)
+        impact.prepare()
+        impact.impactOccurred(intensity: 1.0)
+
+        playJackpotWhiteout()
+        playPremiumBurst()
+
+        if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
+            luckyLampMode = .rainbow
+            luckyLampTrigger += 1
+            playRainbowFinalFlash()
+        } else {
+            luckyLampMode = .gold
+            luckyLampTrigger += 1
+            playGoldFinalFlash()
+        }
+
+        withAnimation(.easeOut(duration: 0.06)) {
+            machineShakeX = -12
+            machinePulse = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            withAnimation(.easeInOut(duration: 0.07)) {
+                machineShakeX = 12
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            onPush()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            withAnimation(
+                .spring(
+                    response: 0.30,
+                    dampingFraction: 0.56
+                )
+            ) {
+                machineShakeX = 0
+                machinePulse = false
+            }
+        }
+    }
+
+    private func playBlackoutSequence() {
+        blackoutTrigger += 1
+
+        withAnimation(.easeOut(duration: 0.06)) {
+            machineShakeX = -5
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.easeInOut(duration: 0.07)) {
+                machineShakeX = 5
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(
+                .spring(
+                    response: 0.26,
+                    dampingFraction: 0.62
+                )
+            ) {
+                machineShakeX = 0
+            }
+        }
+    }
+
+    private func lightLuckyLamp() {
+        switch safeSymbols {
+
+        // SSR
+        case ["🌈7", "🌈7", "🌈7"]:
+            luckyLampMode = .rainbow
+            luckyLampTrigger += 1
+
+        // SR
+        case ["7", "7", "7"],
+             ["7", "7", "BAR"],
+             ["BAR", "BAR", "BAR"]:
+            luckyLampMode = .gold
+            luckyLampTrigger += 1
+
+        // R・N
+        default:
+            luckyLampMode = .off
+        }
+    }
+    private func playResultCelebration() {
+        
+        if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
+            resultCelebrationKind = .rainbowSeven
+            resultCelebrationTrigger += 1
+            playConfetti(duration: 3.8)
+            playJackpotWhiteout()
+            playPremiumBurst()
+
+            withAnimation(.easeOut(duration: 0.07)) {
+                machineShakeX = -11
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                withAnimation(.easeInOut(duration: 0.07)) {
+                    machineShakeX = 11
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {
+                withAnimation(
+                    .spring(
+                        response: 0.30,
+                        dampingFraction: 0.54
+                    )
+                ) {
+                    machineShakeX = 0
+                }
+            }
+        } else if safeSymbols == ["7", "7", "7"] {
+            resultCelebrationKind = .redSeven
+            resultCelebrationTrigger += 1
+            playConfetti(duration: 3.0)
+            playJackpotWhiteout()
+
+            withAnimation(.easeOut(duration: 0.08)) {
+                machineShakeX = -8
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
+                withAnimation(.easeInOut(duration: 0.08)) {
+                    machineShakeX = 8
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
+                withAnimation(
+                    .spring(
+                        response: 0.28,
+                        dampingFraction: 0.60
+                    )
+                ) {
+                    machineShakeX = 0
+                }
+            }
+        }
+    }
+
+    private func playConfetti(duration: Double) {
+        confettiResetToken += 1
+        isConfettiVisible = false
+
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.12)) {
+                isConfettiVisible = true
+            }
+        }
+
+        let currentToken = confettiResetToken
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            guard currentToken == confettiResetToken else { return }
+
+            withAnimation(.easeOut(duration: 0.32)) {
+                isConfettiVisible = false
+            }
+        }
+    }
+
     private func playPremiumBurst() {
         premiumBurstTrigger += 1
     }
@@ -605,6 +894,119 @@ struct PremiumSlotMachineView: View {
         }
     }
 
+    private func playEnhancedStopFlash(
+        stoppedCount: Int
+    ) {
+        let stoppedIndex = min(max(stoppedCount - 1, 0), 2)
+
+        enhancedStopFlashRotation += 16
+
+        switch stoppedIndex {
+        case 0:
+            enhancedStopFlashColor = .white
+            enhancedStopFlashOpacity = 0.54
+            enhancedStopFlashScale = 0.94
+
+            withAnimation(.easeOut(duration: 0.18)) {
+                enhancedStopFlashOpacity = 0
+                enhancedStopFlashScale = 1.04
+            }
+
+        case 1:
+            enhancedStopFlashColor = Color(
+                red: 0.72,
+                green: 0.90,
+                blue: 1.00
+            )
+            enhancedStopFlashOpacity = 0.72
+            enhancedStopFlashScale = 0.91
+
+            withAnimation(.easeOut(duration: 0.24)) {
+                enhancedStopFlashOpacity = 0
+                enhancedStopFlashScale = 1.09
+            }
+
+        default:
+            if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
+                playRainbowFinalFlash()
+            } else if safeSymbols == ["7", "7", "7"] {
+                playGoldFinalFlash()
+            } else {
+                enhancedStopFlashColor = .white
+                enhancedStopFlashOpacity = 0.95
+                enhancedStopFlashScale = 0.84
+
+                withAnimation(.easeOut(duration: 0.34)) {
+                    enhancedStopFlashOpacity = 0
+                    enhancedStopFlashScale = 1.18
+                }
+            }
+        }
+    }
+
+    private func playGoldFinalFlash() {
+        enhancedStopFlashColor = Color.yellow
+        enhancedStopFlashOpacity = 1
+        enhancedStopFlashScale = 0.78
+
+        withAnimation(.easeOut(duration: 0.15)) {
+            enhancedStopFlashScale = 1.22
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.10
+        ) {
+            enhancedStopFlashColor = .white
+            enhancedStopFlashOpacity = 0.96
+            enhancedStopFlashScale = 0.90
+
+            withAnimation(.easeOut(duration: 0.42)) {
+                enhancedStopFlashOpacity = 0
+                enhancedStopFlashScale = 1.30
+            }
+        }
+    }
+
+    private func playRainbowFinalFlash() {
+        let rainbowColors: [Color] = [
+            .red,
+            .orange,
+            .yellow,
+            .green,
+            .cyan,
+            .blue,
+            .purple,
+            .pink
+        ]
+
+        enhancedStopFlashOpacity = 1
+        enhancedStopFlashScale = 0.76
+
+        for (index, color) in rainbowColors.enumerated() {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now()
+                + Double(index) * 0.055
+            ) {
+                enhancedStopFlashColor = color
+                enhancedStopFlashScale =
+                    index.isMultiple(of: 2)
+                    ? 1.08
+                    : 0.96
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.48
+        ) {
+            enhancedStopFlashColor = .white
+
+            withAnimation(.easeOut(duration: 0.48)) {
+                enhancedStopFlashOpacity = 0
+                enhancedStopFlashScale = 1.34
+            }
+        }
+    }
+
     private func playStopImpact(stoppedCount: Int) {
         let stoppedIndex = min(max(stoppedCount - 1, 0), 2)
         flashingStopIndex = stoppedIndex
@@ -649,6 +1051,422 @@ struct PremiumSlotMachineView: View {
     }
 }
 
+
+
+private struct EnhancedReelStopFlashOverlay: View {
+    let opacity: Double
+    let scale: CGFloat
+    let color: Color
+    let rotation: Double
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(
+                cornerRadius: 34,
+                style: .continuous
+            )
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color.white.opacity(0.96),
+                        color.opacity(0.76),
+                        color.opacity(0.24),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 255
+                )
+            )
+            .blendMode(.screen)
+
+            ForEach(0..<12, id: \.self) { index in
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.94),
+                                color.opacity(0.76),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 185, height: 4)
+                    .offset(x: 86)
+                    .rotationEffect(
+                        .degrees(
+                            Double(index) * 30
+                            + rotation
+                        )
+                    )
+                    .blendMode(.screen)
+            }
+        }
+        .scaleEffect(scale)
+        .opacity(opacity)
+        .compositingGroup()
+    }
+}
+
+private enum SlotResultCelebrationKind {
+    case redSeven
+    case rainbowSeven
+}
+
+private struct SlotResultCelebrationOverlay: View {
+    let trigger: Int
+    let kind: SlotResultCelebrationKind?
+
+    @State private var progress: CGFloat = 1
+    @State private var overlayOpacity = 0.0
+    @State private var ringScale: CGFloat = 0.35
+    @State private var ringOpacity = 0.0
+    @State private var titleScale: CGFloat = 0.55
+
+    private let particleCount = 52
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                if let kind {
+                    celebrationBackground(kind: kind)
+
+                    ForEach(0..<particleCount, id: \.self) { index in
+                        particle(
+                            index: index,
+                            kind: kind,
+                            size: proxy.size
+                        )
+                    }
+
+                    Circle()
+                        .stroke(
+                            ringStyle(for: kind),
+                            lineWidth: kind == .rainbowSeven ? 13 : 9
+                        )
+                        .frame(width: 205, height: 205)
+                        .scaleEffect(ringScale)
+                        .opacity(ringOpacity)
+                        .blur(radius: 0.5)
+                        .blendMode(.screen)
+
+                    VStack(spacing: 5) {
+                        Text(
+                            kind == .rainbowSeven
+                                ? "🌈 PREMIUM 🌈"
+                                : "777 JACKPOT"
+                        )
+                        .font(
+                            .system(
+                                size: kind == .rainbowSeven ? 27 : 31,
+                                weight: .black,
+                                design: .rounded
+                            )
+                        )
+                        .tracking(1.2)
+                        .foregroundStyle(titleStyle(for: kind))
+                        .shadow(
+                            color: kind == .rainbowSeven
+                                ? Color.white
+                                : Color.yellow,
+                            radius: 14
+                        )
+
+                        Text(
+                            kind == .rainbowSeven
+                                ? "RAINBOW SEVEN"
+                                : "RED SEVEN"
+                        )
+                        .font(
+                            .system(
+                                size: 10,
+                                weight: .black,
+                                design: .monospaced
+                            )
+                        )
+                        .tracking(2.6)
+                        .foregroundStyle(Color.white.opacity(0.88))
+                    }
+                    .scaleEffect(titleScale)
+                    .opacity(overlayOpacity)
+                }
+            }
+            .frame(
+                width: proxy.size.width,
+                height: proxy.size.height
+            )
+        }
+        .onChange(of: trigger) { _, newValue in
+            guard newValue > 0, kind != nil else { return }
+            play()
+        }
+    }
+
+    @ViewBuilder
+    private func celebrationBackground(
+        kind: SlotResultCelebrationKind
+    ) -> some View {
+        if kind == .rainbowSeven {
+            Rectangle()
+                .fill(
+                    AngularGradient(
+                        colors: [
+                            .red,
+                            .orange,
+                            .yellow,
+                            .green,
+                            .cyan,
+                            .blue,
+                            .purple,
+                            .pink,
+                            .red
+                        ],
+                        center: .center
+                    )
+                )
+                .opacity(0.19 * overlayOpacity)
+                .blendMode(.screen)
+        } else {
+            RadialGradient(
+                colors: [
+                    Color.white.opacity(0.55 * overlayOpacity),
+                    Color.yellow.opacity(0.28 * overlayOpacity),
+                    Color.red.opacity(0.12 * overlayOpacity),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 245
+            )
+        }
+    }
+
+    private func particle(
+        index: Int,
+        kind: SlotResultCelebrationKind,
+        size: CGSize
+    ) -> some View {
+        let fraction =
+            CGFloat(index)
+            / CGFloat(max(particleCount - 1, 1))
+
+        let column =
+            CGFloat(index % 13)
+            / 12.0
+
+        let wave =
+            sin(
+                Double(index) * 1.73
+            )
+
+        let startX =
+            size.width * column
+
+        let travelX =
+            CGFloat(wave)
+            * (28 + CGFloat(index % 5) * 9)
+
+        let startY =
+            -30 - CGFloat(index % 7) * 18
+
+        let travelY =
+            size.height
+            + 95
+            + CGFloat(index % 9) * 22
+
+        let particleSize =
+            5 + CGFloat(index % 5) * 1.8
+
+        return Group {
+            if kind == .rainbowSeven {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(
+                        rainbowColor(
+                            at: fraction
+                        )
+                    )
+                    .frame(
+                        width: particleSize,
+                        height: particleSize * 1.65
+                    )
+            } else {
+                Circle()
+                    .fill(
+                        index.isMultiple(of: 3)
+                            ? Color.white
+                            : Color.yellow
+                    )
+                    .frame(
+                        width: particleSize,
+                        height: particleSize
+                    )
+            }
+        }
+        .rotationEffect(
+            .degrees(
+                Double(progress)
+                * (360 + Double(index % 8) * 70)
+            )
+        )
+        .position(
+            x: startX + travelX * progress,
+            y: startY + travelY * progress
+        )
+        .opacity(
+            overlayOpacity
+            * Double(
+                max(
+                    0,
+                    1 - progress * 0.52
+                )
+            )
+        )
+    }
+
+    private func ringStyle(
+        for kind: SlotResultCelebrationKind
+    ) -> AnyShapeStyle {
+        if kind == .rainbowSeven {
+            return AnyShapeStyle(
+                AngularGradient(
+                    colors: [
+                        .red,
+                        .orange,
+                        .yellow,
+                        .green,
+                        .cyan,
+                        .blue,
+                        .purple,
+                        .pink,
+                        .red
+                    ],
+                    center: .center
+                )
+            )
+        }
+
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [
+                    .white,
+                    .yellow,
+                    .orange,
+                    .yellow,
+                    .white
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+    }
+
+    private func titleStyle(
+        for kind: SlotResultCelebrationKind
+    ) -> AnyShapeStyle {
+        if kind == .rainbowSeven {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        .red,
+                        .orange,
+                        .yellow,
+                        .green,
+                        .cyan,
+                        .blue,
+                        .purple,
+                        .pink
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        }
+
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [
+                    .white,
+                    .yellow,
+                    .orange
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private func rainbowColor(
+        at fraction: CGFloat
+    ) -> Color {
+        let colors: [Color] = [
+            .red,
+            .orange,
+            .yellow,
+            .green,
+            .cyan,
+            .blue,
+            .purple,
+            .pink
+        ]
+
+        let index =
+            min(
+                Int(
+                    fraction
+                    * CGFloat(colors.count)
+                ),
+                colors.count - 1
+            )
+
+        return colors[index]
+    }
+
+    private func play() {
+        progress = 0
+        overlayOpacity = 1
+        ringScale = 0.35
+        ringOpacity = 1
+        titleScale = 0.55
+
+        withAnimation(
+            .easeOut(duration: 2.75)
+        ) {
+            progress = 1
+        }
+
+        withAnimation(
+            .spring(
+                response: 0.40,
+                dampingFraction: 0.54
+            )
+        ) {
+            ringScale = 1.35
+            titleScale = 1
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.38
+        ) {
+            withAnimation(
+                .easeOut(duration: 0.65)
+            ) {
+                ringOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 1.85
+        ) {
+            withAnimation(
+                .easeOut(duration: 0.75)
+            ) {
+                overlayOpacity = 0
+            }
+        }
+    }
+}
 
 private extension View {
     func strokeText(color: Color, width: CGFloat) -> some View {
