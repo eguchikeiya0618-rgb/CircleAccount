@@ -33,6 +33,7 @@ struct MembersView: View {
         NavigationStack {
             VStack {
                 List {
+                    
                     ForEach(members) { member in
                         HStack {
                             ProfileImageView(
@@ -110,12 +111,14 @@ struct MembersView: View {
                             addMember()
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(.purple)
                         .disabled(newName.isEmpty)
                     }
                     .padding()
                 }
             }
-            .navigationTitle("メンバー")
+            .background(LinearGradient(colors:[Color.black,Color.indigo.opacity(0.9),Color.purple.opacity(0.6)], startPoint:.topLeading,endPoint:.bottomTrailing).ignoresSafeArea())
+            .navigationTitle("Members")
             .onAppear {
                 loadMembers()
             }
@@ -150,6 +153,7 @@ struct MembersView: View {
                             updateMember()
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(.purple)
 
                         Spacer()
                     }

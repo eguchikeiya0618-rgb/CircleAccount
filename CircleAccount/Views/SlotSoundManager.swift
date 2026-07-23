@@ -9,6 +9,7 @@ final class SlotSoundManager {
     private let accentPlayer = AVAudioPlayerNode()
     private let resultPlayer = AVAudioPlayerNode()
 
+    private var spinStartBuffer: AVAudioPCMBuffer?
     private var spinBuffer: AVAudioPCMBuffer?
     private var intenseSpinBuffer: AVAudioPCMBuffer?
     private var leverBuffer: AVAudioPCMBuffer?
@@ -21,9 +22,12 @@ final class SlotSoundManager {
     private var grapeBuffer: AVAudioPCMBuffer?
     private var sevenBuffer: AVAudioPCMBuffer?
     private var rainbowSevenBuffer: AVAudioPCMBuffer?
+    private var rewardRevealBuffer: AVAudioPCMBuffer?
 
     private var isPrepared = false
     private var isSoundEnabled = true
+    private var masterVolume: Float = 0.80
+    private var currentSpinBaseVolume: Float = 0.34
 
     private init() {}
 
@@ -52,6 +56,20 @@ final class SlotSoundManager {
         }
     }
 
+    // MARK: - Volume
+
+    func setMasterVolume(_ value: Double) {
+        masterVolume = Float(
+            min(max(value, 0.0), 1.0)
+        )
+
+        if spinPlayer.isPlaying {
+            spinPlayer.volume = adjustedVolume(
+                currentSpinBaseVolume
+            )
+        }
+    }
+
     // MARK: - Public Sound Methods
 
     func playLever() {
@@ -68,6 +86,14 @@ final class SlotSoundManager {
         guard isSoundEnabled else { return }
 
         prepareIfNeeded()
+
+        // 実機風の「始動音」を先に鳴らしてから、
+        // モーターとリールの回転ループへつなげる。
+        playOneShot(
+            buffer: spinStartBuffer,
+            volume: 0.78
+        )
+
         spinPlayer.stop()
 
         guard let spinBuffer else { return }
@@ -79,7 +105,10 @@ final class SlotSoundManager {
             completionHandler: nil
         )
 
-        spinPlayer.volume = 0.34
+        currentSpinBaseVolume = 0.38
+        spinPlayer.volume = adjustedVolume(
+            currentSpinBaseVolume
+        )
         spinPlayer.play()
     }
 
@@ -98,7 +127,10 @@ final class SlotSoundManager {
             completionHandler: nil
         )
 
-        spinPlayer.volume = 0.42
+        currentSpinBaseVolume = 0.42
+        spinPlayer.volume = adjustedVolume(
+            currentSpinBaseVolume
+        )
         spinPlayer.play()
     }
 
@@ -202,6 +234,20 @@ final class SlotSoundManager {
         )
     }
 
+    func playRewardReveal() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+        stopSpin()
+
+        // 低い衝撃音 → 金属的な上昇音 → 短い余韻。
+        // 派手すぎるファンファーレではなく、筐体らしい高級感を優先。
+        playResultOneShot(
+            buffer: rewardRevealBuffer,
+            volume: 0.84
+        )
+    }
+
     func stopSpin() {
         if spinPlayer.isPlaying {
             spinPlayer.stop()
@@ -282,6 +328,10 @@ final class SlotSoundManager {
             format: format
         )
 
+        spinStartBuffer = makeSpinStartSound(
+            format: format
+        )
+
         spinBuffer = makeSpinLoop(
             format: format,
             intense: false
@@ -336,6 +386,10 @@ final class SlotSoundManager {
             rainbow: true
         )
 
+        rewardRevealBuffer = makeRewardRevealSound(
+            format: format
+        )
+
         engine.prepare()
         isPrepared = true
     }
@@ -355,7 +409,7 @@ final class SlotSoundManager {
             completionHandler: nil
         )
 
-        accentPlayer.volume = volume
+        accentPlayer.volume = adjustedVolume(volume)
         accentPlayer.play()
     }
 
@@ -374,18 +428,157 @@ final class SlotSoundManager {
             completionHandler: nil
         )
 
-        resultPlayer.volume = volume
+        resultPlayer.volume = adjustedVolume(volume)
         resultPlayer.play()
     }
 
-    // MARK: - Spin Loop
+    private func adjustedVolume(
+        _ baseVolume: Float
+    ) -> Float {
+        min(
+            max(baseVolume * masterVolume, 0),
+            1
+        )
+    }
+
+    private func makeRewardRevealSound(
+        format: AVAudioFormat
+    ) -> AVAudioPCMBuffer? {
+        renderBuffer(
+            format: format,
+            duration: 1.18
+        ) { t in
+            let impactEnvelope = exp(-t * 15.0)
+            let lowImpact =
+                sin(2.0 * .pi * 58.0 * t)
+                * impactEnvelope
+                * 0.52
+
+            let body =
+                sin(2.0 * .pi * 116.0 * t)
+                * exp(-t * 8.0)
+                * 0.20
+
+            let riseProgress = min(
+                1.0,
+                max(0.0, (t - 0.10) / 0.62)
+            )
+
+            let riseFrequency =
+                620.0
+                + 2_850.0
+                * pow(riseProgress, 1.55)
+
+            let riseEnvelope =
+                t < 0.10
+                ? 0.0
+                : sin(.pi * min(1.0, riseProgress))
+                  * exp(-max(0.0, t - 0.70) * 5.5)
+
+            let metallicRise =
+                sin(2.0 * .pi * riseFrequency * t)
+                * riseEnvelope
+                * 0.16
+
+            let shimmerEnvelope =
+                t < 0.42
+                ? 0.0
+                : exp(-(t - 0.42) * 4.2)
+
+            let shimmer =
+                (
+                    sin(2.0 * .pi * 1_760.0 * t)
+                    + sin(2.0 * .pi * 2_640.0 * t) * 0.62
+                    + sin(2.0 * .pi * 3_520.0 * t) * 0.34
+                )
+                * shimmerEnvelope
+                * 0.075
+
+            return lowImpact + body + metallicRise + shimmer
+        }
+    }
+
+    // MARK: - Spin Start / Loop
+
+    private func makeSpinStartSound(
+        format: AVAudioFormat
+    ) -> AVAudioPCMBuffer? {
+        renderBuffer(
+            format: format,
+            duration: 0.48
+        ) { t in
+            let progress = min(1.0, t / 0.48)
+
+            // モーターが一気に立ち上がる低音。
+            let motorFrequency =
+                54.0
+                + 118.0
+                * pow(progress, 0.72)
+
+            let motorEnvelope =
+                min(1.0, t * 20.0)
+                * exp(-max(0.0, t - 0.30) * 7.0)
+
+            let motor =
+                sin(
+                    2.0
+                    * .pi
+                    * motorFrequency
+                    * t
+                )
+                * motorEnvelope
+                * 0.42
+
+            // ベルト・ギアが噛み合う機械的な成分。
+            let gearFrequency =
+                620.0
+                + 1_450.0
+                * pow(progress, 1.20)
+
+            let gear =
+                sin(
+                    2.0
+                    * .pi
+                    * gearFrequency
+                    * t
+                )
+                * exp(-t * 4.8)
+                * 0.13
+
+            let clutch =
+                sin(
+                    2.0
+                    * .pi
+                    * 118.0
+                    * t
+                )
+                * exp(-t * 18.0)
+                * 0.34
+
+            let highWhirr =
+                sin(
+                    2.0
+                    * .pi
+                    * (
+                        1_100.0
+                        + 2_400.0 * progress
+                    )
+                    * t
+                )
+                * min(1.0, t * 9.0)
+                * exp(-t * 3.1)
+                * 0.055
+
+            return motor + gear + clutch + highWhirr
+        }
+    }
 
     private func makeSpinLoop(
         format: AVAudioFormat,
         intense: Bool
     ) -> AVAudioPCMBuffer? {
         let sampleRate = format.sampleRate
-        let duration = intense ? 0.96 : 1.12
+        let duration = intense ? 1.20 : 1.36
 
         let frameCount = AVAudioFrameCount(
             sampleRate * duration
@@ -403,76 +596,70 @@ final class SlotSoundManager {
 
         buffer.frameLength = frameCount
 
-        var seed: UInt64 = intense
-            ? 0x98A7B6C5
-            : 0x1234ABCD
+        var seed: UInt64 =
+            intense ? 0xD1A6C4F2 : 0x7B31E2A9
+
+        var filteredNoise = 0.0
+        var phase1 = 0.0
+        var phase2 = 0.0
+        var phase3 = 0.0
 
         for frame in 0..<Int(frameCount) {
             let t = Double(frame) / sampleRate
             let loopPhase = t / duration
 
+            let speedWobble =
+                sin(2.0 * .pi * 1.35 * t) * 2.8
+                + sin(2.0 * .pi * 4.7 * t) * 0.85
+
             let baseFrequency =
-                intense ? 92.0 : 78.0
+                (intense ? 126.0 : 108.0)
+                + speedWobble
 
-            let motorSweep =
-                intense ? 21.0 : 13.0
-
-            let motorFrequency =
-                baseFrequency
-                + motorSweep
-                * sin(loopPhase * .pi * 2.0)
+            phase1 += 2.0 * .pi * baseFrequency / sampleRate
+            phase2 += 2.0 * .pi * baseFrequency * 2.03 / sampleRate
+            phase3 += 2.0 * .pi * baseFrequency * 5.08 / sampleRate
 
             let motor =
-                sin(
-                    2.0
-                    * .pi
-                    * motorFrequency
-                    * t
-                )
-                * 0.17
+                sin(phase1) * (intense ? 0.17 : 0.145)
 
             let harmonic =
-                sin(
-                    2.0
-                    * .pi
-                    * motorFrequency
-                    * 2.02
-                    * t
-                )
-                * 0.075
+                sin(phase2) * (intense ? 0.082 : 0.068)
 
-            let highMotor =
-                sin(
-                    2.0
-                    * .pi
-                    * motorFrequency
-                    * 4.01
-                    * t
-                )
-                * 0.027
+            let upperMotor =
+                sin(phase3) * (intense ? 0.030 : 0.023)
 
-            let reelRate =
-                intense ? 18.0 : 14.0
+            // 3本のリールがわずかにずれながら回る機械音。
+            var reelTexture = 0.0
+            let reelRates: [Double] =
+                intense
+                ? [22.0, 23.3, 24.7]
+                : [18.2, 19.4, 20.7]
 
-            let reelPosition =
-                loopPhase * reelRate
+            for (index, rate) in reelRates.enumerated() {
+                let offset = Double(index) * 0.29
+                let position =
+                    loopPhase * rate + offset
 
-            let reelFraction =
-                reelPosition
-                - floor(reelPosition)
+                let fraction =
+                    position - floor(position)
 
-            let reelEnvelope =
-                exp(-reelFraction * 52.0)
+                let envelope =
+                    exp(-fraction * 44.0)
 
-            let reelTick =
-                sin(
-                    2.0
-                    * .pi
-                    * 1_280.0
-                    * t
-                )
-                * reelEnvelope
-                * (intense ? 0.075 : 0.058)
+                let frequency =
+                    1_080.0 + Double(index) * 170.0
+
+                reelTexture +=
+                    sin(
+                        2.0
+                        * .pi
+                        * frequency
+                        * t
+                    )
+                    * envelope
+                    * (intense ? 0.042 : 0.033)
+            }
 
             seed =
                 seed
@@ -480,60 +667,58 @@ final class SlotSoundManager {
                 &+ 1
 
             let randomValue =
-                Double(
-                    (seed >> 33) & 0xFFFF
-                )
+                Double((seed >> 33) & 0xFFFF)
                 / 65_535.0
 
-            let mechanicalNoise =
-                (randomValue * 2.0 - 1.0)
-                * (intense ? 0.028 : 0.020)
+            let whiteNoise =
+                randomValue * 2.0 - 1.0
 
-            let wobble =
-                0.88
-                + 0.12
-                * sin(
+            // ローパスした空気音で「シャー」という回転感を加える。
+            filteredNoise =
+                filteredNoise * 0.86
+                + whiteNoise * 0.14
+
+            let airNoise =
+                filteredNoise
+                * (intense ? 0.052 : 0.038)
+
+            let bodyPulse =
+                sin(
                     2.0
                     * .pi
-                    * (intense ? 9.0 : 7.0)
+                    * (intense ? 8.4 : 6.9)
                     * t
                 )
+                * 0.018
 
-            let fadeFrames = 420.0
+            // ループの継ぎ目を聞こえにくくする短いクロスフェード。
+            let fadeFrames = 640.0
 
-            let startFade = min(
-                1.0,
-                Double(frame) / fadeFrames
-            )
+            let startFade =
+                min(1.0, Double(frame) / fadeFrames)
 
-            let endFade = min(
-                1.0,
-                Double(
-                    Int(frameCount) - frame
-                ) / fadeFrames
-            )
+            let endFade =
+                min(
+                    1.0,
+                    Double(Int(frameCount) - frame)
+                    / fadeFrames
+                )
 
-            let loopFade = min(
-                startFade,
-                endFade
-            )
+            let loopFade = min(startFade, endFade)
 
             let sample =
                 (
                     motor
                     + harmonic
-                    + highMotor
-                    + reelTick
-                    + mechanicalNoise
+                    + upperMotor
+                    + reelTexture
+                    + airNoise
+                    + bodyPulse
                 )
-                * wobble
                 * loopFade
 
             channel[frame] = Float(
-                max(
-                    -0.55,
-                    min(0.55, sample)
-                )
+                max(-0.62, min(0.62, sample))
             )
         }
 
@@ -547,39 +732,57 @@ final class SlotSoundManager {
     ) -> AVAudioPCMBuffer? {
         renderBuffer(
             format: format,
-            duration: 0.34
+            duration: 0.38
         ) { t in
-            let knock =
+            let mainKnock =
                 sin(
                     2.0
                     * .pi
-                    * 112.0
+                    * 86.0
                     * t
                 )
-                * exp(-t * 24.0)
-                * 0.72
+                * exp(-t * 18.0)
+                * 0.82
+
+            let lockBody =
+                sin(
+                    2.0
+                    * .pi
+                    * 154.0
+                    * t
+                )
+                * exp(-t * 23.0)
+                * 0.42
 
             let metal =
                 sin(
                     2.0
                     * .pi
-                    * 720.0
+                    * 760.0
                     * t
                 )
-                * exp(-t * 34.0)
-                * 0.20
+                * exp(-t * 31.0)
+                * 0.18
 
-            let click =
-                sin(
+            let latchTime = t - 0.105
+
+            let latch =
+                latchTime >= 0
+                ? sin(
                     2.0
                     * .pi
-                    * 1_950.0
-                    * t
+                    * 1_680.0
+                    * latchTime
                 )
-                * exp(-t * 58.0)
-                * 0.14
+                * exp(-latchTime * 58.0)
+                * 0.20
+                : 0.0
 
-            return knock + metal + click
+            return
+                mainKnock
+                + lockBody
+                + metal
+                + latch
         }
     }
 

@@ -65,6 +65,12 @@ struct HomeView: View {
     @State private var heroShimmerOffset: CGFloat = -1.4
     @State private var logoScale: CGFloat = 0.88
     @State private var logoOpacity = 0.0
+    @State private var welcomeOpacity = 0.0
+    @State private var welcomeOffset: CGFloat = 12
+    @State private var heroGlassSweepOffset: CGFloat = -1.6
+    @State private var gachaGlow = false
+    @State private var gachaSweepOffset: CGFloat = -1.4
+    @State private var displayedPoint = 0
 
     private let mainColor = Color(
         red: 0.05,
@@ -145,14 +151,34 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(
+                            red: 0.018,
+                            green: 0.045,
+                            blue: 0.12
+                        ),
+                        Color(
+                            red: 0.035,
+                            green: 0.10,
+                            blue: 0.24
+                        )
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
                 HomeAmbientBackground(
                     accentColor: rankAccentColor
                 )
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+
+                HomeStarfieldOverlay()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
                 ScrollView {
                     LazyVStack(spacing: 18) {
@@ -188,6 +214,8 @@ struct HomeView: View {
                                     : latestMVPImageBase64
                         )
 
+                        featuredGachaCard
+
                         quickMenuSection
 
                         latestChampionCard
@@ -206,8 +234,10 @@ struct HomeView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            .navigationTitle("ホーム")
+            .navigationTitle("HOME")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .onAppear {
                 loadDashboard()
                 loadPoint()
@@ -277,6 +307,68 @@ struct HomeView: View {
         ) {
             heroShimmerOffset = 1.4
         }
+
+        withAnimation(
+            .easeOut(duration: 0.55)
+                .delay(0.20)
+        ) {
+            welcomeOpacity = 1
+            welcomeOffset = 0
+        }
+
+        withAnimation(
+            .linear(duration: 3.6)
+                .repeatForever(
+                    autoreverses: false
+                )
+        ) {
+            heroGlassSweepOffset = 1.6
+        }
+
+        withAnimation(
+            .easeInOut(duration: 1.15)
+                .repeatForever(
+                    autoreverses: true
+                )
+        ) {
+            gachaGlow = true
+        }
+
+        withAnimation(
+            .linear(duration: 2.6)
+                .repeatForever(
+                    autoreverses: false
+                )
+        ) {
+            gachaSweepOffset = 1.5
+        }
+
+        animatePointCounter()
+    }
+
+    private func animatePointCounter() {
+        displayedPoint = 0
+
+        let target = max(totalPoint, 0)
+        guard target > 0 else {
+            displayedPoint = 0
+            return
+        }
+
+        let steps = min(target, 36)
+        let interval = 0.72 / Double(max(steps, 1))
+
+        for step in 1...steps {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + interval * Double(step)
+            ) {
+                displayedPoint =
+                    Int(
+                        (Double(target) / Double(steps))
+                        * Double(step)
+                    )
+            }
+        }
     }
 
     // MARK: - ヘッダー
@@ -291,7 +383,8 @@ struct HomeView: View {
                         design: .serif
                     )
                 )
-                .foregroundStyle(mainColor)
+                .foregroundStyle(.white)
+                .shadow(color: Color.cyan.opacity(0.28), radius: 14)
                 .overlay {
                     LinearGradient(
                         colors: [
@@ -320,6 +413,19 @@ struct HomeView: View {
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
 
+            Text("WELCOME BACK")
+                .font(
+                    .system(
+                        size: 10,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .tracking(2.4)
+                .foregroundStyle(accentColor.opacity(0.88))
+                .opacity(welcomeOpacity)
+                .offset(y: welcomeOffset)
+
             Text("BADMINTON CIRCLE")
                 .font(.caption)
                 .fontWeight(.bold)
@@ -330,7 +436,7 @@ struct HomeView: View {
                 .font(.caption2)
                 .bold()
                 .foregroundStyle(
-                    mainColor.opacity(0.60)
+                    .white.opacity(0.46)
                 )
         }
         .frame(maxWidth: .infinity)
@@ -433,6 +539,22 @@ struct HomeView: View {
                 .offset(
                     x: heroShimmerOffset * 340
                 )
+                .blendMode(.screen)
+
+                LinearGradient(
+                    colors: [
+                        Color.clear,
+                        Color.white.opacity(0.02),
+                        Color.white.opacity(0.34),
+                        Color.cyan.opacity(0.18),
+                        Color.clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 120)
+                .rotationEffect(.degrees(-18))
+                .offset(x: heroGlassSweepOffset * 330)
                 .blendMode(.screen)
 
                 if pointToNextLevel <= 10 {
@@ -599,7 +721,7 @@ struct HomeView: View {
                         radius: 10
                     )
 
-                Text("TOTAL \(totalPoint)pt")
+                Text("TOTAL \(displayedPoint)pt")
                     .font(.caption)
                     .fontWeight(.black)
                     .foregroundStyle(.cyan)
@@ -872,6 +994,263 @@ struct HomeView: View {
 
         return "次の活動もSiRiUSを楽しみましょう！"
     }
+
+    // MARK: - 注目ガチャ
+
+    private var featuredGachaCard: some View {
+        NavigationLink {
+            GachaView()
+        } label: {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
+                )
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.black,
+                            Color(
+                                red: 0.19,
+                                green: 0.03,
+                                blue: 0.12
+                            ),
+                            Color(
+                                red: 0.46,
+                                green: 0.08,
+                                blue: 0.18
+                            ),
+                            Color(
+                                red: 0.11,
+                                green: 0.03,
+                                blue: 0.24
+                            )
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+                Circle()
+                    .fill(
+                        Color.orange.opacity(
+                            gachaGlow ? 0.30 : 0.12
+                        )
+                    )
+                    .frame(width: 250, height: 250)
+                    .blur(radius: 22)
+                    .offset(x: 155, y: -90)
+
+                Circle()
+                    .fill(
+                        Color.purple.opacity(
+                            gachaGlow ? 0.25 : 0.10
+                        )
+                    )
+                    .frame(width: 220, height: 220)
+                    .blur(radius: 22)
+                    .offset(x: -145, y: 125)
+
+                LinearGradient(
+                    colors: [
+                        Color.clear,
+                        Color.white.opacity(0.05),
+                        Color.yellow.opacity(0.48),
+                        Color.white.opacity(0.68),
+                        Color.orange.opacity(0.22),
+                        Color.clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 110)
+                .rotationEffect(.degrees(-16))
+                .offset(x: gachaSweepOffset * 330)
+                .blendMode(.screen)
+
+                HStack(spacing: 18) {
+                    ZStack {
+                        RoundedRectangle(
+                            cornerRadius: 22,
+                            style: .continuous
+                        )
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.22),
+                                    Color.white.opacity(0.06)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 88, height: 88)
+
+                        RoundedRectangle(
+                            cornerRadius: 22,
+                            style: .continuous
+                        )
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.82),
+                                    Color.orange.opacity(0.72),
+                                    Color.purple.opacity(0.58)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                        .frame(width: 88, height: 88)
+
+                        Text("🎰")
+                            .font(.system(size: 52))
+                            .scaleEffect(
+                                gachaGlow ? 1.06 : 0.96
+                            )
+                    }
+
+                    VStack(
+                        alignment: .leading,
+                        spacing: 7
+                    ) {
+                        Text("TODAY'S GACHA")
+                            .font(
+                                .system(
+                                    size: 11,
+                                    weight: .black,
+                                    design: .rounded
+                                )
+                            )
+                            .tracking(2.0)
+                            .foregroundStyle(
+                                .white.opacity(0.62)
+                            )
+
+                        Text("SiRiUS SLOT")
+                            .font(
+                                .system(
+                                    size: 25,
+                                    weight: .black,
+                                    design: .rounded
+                                )
+                            )
+                            .foregroundStyle(.white)
+
+                        HStack(spacing: 7) {
+                            Text("SSR 0.5%")
+                                .font(
+                                    .system(
+                                        size: 10,
+                                        weight: .black
+                                    )
+                                )
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Color.red.opacity(0.88)
+                                )
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+
+                            Text("100 PT / PLAY")
+                                .font(
+                                    .system(
+                                        size: 10,
+                                        weight: .black,
+                                        design: .monospaced
+                                    )
+                                )
+                                .foregroundStyle(
+                                    .yellow.opacity(0.94)
+                                )
+                        }
+
+                        Text("レバーを引いてプレミアムを狙え")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(
+                                .white.opacity(0.72)
+                            )
+                    }
+
+                    Spacer(minLength: 4)
+
+                    ZStack {
+                        Circle()
+                            .fill(
+                                Color.white.opacity(0.12)
+                            )
+                            .frame(width: 42, height: 42)
+
+                        Image(
+                            systemName:
+                                "chevron.right"
+                        )
+                        .font(.headline)
+                        .fontWeight(.black)
+                        .foregroundStyle(.white)
+                    }
+                }
+                .padding(20)
+            }
+            .frame(minHeight: 150)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
+                )
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.yellow.opacity(0.90),
+                            Color.white.opacity(0.70),
+                            Color.orange.opacity(0.52),
+                            Color.purple.opacity(0.48)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.7
+                )
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 26,
+                    style: .continuous
+                )
+                .stroke(
+                    Color.white.opacity(0.10),
+                    lineWidth: 1
+                )
+                .padding(4)
+            }
+            .shadow(
+                color: Color.orange.opacity(
+                    gachaGlow ? 0.36 : 0.18
+                ),
+                radius: gachaGlow ? 25 : 15,
+                x: 0,
+                y: 10
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(screenAppeared ? 1 : 0)
+        .offset(y: screenAppeared ? 0 : 20)
+        .animation(
+            .easeOut(duration: 0.60)
+                .delay(0.10),
+            value: screenAppeared
+        )
+    }
+
     // MARK: - クイックメニュー
 
     private var quickMenuSection: some View {
@@ -885,7 +1264,7 @@ struct HomeView: View {
                     .fontWeight(.black)
                     .tracking(1.8)
                     .foregroundStyle(
-                        mainColor.opacity(0.72)
+                        .white.opacity(0.72)
                     )
 
                 Spacer()
@@ -982,7 +1361,7 @@ struct HomeView: View {
                 Text(title)
                     .font(.caption2)
                     .fontWeight(.bold)
-                    .foregroundStyle(mainColor)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
@@ -991,7 +1370,7 @@ struct HomeView: View {
             )
             .padding(8)
             .background(
-                Color(.systemBackground)
+                .ultraThinMaterial
             )
             .clipShape(
                 RoundedRectangle(
@@ -1003,7 +1382,7 @@ struct HomeView: View {
                     cornerRadius: 20
                 )
                 .stroke(
-                    color.opacity(0.13),
+                    Color.white.opacity(0.12),
                     lineWidth: 1
                 )
             }
@@ -1094,7 +1473,7 @@ struct HomeView: View {
                         design: .rounded
                     )
                 )
-                .foregroundStyle(mainColor)
+                .foregroundStyle(.white)
 
             VStack(
                 alignment: .leading,
@@ -1146,7 +1525,7 @@ struct HomeView: View {
         }
         .padding(20)
         .background(
-            Color(.systemBackground)
+            .ultraThinMaterial
         )
         .clipShape(
             RoundedRectangle(
@@ -1211,7 +1590,7 @@ struct HomeView: View {
             Text(text)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundStyle(mainColor)
+                .foregroundStyle(.white)
         }
     }
 
@@ -2211,14 +2590,14 @@ struct HomeView: View {
                 )
                 .font(.subheadline)
                 .foregroundStyle(
-                    .secondary
+                    .white.opacity(0.55)
                 )
             } else {
                 Text(latestNotice)
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(
-                        mainColor
+                        .white
                     )
                     .fixedSize(
                         horizontal: false,
@@ -2236,9 +2615,7 @@ struct HomeView: View {
                 colors: [
                     Color.red.opacity(0.10),
                     Color.pink.opacity(0.04),
-                    Color(
-                        .systemBackground
-                    )
+                    Color.white.opacity(0.035)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -2297,7 +2674,7 @@ struct HomeView: View {
                             .font(.headline)
                             .bold()
                             .foregroundStyle(
-                                mainColor
+                                .white
                             )
 
                         Text("サークル運営状況")
@@ -2384,9 +2761,7 @@ struct HomeView: View {
                     Color.blue.opacity(
                         0.04
                     ),
-                    Color(
-                        .systemBackground
-                    )
+                    Color.white.opacity(0.035)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -2434,7 +2809,7 @@ struct HomeView: View {
                 .font(.title3)
                 .bold()
                 .foregroundStyle(
-                    mainColor
+                    .white
                 )
                 .lineLimit(1)
                 .minimumScaleFactor(0.70)
@@ -2445,10 +2820,7 @@ struct HomeView: View {
         )
         .padding(14)
         .background(
-            Color(
-                .systemBackground
-            )
-            .opacity(0.83)
+            Color.white.opacity(0.08)
         )
         .clipShape(
             RoundedRectangle(
@@ -3011,6 +3383,8 @@ struct HomeView: View {
                                 "totalPoint"
                             ] as? Int
                             ?? 0
+
+                        animatePointCounter()
                     }
             }
     }
@@ -3519,20 +3893,28 @@ struct SummaryCard: View {
             alignment: .leading
         )
         .padding(17)
-        .background(
-            Color(.systemBackground)
-        )
+        .background(.ultraThinMaterial)
         .clipShape(
             RoundedRectangle(
-                cornerRadius: 21
+                cornerRadius: 21,
+                style: .continuous
             )
         )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 21,
+                style: .continuous
+            )
+            .stroke(
+                Color.white.opacity(0.11),
+                lineWidth: 1
+            )
+        }
         .shadow(
-            color:
-                .black.opacity(0.045),
-            radius: 8,
+            color: .black.opacity(0.16),
+            radius: 12,
             x: 0,
-            y: 4
+            y: 6
         )
     }
 }
@@ -3768,6 +4150,86 @@ private struct DashboardParticleLayer: View {
                                     ),
                             radius: 4
                         )
+                }
+            }
+        }
+    }
+}
+
+
+// MARK: - ホーム星空オーバーレイ
+
+private struct HomeStarfieldOverlay: View {
+    private let stars: [
+        (
+            x: CGFloat,
+            y: CGFloat,
+            size: CGFloat,
+            speed: Double
+        )
+    ] = [
+        (-145, -310, 2.4, 0.42),
+        (-80, -220, 1.8, 0.50),
+        (15, -275, 2.2, 0.47),
+        (125, -180, 1.7, 0.55),
+        (160, -45, 2.8, 0.44),
+        (95, 125, 1.9, 0.51),
+        (-35, 210, 2.5, 0.48),
+        (-145, 340, 1.8, 0.56),
+        (70, 470, 2.2, 0.46),
+        (155, 610, 1.7, 0.53),
+        (-75, 745, 2.6, 0.49)
+    ]
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let time =
+                timeline.date
+                    .timeIntervalSinceReferenceDate
+
+            GeometryReader { proxy in
+                ZStack {
+                    ForEach(
+                        stars.indices,
+                        id: \.self
+                    ) { index in
+                        let star = stars[index]
+
+                        Circle()
+                            .fill(
+                                index.isMultiple(of: 2)
+                                    ? Color.white.opacity(0.44)
+                                    : Color.cyan.opacity(0.42)
+                            )
+                            .frame(
+                                width: star.size,
+                                height: star.size
+                            )
+                            .position(
+                                x:
+                                    proxy.size.width / 2
+                                    + star.x
+                                    + CGFloat(
+                                        sin(
+                                            time * star.speed
+                                            + Double(index)
+                                        )
+                                    ) * 8,
+                                y:
+                                    proxy.size.height / 2
+                                    + star.y
+                                    + CGFloat(
+                                        cos(
+                                            time * star.speed
+                                            + Double(index)
+                                        )
+                                    ) * 10
+                            )
+                            .shadow(
+                                color: Color.cyan.opacity(0.50),
+                                radius: 4
+                            )
+                    }
                 }
             }
         }

@@ -47,6 +47,10 @@ struct PointCardView: View {
 
     @State private var glowAnimation = false
     @State private var shimmerOffset: CGFloat = -1.3
+    @State private var screenAppeared = false
+    @State private var backgroundPulse = false
+    @State private var displayedTotalPoint = 0
+    @State private var titleShimmerOffset: CGFloat = -1.4
 
     // プレミアムカード操作演出
     @State private var cardDragOffset: CGSize = .zero
@@ -128,7 +132,13 @@ struct PointCardView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 22) {
+                    premiumHeader
+
                     flippingCard
+                        .opacity(screenAppeared ? 1 : 0)
+                        .offset(y: screenAppeared ? 0 : 24)
+
+                    premiumPointSummary
                     
                     Text("カードをタップするとランキングが見れます")
                         .font(.caption)
@@ -181,10 +191,20 @@ struct PointCardView: View {
                     }
                     
                     pointRuleSection
+                    }
+                    .padding()
+                    .padding(.bottom, 110)
                 }
-                .padding()
+                .scrollIndicators(.hidden)
             }
-            .background(Color(.systemGroupedBackground))
+            .background {
+                PremiumPointAmbientBackground(
+                    rank: rankBadge,
+                    pulse: backgroundPulse
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            }
             .navigationTitle("ポイントカード")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
@@ -205,6 +225,28 @@ struct PointCardView: View {
                 ) {
                     shimmerOffset = 1.5
                 }
+
+                withAnimation(
+                    .easeInOut(duration: 1.45)
+                    .repeatForever(autoreverses: true)
+                ) {
+                    backgroundPulse = true
+                }
+
+                withAnimation(
+                    .linear(duration: 2.8)
+                    .repeatForever(autoreverses: false)
+                ) {
+                    titleShimmerOffset = 1.4
+                }
+
+                withAnimation(
+                    .spring(response: 0.70, dampingFraction: 0.78)
+                ) {
+                    screenAppeared = true
+                }
+
+                animateDisplayedPoint(to: totalPoint)
             }
             .alert("🎉 RANK UP!", isPresented: $showRankUpAlert) {
                 Button("OK") { }
@@ -363,6 +405,240 @@ struct PointCardView: View {
                         .zIndex(101)
                     }
                 }
+            }
+        }
+
+    private var premiumHeader: some View {
+        VStack(spacing: 6) {
+            Text("SiRiUS")
+                .font(
+                    .system(
+                        size: 40,
+                        weight: .black,
+                        design: .serif
+                    )
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            premiumRankPrimaryColor,
+                            Color.white,
+                            premiumRankSecondaryColor
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .overlay {
+                    LinearGradient(
+                        colors: [
+                            Color.clear,
+                            Color.white.opacity(0.95),
+                            Color.clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 70)
+                    .rotationEffect(.degrees(-18))
+                    .offset(x: titleShimmerOffset * 170)
+                    .mask {
+                        Text("SiRiUS")
+                            .font(
+                                .system(
+                                    size: 40,
+                                    weight: .black,
+                                    design: .serif
+                                )
+                            )
+                    }
+                }
+
+            Text("PREMIUM MEMBER WALLET")
+                .font(
+                    .system(
+                        size: 10,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .tracking(2.5)
+                .foregroundStyle(.secondary)
+
+            Text(rankBadge)
+                .font(
+                    .system(
+                        size: 11,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .tracking(1.5)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 6)
+                .background(
+                    premiumRankPrimaryColor.opacity(0.13)
+                )
+                .foregroundStyle(premiumRankPrimaryColor)
+                .clipShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            premiumRankPrimaryColor.opacity(0.24),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+        .opacity(screenAppeared ? 1 : 0)
+        .offset(y: screenAppeared ? 0 : -14)
+        .animation(
+            .easeOut(duration: 0.55),
+            value: screenAppeared
+        )
+    }
+
+    private var premiumPointSummary: some View {
+        HStack(spacing: 12) {
+            premiumSummaryTile(
+                title: "TOTAL",
+                value: "\(displayedTotalPoint)pt",
+                icon: "sparkles",
+                color: premiumRankPrimaryColor
+            )
+
+            premiumSummaryTile(
+                title: "AVAILABLE",
+                value: "\(availablePoint)pt",
+                icon: "wallet.pass.fill",
+                color: .cyan
+            )
+
+            premiumSummaryTile(
+                title: "MONTHLY",
+                value: "\(monthlyPoint)pt",
+                icon: "calendar.badge.clock",
+                color: .orange
+            )
+        }
+        .opacity(screenAppeared ? 1 : 0)
+        .offset(y: screenAppeared ? 0 : 18)
+        .animation(
+            .easeOut(duration: 0.55).delay(0.12),
+            value: screenAppeared
+        )
+    }
+
+    private func premiumSummaryTile(
+        title: String,
+        value: String,
+        icon: String,
+        color: Color
+    ) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(color)
+
+            Text(title)
+                .font(
+                    .system(
+                        size: 9,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(
+                    .system(
+                        size: 14,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.70)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            Color(.systemBackground).opacity(0.88)
+        )
+        .clipShape(
+            RoundedRectangle(cornerRadius: 18)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(
+                    color.opacity(0.17),
+                    lineWidth: 1
+                )
+        }
+        .shadow(
+            color: color.opacity(0.09),
+            radius: 10,
+            x: 0,
+            y: 5
+        )
+    }
+
+    private var premiumRankPrimaryColor: Color {
+        switch rankBadge {
+        case "LEGEND": return .yellow
+        case "PLATINUM": return .cyan
+        case "GOLD": return .orange
+        case "SILVER":
+            return Color(
+                red: 0.72,
+                green: 0.83,
+                blue: 1.0
+            )
+        default:
+            return Color(
+                red: 0.84,
+                green: 0.39,
+                blue: 0.16
+            )
+        }
+    }
+
+    private var premiumRankSecondaryColor: Color {
+        switch rankBadge {
+        case "LEGEND": return .pink
+        case "PLATINUM": return .purple
+        case "GOLD": return .yellow
+        case "SILVER": return .white
+        default: return .orange
+        }
+    }
+
+    private func animateDisplayedPoint(to target: Int) {
+        displayedTotalPoint = 0
+
+        let safeTarget = max(target, 0)
+        guard safeTarget > 0 else {
+            displayedTotalPoint = 0
+            return
+        }
+
+        let steps = min(safeTarget, 36)
+        let interval = 0.72 / Double(max(steps, 1))
+
+        for step in 1...steps {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + interval * Double(step)
+            ) {
+                displayedTotalPoint =
+                    Int(
+                        Double(safeTarget)
+                        * Double(step)
+                        / Double(steps)
+                    )
             }
         }
     }
@@ -702,9 +978,37 @@ import SwiftUI
 extension PointCardView {
     var ticketsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("🎫 My Tickets")
-                .font(.title2)
-                .bold()
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("MY TICKETS")
+                        .font(
+                            .system(
+                                size: 11,
+                                weight: .black,
+                                design: .rounded
+                            )
+                        )
+                        .tracking(1.8)
+                        .foregroundStyle(.secondary)
+
+                    Text("保有チケット")
+                        .font(.title2)
+                        .bold()
+                }
+
+                Spacer()
+
+                Text("\(totalTicketCount)枚")
+                    .font(.caption)
+                    .fontWeight(.black)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(
+                        Color.purple.opacity(0.12)
+                    )
+                    .foregroundStyle(.purple)
+                    .clipShape(Capsule())
+            }
             
             ticketRow(icon: "🎾", title: "ガット張り工賃無料券", count: stringingFreeTickets, ticketField: "stringingFreeTickets")
             Divider()
@@ -955,6 +1259,16 @@ extension PointCardView {
         }
         .buttonStyle(.plain)
     }
+    var totalTicketCount: Int {
+        cleanupTickets
+        + discountTickets
+        + halfPriceTickets
+        + freeTickets
+        + challengeTickets
+        + priorityTickets
+        + stringingFreeTickets
+    }
+
     func ticketRow(icon: String, title: String, count: Int, ticketField: String) -> some View {
         HStack(spacing: 14) {
             Text(icon)
@@ -970,7 +1284,28 @@ extension PointCardView {
             }
             
             Spacer()
+
+            Text("\(count)")
+                .font(
+                    .system(
+                        size: 17,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .foregroundStyle(
+                    count > 0 ? Color.primary : Color.secondary
+                )
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(
+                    count > 0
+                    ? Color.purple
+                    : Color.secondary.opacity(0.45)
+                )
         }
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture {
             guard count > 0 else { return }
@@ -1087,6 +1422,7 @@ extension PointCardView {
                 let newPoint = data["totalPoint"] as? Int ?? 0
                 
                 totalPoint = newPoint
+                animateDisplayedPoint(to: newPoint)
                 availablePoint = data["availablePoint"] as? Int ?? 0
                 monthlyPoint = data["monthlyPoint"] as? Int ?? 0
                 
@@ -1939,6 +2275,129 @@ struct MVPSelectionView: View {
     }
 }
 import SwiftUI
+
+
+// MARK: - Premium Point Background
+
+private struct PremiumPointAmbientBackground: View {
+    let rank: String
+    let pulse: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(primaryColor.opacity(pulse ? 0.11 : 0.05))
+                .frame(width: 310, height: 310)
+                .blur(radius: 28)
+                .offset(x: 145, y: -330)
+                .scaleEffect(pulse ? 1.10 : 0.92)
+
+            Circle()
+                .fill(secondaryColor.opacity(pulse ? 0.08 : 0.035))
+                .frame(width: 285, height: 285)
+                .blur(radius: 30)
+                .offset(x: -155, y: 80)
+                .scaleEffect(pulse ? 1.06 : 0.94)
+
+            Circle()
+                .fill(Color.cyan.opacity(0.045))
+                .frame(width: 240, height: 240)
+                .blur(radius: 30)
+                .offset(x: 135, y: 560)
+
+            PremiumPointBackgroundParticles(
+                primaryColor: primaryColor
+            )
+        }
+    }
+
+    private var primaryColor: Color {
+        switch rank {
+        case "LEGEND": return .yellow
+        case "PLATINUM": return .cyan
+        case "GOLD": return .orange
+        case "SILVER": return .blue
+        default: return .orange
+        }
+    }
+
+    private var secondaryColor: Color {
+        switch rank {
+        case "LEGEND": return .pink
+        case "PLATINUM": return .purple
+        case "GOLD": return .yellow
+        case "SILVER": return .white
+        default: return .red
+        }
+    }
+}
+
+private struct PremiumPointBackgroundParticles: View {
+    let primaryColor: Color
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 16.0)) { timeline in
+            let time =
+                timeline.date
+                    .timeIntervalSinceReferenceDate
+
+            GeometryReader { proxy in
+                ZStack {
+                    ForEach(0..<12, id: \.self) { index in
+                        let seed = Double(index + 1)
+                        let xBase =
+                            CGFloat(
+                                sin(seed * 13.7)
+                            ) * proxy.size.width * 0.43
+                        let yBase =
+                            CGFloat(index) * 105 - 80
+
+                        Circle()
+                            .fill(
+                                index.isMultiple(of: 2)
+                                ? Color.white.opacity(0.24)
+                                : primaryColor.opacity(0.24)
+                            )
+                            .frame(
+                                width:
+                                    index.isMultiple(of: 3)
+                                    ? 3.2
+                                    : 2.0,
+                                height:
+                                    index.isMultiple(of: 3)
+                                    ? 3.2
+                                    : 2.0
+                            )
+                            .position(
+                                x:
+                                    proxy.size.width / 2
+                                    + xBase
+                                    + CGFloat(
+                                        sin(
+                                            time * 0.35
+                                            + seed
+                                        )
+                                    ) * 11,
+                                y:
+                                    yBase
+                                    + CGFloat(
+                                        cos(
+                                            time * 0.30
+                                            + seed
+                                        )
+                                    ) * 12
+                            )
+                            .shadow(
+                                color:
+                                    primaryColor.opacity(0.42),
+                                radius: 4
+                            )
+                    }
+                }
+            }
+        }
+    }
+}
 
 // MARK: - Premium Point Card Effects
 

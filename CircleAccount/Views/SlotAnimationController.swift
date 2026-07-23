@@ -11,6 +11,18 @@ enum SlotAnimationRoute: Equatable {
     case premium
 }
 
+enum SlotCinematicPhase: Equatable {
+    case idle
+    case leverBlackout
+    case delayedStart
+    case silentFreeze
+    case pushStandby
+    case finalSilence
+    case kyuiin
+    case doorOpen
+    case ticketReady
+}
+
 @MainActor
 final class SlotAnimationController: ObservableObject {
     @Published var stage: SlotEffectStage = .idle
@@ -28,15 +40,22 @@ final class SlotAnimationController: ObservableObject {
     @Published var leverProgress: CGFloat = 0
     @Published var shouldReverseReels = false
     @Published var shouldShowResult = false
+    @Published var canStopFirstReel = false
 
     @Published var resultTitle = ""
     @Published var resultSubtitle = ""
     @Published var currentRoute: SlotAnimationRoute = .normal
 
+    @Published var cinematicPhase: SlotCinematicPhase = .idle
+    @Published var cinematicTrigger = 0
+
     private let sound = SlotSoundManager.shared
 
     private var animationTask: Task<Void, Never>?
     private var pushContinuation:
+        CheckedContinuation<Void, Never>?
+
+    private var firstReelStopContinuation:
         CheckedContinuation<Void, Never>?
 
     private(set) var isSequenceRunning = false
@@ -98,6 +117,23 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 
+    // MARK: - First Reel Stop
+
+    func stopFirstReel() {
+        guard
+            isSpinning,
+            stoppedReelCount == 0,
+            canStopFirstReel
+        else {
+            return
+        }
+
+        canStopFirstReel = false
+
+        firstReelStopContinuation?.resume()
+        firstReelStopContinuation = nil
+    }
+
     // MARK: - Push
 
     func pressPush() {
@@ -137,10 +173,13 @@ final class SlotAnimationController: ObservableObject {
         leverProgress = 0
         shouldReverseReels = false
         shouldShowResult = false
+        canStopFirstReel = false
 
         resultTitle = ""
         resultSubtitle = ""
         currentRoute = .normal
+        cinematicPhase = .idle
+        cinematicTrigger = 0
 
         isSequenceRunning = false
     }
@@ -151,6 +190,10 @@ final class SlotAnimationController: ObservableObject {
 
         pushContinuation?.resume()
         pushContinuation = nil
+
+        firstReelStopContinuation?.resume()
+        firstReelStopContinuation = nil
+        canStopFirstReel = false
 
         sound.stopAll()
 
@@ -196,7 +239,47 @@ final class SlotAnimationController: ObservableObject {
             for: route
         )
 
-        stage = .idle
+        // 暗転・遅れは毎回出さず、ルートに応じて抽選する。
+        // 文字は表示せず、無音と始動タイミングだけで気付かせる。
+        let startupCinematic = shouldUseStartupCinematic(
+            for: route
+        )
+
+        if startupCinematic {
+            cinematicPhase = .leverBlackout
+            cinematicTrigger += 1
+            stage = .blackout
+            statusText = ""
+            subStatusText = ""
+
+            sound.stopSpin()
+            await sleep(
+                startupDelayDuration(
+                    for: route
+                )
+            )
+
+            guard !Task.isCancelled else {
+                finishCancelledSequence()
+                return
+            }
+
+            cinematicPhase = .delayedStart
+            cinematicTrigger += 1
+            stage = .idle
+
+            await sleep(0.24)
+
+            guard !Task.isCancelled else {
+                finishCancelledSequence()
+                return
+            }
+        } else {
+            cinematicPhase = .idle
+            stage = .idle
+            await sleep(0.10)
+        }
+
         statusText = "START"
         subStatusText = "REEL MOTOR ONLINE"
 
@@ -238,6 +321,46 @@ final class SlotAnimationController: ObservableObject {
         }
 
         isSequenceRunning = false
+    }
+
+    private func shouldUseStartupCinematic(
+        for route: SlotAnimationRoute
+    ) -> Bool {
+        let roll = Int.random(in: 0..<100)
+
+        switch route {
+        case .normal:
+            return roll < 4
+        case .chance:
+            return roll < 18
+        case .superChance:
+            return roll < 46
+        case .warning:
+            return roll < 72
+        case .reverse:
+            return roll < 88
+        case .premium:
+            return true
+        }
+    }
+
+    private func startupDelayDuration(
+        for route: SlotAnimationRoute
+    ) -> Double {
+        switch route {
+        case .normal:
+            return 0.22
+        case .chance:
+            return 0.32
+        case .superChance:
+            return 0.45
+        case .warning:
+            return 0.58
+        case .reverse:
+            return 0.72
+        case .premium:
+            return 0.92
+        }
     }
 
     // MARK: - Normal Route
@@ -346,9 +469,11 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        await showPushSequence()
+        if shouldUseFinalPushChallenge() {
+            await showPushSequence()
 
-        guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
+        }
 
         await showJackpot()
 
@@ -404,9 +529,11 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        await showPushSequence()
+        if shouldUseFinalPushChallenge() {
+            await showPushSequence()
 
-        guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
+        }
 
         await showJackpot()
 
@@ -471,9 +598,11 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        await showPushSequence()
+        if shouldUseFinalPushChallenge() {
+            await showPushSequence()
 
-        guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
+        }
 
         await showJackpot()
 
@@ -566,58 +695,165 @@ final class SlotAnimationController: ObservableObject {
             return
         }
 
-        for index in 0..<3 {
+        statusText = "STOP READY"
+        subStatusText = "PRESS LEFT STOP"
+        canStopFirstReel = true
+
+        await waitForFirstReelStopOrTimeout(
+            seconds: 8.0
+        )
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        canStopFirstReel = false
+        stopReel(index: 0)
+
+        statusText = "1ST STOP"
+        subStatusText = "WATCH THE MIDDLE REEL"
+
+        await sleep(1.25)
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        stopReel(index: 1)
+
+        statusText = "2ND STOP"
+        subStatusText = "FINAL REEL APPROACHING"
+
+        // 高期待度ルートでは、第二停止後に一度無音フリーズ
+        if usesCinematicReveal {
+            cinematicPhase = .silentFreeze
+            cinematicTrigger += 1
+            sound.stopSpin()
+
+            await sleep(0.95)
+
             guard !Task.isCancelled else {
                 sound.stopSpin()
                 return
             }
 
-            await sleep(
-                intervals[index]
-            )
+            sound.intensifySpin()
+        }
+
+        await sleep(1.55)
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        stopReel(index: 2)
+
+        // 第三停止後、最低1秒は完全に沈黙させる
+        statusText = "..."
+        subStatusText = "FINAL SILENCE"
+        cinematicPhase = .finalSilence
+        cinematicTrigger += 1
+        sound.stopSpin()
+
+        await sleep(1.18)
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        // 高期待度ルートはキュイン告知
+        if usesCinematicReveal {
+            cinematicPhase = .kyuiin
+            cinematicTrigger += 1
+            statusText = "KYUIIN!!"
+            subStatusText = "BONUS SIGNAL"
+
+            sound.playJackpot()
+
+            await sleep(0.82)
 
             guard !Task.isCancelled else {
                 sound.stopSpin()
                 return
             }
-
-            stoppedReelCount = index + 1
-
-            sound.playReelStop(
-                index: index,
-                isFinal: index == 2
-            )
-
-            playStopHaptic(
-                index: index,
-                isFinal: index == 2
-            )
-
-            if index == 2 {
-                statusText = "RESULT LOCKED"
-                subStatusText = "FINAL JUDGEMENT"
-
-                await sleep(0.45)
-
-                guard !Task.isCancelled else {
-                    sound.stopSpin()
-                    return
-                }
-
-                playResultSound()
-            } else {
-                statusText =
-                    "REEL \(index + 1) STOP"
-
-                subStatusText =
-                    index == 0
-                    ? "MIDDLE REEL STANDBY"
-                    : "FINAL REEL STANDBY"
-            }
+        } else {
+            playResultSound()
+            await sleep(0.55)
         }
 
         isSpinning = false
         sound.stopSpin()
+    }
+
+    private var usesCinematicReveal: Bool {
+        switch currentRoute {
+        case .superChance, .warning, .reverse, .premium:
+            return true
+        case .normal, .chance:
+            return false
+        }
+    }
+
+    private func stopReel(
+        index: Int
+    ) {
+        stoppedReelCount = index + 1
+
+        sound.playReelStop(
+            index: index,
+            isFinal: index == 2
+        )
+
+        playStopHaptic(
+            index: index,
+            isFinal: index == 2
+        )
+
+        if index == 2 {
+            statusText = "RESULT LOCKED"
+            subStatusText = "FINAL JUDGEMENT"
+        } else if index == 0 {
+            statusText = "LEFT REEL STOP"
+            subStatusText = "MIDDLE REEL AUTO"
+        } else {
+            statusText = "MIDDLE REEL STOP"
+            subStatusText = "FINAL REEL AUTO"
+        }
+    }
+
+    private func waitForFirstReelStopOrTimeout(
+        seconds: Double
+    ) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                await withCheckedContinuation { continuation in
+                    Task { @MainActor [weak self] in
+                        self?.firstReelStopContinuation = continuation
+                    }
+                }
+            }
+
+            group.addTask {
+                try? await Task.sleep(
+                    nanoseconds: UInt64(
+                        seconds * 1_000_000_000
+                    )
+                )
+            }
+
+            await group.next()
+            group.cancelAll()
+
+            await MainActor.run {
+                self.firstReelStopContinuation?.resume()
+                self.firstReelStopContinuation = nil
+                self.canStopFirstReel = false
+            }
+        }
     }
 
     // MARK: - Haptics
@@ -697,6 +933,8 @@ final class SlotAnimationController: ObservableObject {
     // MARK: - Push Sequence
 
     private func showPushSequence() async {
+        cinematicPhase = .pushStandby
+        cinematicTrigger += 1
         stage = .push
 
         statusText = "PUSH"
@@ -751,28 +989,47 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 
+    private func shouldUseFinalPushChallenge() -> Bool {
+        Int.random(in: 0..<100) < 70
+    }
+
     // MARK: - Jackpot
 
     private func showJackpot() async {
+        cinematicPhase = .doorOpen
+        cinematicTrigger += 1
         stage = .jackpot
+
+        statusText = "DOOR OPEN"
+        subStatusText = "PREMIUM REVEAL"
+
+        sound.playJackpot()
+
+        await sleep(1.35)
+
+        guard !Task.isCancelled else { return }
 
         statusText = "JACKPOT"
         subStatusText = "PREMIUM WIN"
 
-        sound.playJackpot()
-
-        await sleep(3.15)
+        await sleep(2.35)
     }
 
     // MARK: - Result
 
     private func showCardAndFinish() async {
+        cinematicPhase = .ticketReady
+        cinematicTrigger += 1
         stage = .cardReveal
 
         statusText = "PRIZE GET"
         subStatusText = "CONGRATULATIONS"
 
-        await sleep(3.10)
+        sound.playRewardReveal()
+
+        // 筐体内の当たり演出とチケットカードを見せてから
+        // 全画面の獲得結果へ移動する
+        await sleep(4.20)
 
         guard !Task.isCancelled else { return }
 
@@ -783,6 +1040,7 @@ final class SlotAnimationController: ObservableObject {
         guard !Task.isCancelled else { return }
 
         stage = .idle
+        cinematicPhase = .idle
     }
 
     // MARK: - Heat Level
@@ -804,6 +1062,10 @@ final class SlotAnimationController: ObservableObject {
         isPushVisible = false
         isPushEnabled = false
         shouldReverseReels = false
+        cinematicPhase = .idle
+        canStopFirstReel = false
+        firstReelStopContinuation?.resume()
+        firstReelStopContinuation = nil
         isSequenceRunning = false
     }
 

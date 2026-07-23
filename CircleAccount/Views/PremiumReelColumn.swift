@@ -20,6 +20,7 @@ struct PremiumReelColumn: View {
     @State private var slipOpacity = 0.0
     @State private var slipOffset: CGFloat = -34
     @State private var reelCompression: CGFloat = 1.0
+    @State private var horizontalShake: CGFloat = 0
 
     // 回転中だけ使用するダミー絵柄列
     @State private var rollingPool: [String] = []
@@ -79,6 +80,7 @@ struct PremiumReelColumn: View {
                     y: reelCompression,
                     anchor: .center
                 )
+                .offset(x: horizontalShake)
                 .clipped()
                 .clipShape(
                     RoundedRectangle(
@@ -381,19 +383,78 @@ struct PremiumReelColumn: View {
     private func spinPhase(at date: Date) -> Double {
         if isDecelerating {
             let duration = decelerationDuration
+
             let elapsed = min(
-                max(date.timeIntervalSince(decelerationStartDate), 0),
+                max(
+                    date.timeIntervalSince(
+                        decelerationStartDate
+                    ),
+                    0
+                ),
                 duration
             )
-            let progress = duration > 0 ? elapsed / duration : 1
 
-            // 線形減速を積分し、止まる直前まで滑らかに回す
+            let progress =
+                duration > 0
+                    ? elapsed / duration
+                    : 1
+
+            /*
+             実機風の減速カーブ。
+
+             速度:
+             v(p) = v0 × (1 - p)^2
+
+             距離は速度を積分した値:
+             v0 × duration ×
+             (p - p² + p³ / 3)
+
+             停止直前まで少し回転が残るため、
+             線形減速よりも重量感が出る。
+             */
             let easedDistance =
                 decelerationInitialSpeed
                 * duration
-                * (progress - 0.5 * progress * progress)
+                * (
+                    progress
+                    - progress * progress
+                    + (
+                        progress
+                        * progress
+                        * progress
+                        / 3.0
+                    )
+                )
 
-            return decelerationStartPhase + easedDistance
+            /*
+             最後の約18%で、ごく小さな
+             「歯車が噛み合う揺れ」を加える。
+             */
+            let lockStart = 0.82
+
+            let lockProgress =
+                max(
+                    0,
+                    min(
+                        1,
+                        (progress - lockStart)
+                        / (1 - lockStart)
+                    )
+                )
+
+            let lockJitter =
+                sin(
+                    lockProgress
+                    * .pi
+                    * 3.0
+                )
+                * (1 - lockProgress)
+                * 0.055
+
+            return
+                decelerationStartPhase
+                + easedDistance
+                + lockJitter
         }
 
         let elapsed = max(
@@ -401,33 +462,100 @@ struct PremiumReelColumn: View {
             0
         )
 
-        let baseSpeed =
-            20.0 + Double(reelIndex) * 3.1
+        let targetSpeed =
+            20.5 + Double(reelIndex) * 2.75
 
-        let microVariation =
+        /*
+         回転開始から最高速までの加速時間。
+         左→中→右で少しだけ差をつけ、
+         3本が完全同期して見えないようにする。
+         */
+        let accelerationDuration =
+            0.58 + Double(reelIndex) * 0.055
+
+        let accelerationProgress =
+            min(
+                1,
+                elapsed / accelerationDuration
+            )
+
+        /*
+         smoothstep:
+         3p² - 2p³
+
+         開始直後と最高速到達時の速度変化を
+         滑らかにする。
+         */
+        let smoothAcceleration =
+            accelerationProgress
+            * accelerationProgress
+            * (
+                3
+                - 2 * accelerationProgress
+            )
+
+        /*
+         加速区間の移動距離は、
+         smoothstepを積分した値を使う。
+
+         ∫(3p² - 2p³)dp
+         = p³ - 0.5p⁴
+         */
+        let acceleratedDistance =
+            targetSpeed
+            * accelerationDuration
+            * (
+                pow(accelerationProgress, 3)
+                - 0.5
+                * pow(accelerationProgress, 4)
+            )
+
+        let cruisingElapsed =
+            max(
+                0,
+                elapsed - accelerationDuration
+            )
+
+        /*
+         最高速中は一定速度に見えすぎないよう、
+         モーターの微妙な速度揺らぎを距離へ加える。
+         */
+        let motorVariation =
             sin(
-                elapsed * 6.2
-                    + Double(reelIndex) * 1.7
-            ) * 0.55
+                cruisingElapsed * 6.4
+                + Double(reelIndex) * 1.45
+            )
+            * 0.075
+            + sin(
+                cruisingElapsed * 15.2
+                + Double(reelIndex) * 0.82
+            )
+            * 0.022
+
+        let cruisingDistance =
+            cruisingElapsed
+            * targetSpeed
+            + motorVariation
 
         return
             Double(spinStartOffset)
-            + elapsed * (baseSpeed + microVariation)
+            + acceleratedDistance
+            + cruisingDistance
     }
 
     private var decelerationDuration: Double {
         switch reelIndex {
         case 0:
-            return 0.16
+            return 0.34
         case 1:
-            return 0.20
+            return 0.40
         default:
-            return 0.28
+            return 0.50
         }
     }
 
     private var decelerationInitialSpeed: Double {
-        20.0 + Double(reelIndex) * 3.1
+        20.5 + Double(reelIndex) * 2.75
     }
 
     private func symbolForRollingRow(
@@ -531,66 +659,129 @@ struct PremiumReelColumn: View {
 
     private func playStopAnimation() {
         stopBounce = false
+        horizontalShake = 0
 
         let drop: CGFloat
         let rebound: CGFloat
         let compressStart: CGFloat
         let compressEnd: CGFloat
+        let firstShake: CGFloat
+        let secondShake: CGFloat
 
         switch reelIndex {
         case 0:
-            drop = -24
-            rebound = 8
-            compressStart = 1.05
-            compressEnd = 0.95
+            drop = -20
+            rebound = 6
+            compressStart = 1.045
+            compressEnd = 0.955
+            firstShake = -1.2
+            secondShake = 0.8
+
         case 1:
-            drop = -32
-            rebound = 11
-            compressStart = 1.08
-            compressEnd = 0.92
+            drop = -27
+            rebound = 8
+            compressStart = 1.065
+            compressEnd = 0.935
+            firstShake = 1.6
+            secondShake = -1.0
+
         default:
-            drop = -42
-            rebound = 15
-            compressStart = 1.12
-            compressEnd = 0.88
+            drop = -36
+            rebound = 11
+            compressStart = 1.095
+            compressEnd = 0.905
+            firstShake = -2.1
+            secondShake = 1.25
         }
 
+        /*
+         停止直前に一コマ滑ったように見せる。
+         その後「ガクッ」と噛み合い、
+         小さく左右へ揺れて静止する。
+         */
         settlingOffset = drop
-        slipOffset = drop - 18
-        slipOpacity = 0.9
-        flashOpacity = reelIndex == 2 ? 0.95 : 0.65
+        slipOffset = drop - 20
+        slipOpacity = 0.86
+        flashOpacity =
+            reelIndex == 2
+                ? 0.92
+                : 0.58
+
         reelCompression = compressStart
+        horizontalShake = firstShake
 
-        withAnimation(.easeOut(duration: 0.08)) {
+        withAnimation(
+            .easeOut(duration: 0.075)
+        ) {
             settlingOffset = rebound
-            slipOffset = rebound + 6
+            slipOffset = rebound + 7
             reelCompression = compressEnd
+            horizontalShake = secondShake
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            withAnimation(.spring(response: 0.18, dampingFraction: 0.34)) {
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.075
+        ) {
+            withAnimation(
+                .spring(
+                    response: 0.17,
+                    dampingFraction: 0.31
+                )
+            ) {
                 stopBounce = true
-                self.settlingOffset = -6
-                self.reelCompression = 1.03
+                settlingOffset = -5
+                reelCompression = 1.025
+                horizontalShake = -secondShake * 0.72
             }
-            withAnimation(.easeOut(duration: 0.10)) {
-                self.slipOpacity = 0
+
+            withAnimation(
+                .easeOut(duration: 0.105)
+            ) {
+                slipOpacity = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.55)) {
-                self.settlingOffset = 0
-                self.reelCompression = 1.0
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.16
+        ) {
+            withAnimation(
+                .easeOut(duration: 0.07)
+            ) {
+                horizontalShake = secondShake * 0.38
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.68)) {
-                self.stopBounce = false
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.22
+        ) {
+            withAnimation(
+                .spring(
+                    response: 0.22,
+                    dampingFraction: 0.58
+                )
+            ) {
+                settlingOffset = 0
+                reelCompression = 1
+                horizontalShake = 0
             }
-            withAnimation(.easeOut(duration: 0.24)) {
-                self.flashOpacity = 0
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.31
+        ) {
+            withAnimation(
+                .spring(
+                    response: 0.24,
+                    dampingFraction: 0.72
+                )
+            ) {
+                stopBounce = false
+            }
+
+            withAnimation(
+                .easeOut(duration: 0.24)
+            ) {
+                flashOpacity = 0
             }
         }
     }
@@ -603,6 +794,7 @@ struct PremiumReelColumn: View {
         slipOffset = -34
         flashOpacity = 0
         reelCompression = 1
+        horizontalShake = 0
     }
 
     private func previousSymbol(

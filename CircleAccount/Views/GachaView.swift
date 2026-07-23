@@ -80,6 +80,12 @@ struct GachaView: View {
                             isPushVisible: animation.isPushVisible,
                             isPushEnabled: animation.isPushEnabled,
                             leverProgress: animation.leverProgress,
+                            isFirstReelStopEnabled: animation.canStopFirstReel,
+                            cinematicPhase: animation.cinematicPhase,
+                            cinematicTrigger: animation.cinematicTrigger,
+                            onFirstReelStop: {
+                                animation.stopFirstReel()
+                            },
                             onPush: {
                                 animation.pressPush()
                             },
