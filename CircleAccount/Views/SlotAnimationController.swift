@@ -252,9 +252,9 @@ final class SlotAnimationController: ObservableObject {
 
         await stopReels(
             intervals: [
-                0.82,
-                0.94,
-                1.12
+                0.68,
+                0.26,
+                0.36
             ]
         )
 
@@ -295,9 +295,9 @@ final class SlotAnimationController: ObservableObject {
 
         await stopReels(
             intervals: [
-                0.90,
-                1.05,
-                1.30
+                0.78,
+                0.30,
+                0.42
             ]
         )
 
@@ -338,9 +338,9 @@ final class SlotAnimationController: ObservableObject {
 
         await stopReels(
             intervals: [
-                1.00,
-                1.20,
-                1.55
+                0.88,
+                0.34,
+                0.50
             ]
         )
 
@@ -396,9 +396,9 @@ final class SlotAnimationController: ObservableObject {
 
         await stopReels(
             intervals: [
-                1.05,
-                1.35,
-                1.75
+                0.98,
+                0.38,
+                0.58
             ]
         )
 
@@ -463,9 +463,9 @@ final class SlotAnimationController: ObservableObject {
 
         await stopReels(
             intervals: [
-                1.10,
-                1.45,
-                1.90
+                1.04,
+                0.42,
+                0.66
             ]
         )
 
@@ -536,9 +536,9 @@ final class SlotAnimationController: ObservableObject {
 
         await stopReels(
             intervals: [
-                1.15,
-                1.55,
-                2.10
+                1.10,
+                0.46,
+                0.76
             ]
         )
 
@@ -597,7 +597,7 @@ final class SlotAnimationController: ObservableObject {
                 statusText = "RESULT LOCKED"
                 subStatusText = "FINAL JUDGEMENT"
 
-                await sleep(0.24)
+                await sleep(0.45)
 
                 guard !Task.isCancelled else {
                     sound.stopSpin()
@@ -610,7 +610,9 @@ final class SlotAnimationController: ObservableObject {
                     "REEL \(index + 1) STOP"
 
                 subStatusText =
-                    "NEXT REEL STANDBY"
+                    index == 0
+                    ? "MIDDLE REEL STANDBY"
+                    : "FINAL REEL STANDBY"
             }
         }
 
@@ -625,35 +627,44 @@ final class SlotAnimationController: ObservableObject {
         isFinal: Bool
     ) {
         let style: UIImpactFeedbackGenerator.FeedbackStyle
+        let intensity: CGFloat
 
         switch index {
         case 0:
             style = .light
+            intensity = 0.68
 
         case 1:
             style = .medium
+            intensity = 0.84
 
         default:
             style = .heavy
+            intensity = 1.0
         }
 
         let impact = UIImpactFeedbackGenerator(style: style)
         impact.prepare()
-        impact.impactOccurred(
-            intensity: isFinal ? 1.0 : 0.82
-        )
+        impact.impactOccurred(intensity: intensity)
 
         guard isFinal else { return }
 
-        let notification = UINotificationFeedbackGenerator()
-        notification.prepare()
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.085
+        ) {
+            let lockImpact = UIImpactFeedbackGenerator(style: .rigid)
+            lockImpact.prepare()
+            lockImpact.impactOccurred(intensity: 0.72)
+        }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.10
+            deadline: .now() + 0.18
         ) {
             switch self.resultTitle {
             case "参加費無料券",
                  "ガット張り工賃無料券":
+                let notification = UINotificationFeedbackGenerator()
+                notification.prepare()
                 notification.notificationOccurred(.success)
 
             default:

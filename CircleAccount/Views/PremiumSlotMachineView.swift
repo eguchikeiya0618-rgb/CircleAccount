@@ -20,10 +20,15 @@ struct PremiumSlotMachineView: View {
     let onLeverChanged: (CGFloat) -> Void
     let onLeverReleased: () -> Void
 
+    @AppStorage("slotSoundEnabled")
+    private var slotSoundEnabled = true
+
     @State private var lampPulse = false
     @State private var borderRotation = 0.0
     @State private var machinePulse = false
     @State private var machineShakeX: CGFloat = 0
+    @State private var machineDropY: CGFloat = 0
+    @State private var machineTiltDegrees = 0.0
     @State private var stopLineFlashOpacity = 0.0
     @State private var flashingStopIndex: Int?
     @State private var premiumFlashOpacity = 0.0
@@ -208,21 +213,46 @@ struct PremiumSlotMachineView: View {
                 glowColor: machineGlow,
                 enabled: !isSpinning,
                 onChanged: onLeverChanged,
-                onReleased: onLeverReleased
+                onReleased: {
+                    SlotSoundManager.shared.playLever()
+                    playLeverLaunchImpact()
+                    onLeverReleased()
+                }
             )
             .offset(x: 2, y: 82)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 520)
-        .scaleEffect(machinePulse ? 1.012 : 1.0)
-        .offset(x: machineShakeX)
+        .scaleEffect(
+            x: machinePulse ? 1.012 : 1.0,
+            y: machinePulse ? 0.992 : 1.0,
+            anchor: .center
+        )
+        .rotationEffect(.degrees(machineTiltDegrees))
+        .offset(x: machineShakeX, y: machineDropY)
         .onAppear {
             prepareDisplaySymbols()
             startContinuousAnimations()
+            SlotSoundManager.shared.prepare(
+                enabled: slotSoundEnabled
+            )
+        }
+        .onDisappear {
+            SlotSoundManager.shared.stopAll()
+        }
+        .onChange(of: slotSoundEnabled) { _, enabled in
+            SlotSoundManager.shared.prepare(
+                enabled: enabled
+            )
         }
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
                 prepareDisplaySymbols()
+                machineDropY = 0
+                machineTiltDegrees = 0
+                SlotSoundManager.shared.startSpin()
+            } else if stoppedReelCount == 0 {
+                SlotSoundManager.shared.stopSpin()
             }
         }
         .onChange(of: heatLevel) { _, newValue in
@@ -230,6 +260,16 @@ struct PremiumSlotMachineView: View {
 
             if newValue == .premium {
                 playPremiumFlash()
+                SlotSoundManager.shared.playWarning()
+
+                if isSpinning {
+                    DispatchQueue.main.asyncAfter(
+                        deadline: .now() + 0.18
+                    ) {
+                        guard isSpinning else { return }
+                        SlotSoundManager.shared.intensifySpin()
+                    }
+                }
             }
         }
         .onChange(of: isPushVisible) { _, visible in
@@ -252,11 +292,17 @@ struct PremiumSlotMachineView: View {
                     isConfettiVisible = false
                     
                     luckyLampMode = .off
+                    SlotSoundManager.shared.stopSpin()
                     
                     hideJackpot()
                 }
                 return
             }
+
+            SlotSoundManager.shared.playReelStop(
+                index: min(max(newValue - 1, 0), 2),
+                isFinal: newValue >= 3
+            )
 
             playStopImpact(stoppedCount: newValue)
             playEnhancedStopFlash(stoppedCount: newValue)
@@ -274,6 +320,7 @@ struct PremiumSlotMachineView: View {
             }
 
             if newValue >= 3 {
+                playResultSound()
                 playResultCelebration()
             }
 
@@ -493,6 +540,53 @@ struct PremiumSlotMachineView: View {
 
     }
 
+    private func playLeverLaunchImpact() {
+        let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
+        heavyImpact.prepare()
+        heavyImpact.impactOccurred(intensity: 0.92)
+
+        machineDropY = 0
+        machineTiltDegrees = 0
+        machineFlashOpacity = max(machineFlashOpacity, 0.48)
+
+        withAnimation(.easeOut(duration: 0.055)) {
+            machineDropY = 8
+            machineShakeX = -3.5
+            machineTiltDegrees = -0.42
+            machinePulse = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.055) {
+            withAnimation(.easeInOut(duration: 0.065)) {
+                machineDropY = -2.5
+                machineShakeX = 3.0
+                machineTiltDegrees = 0.28
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            let rigidImpact = UIImpactFeedbackGenerator(style: .rigid)
+            rigidImpact.prepare()
+            rigidImpact.impactOccurred(intensity: 0.62)
+
+            withAnimation(
+                .spring(
+                    response: 0.24,
+                    dampingFraction: 0.56
+                )
+            ) {
+                machineDropY = 0
+                machineShakeX = 0
+                machineTiltDegrees = 0
+                machinePulse = false
+            }
+
+            withAnimation(.easeOut(duration: 0.20)) {
+                machineFlashOpacity = 0
+            }
+        }
+    }
+
     private func playSparkBurst() {
         sparkBurstProgress = 0
         sparkBurstOpacity = 1
@@ -568,6 +662,7 @@ struct PremiumSlotMachineView: View {
     }
 
     private func playJackpot() {
+        SlotSoundManager.shared.playJackpot()
         playJackpotWhiteout()
         jackpotVisible = true
 
@@ -671,6 +766,7 @@ struct PremiumSlotMachineView: View {
 
         pushPressed = true
         pushPressTrigger += 1
+        SlotSoundManager.shared.playPush()
 
         let impact = UIImpactFeedbackGenerator(style: .heavy)
         impact.prepare()
@@ -762,6 +858,25 @@ struct PremiumSlotMachineView: View {
             luckyLampMode = .off
         }
     }
+    private func playResultSound() {
+        switch safeSymbols {
+        case ["🌈7", "🌈7", "🌈7"]:
+            SlotSoundManager.shared.playRainbowSeven()
+
+        case ["7", "7", "7"]:
+            SlotSoundManager.shared.playSeven()
+
+        case ["🔔", "🔔", "🔔"]:
+            SlotSoundManager.shared.playBell()
+
+        case ["🍇", "🍇", "🍇"]:
+            SlotSoundManager.shared.playGrape()
+
+        default:
+            break
+        }
+    }
+
     private func playResultCelebration() {
         
         if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
@@ -1012,36 +1127,122 @@ struct PremiumSlotMachineView: View {
         flashingStopIndex = stoppedIndex
         pulseMachine()
 
-        withAnimation(.easeOut(duration: 0.035)) {
-            machineShakeX = stoppedIndex == 1 ? -7 : 7
-            stopLineFlashOpacity = 1
+        let firstOffset: CGFloat
+        let reboundOffset: CGFloat
+        let settleOffset: CGFloat
+        let firstDuration: Double
+        let reboundDuration: Double
+        let settleDuration: Double
+        let flashPeak: Double
+        let flashFadeDelay: Double
+        let flashFadeDuration: Double
+
+        switch stoppedIndex {
+        case 0:
+            firstOffset = 4.5
+            reboundOffset = -3.0
+            settleOffset = 1.2
+            firstDuration = 0.045
+            reboundDuration = 0.050
+            settleDuration = 0.060
+            flashPeak = 0.58
+            flashFadeDelay = 0.10
+            flashFadeDuration = 0.20
+
+        case 1:
+            firstOffset = -7.0
+            reboundOffset = 5.0
+            settleOffset = -2.0
+            firstDuration = 0.040
+            reboundDuration = 0.050
+            settleDuration = 0.060
+            flashPeak = 0.78
+            flashFadeDelay = 0.11
+            flashFadeDuration = 0.24
+
+        default:
+            firstOffset = 10.5
+            reboundOffset = -8.0
+            settleOffset = 4.0
+            firstDuration = 0.032
+            reboundDuration = 0.046
+            settleDuration = 0.058
+            flashPeak = 1.0
+            flashFadeDelay = 0.14
+            flashFadeDuration = 0.32
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.045) {
-            withAnimation(.easeInOut(duration: 0.045)) {
-                machineShakeX = stoppedIndex == 1 ? 5 : -5
+        withAnimation(.easeOut(duration: firstDuration)) {
+            machineShakeX = firstOffset
+            stopLineFlashOpacity = flashPeak
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + firstDuration
+        ) {
+            withAnimation(.easeInOut(duration: reboundDuration)) {
+                machineShakeX = reboundOffset
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.095) {
-            withAnimation(.easeInOut(duration: 0.055)) {
-                machineShakeX = 3
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + firstDuration + reboundDuration
+        ) {
+            withAnimation(.easeInOut(duration: settleDuration)) {
+                machineShakeX = settleOffset
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.spring(response: 0.18, dampingFraction: 0.52)) {
+        DispatchQueue.main.asyncAfter(
+            deadline: .now()
+            + firstDuration
+            + reboundDuration
+            + settleDuration
+        ) {
+            withAnimation(
+                .spring(
+                    response: stoppedIndex == 2 ? 0.22 : 0.18,
+                    dampingFraction: stoppedIndex == 2 ? 0.48 : 0.56
+                )
+            ) {
                 machineShakeX = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.easeOut(duration: 0.24)) {
+        if stoppedIndex == 2 {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + 0.085
+            ) {
+                withAnimation(.easeOut(duration: 0.045)) {
+                    machinePulse = true
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + 0.19
+            ) {
+                withAnimation(
+                    .spring(
+                        response: 0.24,
+                        dampingFraction: 0.58
+                    )
+                ) {
+                    machinePulse = false
+                }
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + flashFadeDelay
+        ) {
+            withAnimation(.easeOut(duration: flashFadeDuration)) {
                 stopLineFlashOpacity = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.34
+        ) {
             if flashingStopIndex == stoppedIndex {
                 withAnimation(.easeOut(duration: 0.16)) {
                     flashingStopIndex = nil

@@ -27,6 +27,11 @@ struct PremiumReelColumn: View {
     @State private var spinStartOffset = 0
     @State private var hasStartedCurrentSpin = false
 
+    // 停止直前の慣性回転
+    @State private var isDecelerating = false
+    @State private var decelerationStartDate = Date()
+    @State private var decelerationStartPhase = 0.0
+
     private let visibleRows = 7
     private let rowHeight: CGFloat = 50
 
@@ -35,7 +40,7 @@ struct PremiumReelColumn: View {
             TimelineView(
                 .animation(
                     minimumInterval: 1.0 / 60.0,
-                    paused: !isSpinning
+                    paused: !(isSpinning || isDecelerating)
                 )
             ) { context in
                 let phase = spinPhase(at: context.date)
@@ -46,7 +51,7 @@ struct PremiumReelColumn: View {
                 ZStack {
                     reelBackground
 
-                    if isSpinning {
+                    if isSpinning || isDecelerating {
                         spinningReel(
                             baseIndex: baseIndex,
                             verticalOffset: verticalOffset
@@ -88,6 +93,7 @@ struct PremiumReelColumn: View {
         }
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
+                isDecelerating = false
                 hasStartedCurrentSpin = true
                 prepareRollingPool()
                 resetStopAnimation()
@@ -101,11 +107,12 @@ struct PremiumReelColumn: View {
         }
         .onChange(of: isStopped) { _, stopped in
             guard stopped else {
+                isDecelerating = false
                 resetStopAnimation()
                 return
             }
 
-            playStopAnimation()
+            beginDecelerationAndStop()
         }
     }
 
@@ -372,6 +379,23 @@ struct PremiumReelColumn: View {
     }
 
     private func spinPhase(at date: Date) -> Double {
+        if isDecelerating {
+            let duration = decelerationDuration
+            let elapsed = min(
+                max(date.timeIntervalSince(decelerationStartDate), 0),
+                duration
+            )
+            let progress = duration > 0 ? elapsed / duration : 1
+
+            // 線形減速を積分し、止まる直前まで滑らかに回す
+            let easedDistance =
+                decelerationInitialSpeed
+                * duration
+                * (progress - 0.5 * progress * progress)
+
+            return decelerationStartPhase + easedDistance
+        }
+
         let elapsed = max(
             date.timeIntervalSince(spinStartDate),
             0
@@ -389,6 +413,21 @@ struct PremiumReelColumn: View {
         return
             Double(spinStartOffset)
             + elapsed * (baseSpeed + microVariation)
+    }
+
+    private var decelerationDuration: Double {
+        switch reelIndex {
+        case 0:
+            return 0.16
+        case 1:
+            return 0.20
+        default:
+            return 0.28
+        }
+    }
+
+    private var decelerationInitialSpeed: Double {
+        20.0 + Double(reelIndex) * 3.1
     }
 
     private func symbolForRollingRow(
@@ -470,78 +509,94 @@ struct PremiumReelColumn: View {
         spinStartDate = Date()
     }
 
+    private func beginDecelerationAndStop() {
+        guard !isDecelerating else { return }
+
+        decelerationStartPhase = spinPhase(at: Date())
+        decelerationStartDate = Date()
+        isDecelerating = true
+
+        let duration = decelerationDuration
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            guard isStopped else {
+                isDecelerating = false
+                return
+            }
+
+            isDecelerating = false
+            playStopAnimation()
+        }
+    }
+
     private func playStopAnimation() {
         stopBounce = false
-        settlingOffset = -30
-        slipOffset = -48
-        slipOpacity = 0.86
-        flashOpacity = 0.58
-        reelCompression = 1.08
 
-        withAnimation(
-            .easeOut(duration: 0.11)
-        ) {
-            settlingOffset = 11
-            slipOffset = 16
-            reelCompression = 0.92
+        let drop: CGFloat
+        let rebound: CGFloat
+        let compressStart: CGFloat
+        let compressEnd: CGFloat
+
+        switch reelIndex {
+        case 0:
+            drop = -24
+            rebound = 8
+            compressStart = 1.05
+            compressEnd = 0.95
+        case 1:
+            drop = -32
+            rebound = 11
+            compressStart = 1.08
+            compressEnd = 0.92
+        default:
+            drop = -42
+            rebound = 15
+            compressStart = 1.12
+            compressEnd = 0.88
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.10
-        ) {
-            withAnimation(
-                .spring(
-                    response: 0.20,
-                    dampingFraction: 0.38
-                )
-            ) {
+        settlingOffset = drop
+        slipOffset = drop - 18
+        slipOpacity = 0.9
+        flashOpacity = reelIndex == 2 ? 0.95 : 0.65
+        reelCompression = compressStart
+
+        withAnimation(.easeOut(duration: 0.08)) {
+            settlingOffset = rebound
+            slipOffset = rebound + 6
+            reelCompression = compressEnd
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.34)) {
                 stopBounce = true
-                settlingOffset = -5
-                reelCompression = 1.035
+                self.settlingOffset = -6
+                self.reelCompression = 1.03
             }
-
-            withAnimation(
-                .easeOut(duration: 0.12)
-            ) {
-                slipOpacity = 0
+            withAnimation(.easeOut(duration: 0.10)) {
+                self.slipOpacity = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.21
-        ) {
-            withAnimation(
-                .spring(
-                    response: 0.28,
-                    dampingFraction: 0.64
-                )
-            ) {
-                settlingOffset = 0
-                reelCompression = 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.19) {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.55)) {
+                self.settlingOffset = 0
+                self.reelCompression = 1.0
             }
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.29
-        ) {
-            withAnimation(
-                .spring(
-                    response: 0.27,
-                    dampingFraction: 0.70
-                )
-            ) {
-                stopBounce = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.68)) {
+                self.stopBounce = false
             }
-
-            withAnimation(
-                .easeOut(duration: 0.22)
-            ) {
-                flashOpacity = 0
+            withAnimation(.easeOut(duration: 0.24)) {
+                self.flashOpacity = 0
             }
         }
     }
 
     private func resetStopAnimation() {
+        isDecelerating = false
         stopBounce = false
         settlingOffset = 0
         slipOpacity = 0

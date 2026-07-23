@@ -111,6 +111,7 @@ struct SlotBlackoutOverlay: View {
                 .frame(width: lineWidth, height: 3)
                 .shadow(color: .yellow, radius: 8)
         }
+        .opacity(titleOpacity)
     }
 
     private func playSequence() {
