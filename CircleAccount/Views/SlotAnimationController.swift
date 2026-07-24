@@ -11,6 +11,24 @@ enum SlotAnimationRoute: Equatable {
     case premium
 }
 
+enum SlotExpectationLevel: Int, Equatable {
+    case normal = 0
+    case chance = 1
+    case hot = 2
+    case gekiatsu = 3
+    case premium = 4
+
+    var slipIntensity: CGFloat {
+        switch self {
+        case .normal: return 0.20
+        case .chance: return 0.38
+        case .hot: return 0.58
+        case .gekiatsu: return 0.82
+        case .premium: return 1.0
+        }
+    }
+}
+
 enum SlotCinematicPhase: Equatable {
     case idle
     case leverBlackout
@@ -48,6 +66,11 @@ final class SlotAnimationController: ObservableObject {
 
     @Published var cinematicPhase: SlotCinematicPhase = .idle
     @Published var cinematicTrigger = 0
+
+    @Published var expectationLevel: SlotExpectationLevel = .normal
+    @Published var reelSlipTrigger = 0
+    @Published var reelSlipIndex = -1
+    @Published var reelSlipIntensity: CGFloat = 0
 
     private let sound = SlotSoundManager.shared
 
@@ -109,6 +132,7 @@ final class SlotAnimationController: ObservableObject {
         self.resultTitle = resultTitle
         self.resultSubtitle = resultSubtitle
         self.currentRoute = route
+        expectationLevel = expectationLevel(for: route)
 
         animationTask = Task {
             await runSequence(
@@ -180,6 +204,10 @@ final class SlotAnimationController: ObservableObject {
         currentRoute = .normal
         cinematicPhase = .idle
         cinematicTrigger = 0
+        expectationLevel = .normal
+        reelSlipTrigger = 0
+        reelSlipIndex = -1
+        reelSlipIntensity = 0
 
         isSequenceRunning = false
     }
@@ -208,6 +236,14 @@ final class SlotAnimationController: ObservableObject {
         isSequenceRunning = true
         shouldShowResult = false
         shouldReverseReels = false
+
+        // 前回の暗転・PUSH・告知表示を必ず消してから次の回転を始める
+        stage = .idle
+        cinematicPhase = .idle
+        isPushVisible = false
+        isPushEnabled = false
+        statusText = "READY"
+        subStatusText = "PULL THE LEVER"
 
         withAnimation(
             .spring(
@@ -241,9 +277,8 @@ final class SlotAnimationController: ObservableObject {
 
         // 暗転・遅れは毎回出さず、ルートに応じて抽選する。
         // 文字は表示せず、無音と始動タイミングだけで気付かせる。
-        let startupCinematic = shouldUseStartupCinematic(
-            for: route
-        )
+        // プレミアム演出確認中は旧スタート暗転を無効化。
+        let startupCinematic = false
 
         if startupCinematic {
             cinematicPhase = .leverBlackout
@@ -469,12 +504,6 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        if shouldUseFinalPushChallenge() {
-            await showPushSequence()
-
-            guard !Task.isCancelled else { return }
-        }
-
         await showJackpot()
 
         guard !Task.isCancelled else { return }
@@ -529,11 +558,9 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        if shouldUseFinalPushChallenge() {
-            await showPushSequence()
+        await showSSRPushAndAlignment()
 
-            guard !Task.isCancelled else { return }
-        }
+        guard !Task.isCancelled else { return }
 
         await showJackpot()
 
@@ -598,11 +625,9 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        if shouldUseFinalPushChallenge() {
-            await showPushSequence()
+        await showSSRPushAndAlignment()
 
-            guard !Task.isCancelled else { return }
-        }
+        guard !Task.isCancelled else { return }
 
         await showJackpot()
 
@@ -615,70 +640,22 @@ final class SlotAnimationController: ObservableObject {
 
     private func runPremiumRoute() async {
         heatLevel = .normal
-
+        stage = .idle
+        cinematicPhase = .idle
         statusText = "SPINNING"
-        subStatusText = "GOOD LUCK"
+        subStatusText = "PREMIUM TEST"
 
-        await sleep(1.50)
-
+        await sleep(2.50)
         guard !Task.isCancelled else { return }
 
         heatLevel = .premium
-        statusText = "PREMIUM"
-        subStatusText = "ULTIMATE MODE"
-        stage = .blackout
-        sound.stopSpin()
+        statusText = "STOP READY"
+        subStatusText = "PRESS LEFT STOP"
 
-        await sleep(1.50)
-
-        guard !Task.isCancelled else { return }
-
-        stage = .warning
-        sound.playWarning()
-
-        await sleep(2.00)
-
-        guard !Task.isCancelled else { return }
-
-        stage = .superChance
-
-        await sleep(1.80)
-
-        guard !Task.isCancelled else { return }
-
-        stage = .reverse
-        shouldReverseReels = true
-
-        sound.intensifySpin()
-
-        await sleep(2.30)
-
-        guard !Task.isCancelled else { return }
-
-        shouldReverseReels = false
-        stage = .idle
-
-        statusText = "PREMIUM LOCK"
-        subStatusText = "JACKPOT APPROACHING"
-
-        await sleep(2.65)
-
-        await stopReels(
-            intervals: [
-                1.10,
-                0.46,
-                0.76
-            ]
-        )
-
-        guard !Task.isCancelled else { return }
-
-        await showPushSequence()
-
+        await stopReels(intervals: [1.20, 1.50, 0.60])
         guard !Task.isCancelled else { return }
 
         await showJackpot()
-
         guard !Task.isCancelled else { return }
 
         await showCardAndFinish()
@@ -698,104 +675,211 @@ final class SlotAnimationController: ObservableObject {
         statusText = "STOP READY"
         subStatusText = "PRESS LEFT STOP"
         canStopFirstReel = true
+        await waitForFirstReelStopOrTimeout(seconds: 10.0)
 
-        await waitForFirstReelStopOrTimeout(
-            seconds: 8.0
-        )
-
-        guard !Task.isCancelled else {
-            sound.stopSpin()
-            return
-        }
-
+        guard !Task.isCancelled else { sound.stopSpin(); return }
         canStopFirstReel = false
+        await performSlipIfNeeded(index: 0)
+        guard !Task.isCancelled else { sound.stopSpin(); return }
+
         stopReel(index: 0)
+        statusText = "LEFT REEL STOP"
+        subStatusText = "..."
+        await sleep(1.20)
 
-        statusText = "1ST STOP"
-        subStatusText = "WATCH THE MIDDLE REEL"
-
-        await sleep(1.25)
-
-        guard !Task.isCancelled else {
-            sound.stopSpin()
-            return
-        }
+        guard !Task.isCancelled else { sound.stopSpin(); return }
+        await performSlipIfNeeded(index: 1)
+        guard !Task.isCancelled else { sound.stopSpin(); return }
 
         stopReel(index: 1)
-
-        statusText = "2ND STOP"
-        subStatusText = "FINAL REEL APPROACHING"
-
-        // 高期待度ルートでは、第二停止後に一度無音フリーズ
-        if usesCinematicReveal {
-            cinematicPhase = .silentFreeze
-            cinematicTrigger += 1
-            sound.stopSpin()
-
-            await sleep(0.95)
-
-            guard !Task.isCancelled else {
-                sound.stopSpin()
-                return
-            }
-
-            sound.intensifySpin()
-        }
-
+        statusText = "MIDDLE REEL STOP"
+        subStatusText = "LAST REEL SPINNING"
         await sleep(1.55)
 
-        guard !Task.isCancelled else {
-            sound.stopSpin()
-            return
-        }
+        guard !Task.isCancelled else { sound.stopSpin(); return }
 
-        stopReel(index: 2)
-
-        // 第三停止後、最低1秒は完全に沈黙させる
-        statusText = "..."
-        subStatusText = "FINAL SILENCE"
-        cinematicPhase = .finalSilence
-        cinematicTrigger += 1
-        sound.stopSpin()
-
-        await sleep(1.18)
-
-        guard !Task.isCancelled else {
-            sound.stopSpin()
-            return
-        }
-
-        // 高期待度ルートはキュイン告知
         if usesCinematicReveal {
-            cinematicPhase = .kyuiin
-            cinematicTrigger += 1
-            statusText = "KYUIIN!!"
-            subStatusText = "BONUS SIGNAL"
+            statusText = ""
+            subStatusText = ""
 
-            sound.playJackpot()
-
-            await sleep(0.82)
+            // 第2リール停止後の筐体振動
+            let warningImpact = UIImpactFeedbackGenerator(style: .rigid)
+            warningImpact.prepare()
+            warningImpact.impactOccurred(intensity: 0.72)
+            await sleep(0.42)
 
             guard !Task.isCancelled else {
                 sound.stopSpin()
                 return
             }
-        } else {
-            playResultSound()
-            await sleep(0.55)
-        }
 
-        isSpinning = false
-        sound.stopSpin()
+            // CRT電源OFF：画面が縦に潰れ、横線、点、暗転へ
+            cinematicPhase = .silentFreeze
+            cinematicTrigger += 1
+            await sleep(1.20)
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
+            // 完全暗転・無音
+            sound.stopSpin()
+            cinematicPhase = .finalSilence
+            cinematicTrigger += 1
+            await sleep(2.00)
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
+            // 先にPUSHを有効化し、CRT復帰直後から押せるようにする
+            isPushVisible = true
+            isPushEnabled = true
+
+            // CRT電源ON：点、横線、通常画面へ復帰
+            cinematicPhase = .pushStandby
+            cinematicTrigger += 1
+
+            // 右リールだけ回転中
+            sound.startSpin()
+            sound.intensifySpin()
+
+            statusText = "LAST REEL"
+            subStatusText = "PUSH TO STOP"
+
+            // 復帰演出を見せる
+            await sleep(1.05)
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
+            // PUSHを押すまで絶対に進まない
+            await waitForPush()
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
+            isPushEnabled = false
+            isPushVisible = false
+            statusText = ""
+            subStatusText = ""
+
+            // PUSHの重い衝撃
+            let pushImpact = UIImpactFeedbackGenerator(style: .heavy)
+            pushImpact.prepare()
+            pushImpact.impactOccurred(intensity: 1.0)
+            await sleep(0.42)
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
+            // PUSHを押した瞬間に最後の右リールを停止
+            await performSlipIfNeeded(index: 2)
+
+            guard !Task.isCancelled else {
+                sound.stopSpin()
+                return
+            }
+
+            stopReel(index: 2)
+            isSpinning = false
+            sound.stopSpin()
+
+            await sleep(1.80)
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            // 777停止後にキュイン
+            cinematicPhase = .kyuiin
+            cinematicTrigger += 1
+            sound.playJackpot()
+            await sleep(2.10)
+        } else {
+            await sleep(intervals[2])
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+            await performSlipIfNeeded(index: 2)
+            stopReel(index: 2)
+            isSpinning = false
+            sound.stopSpin()
+            playResultSound()
+        }
     }
 
     private var usesCinematicReveal: Bool {
+        // SSR（rarity 5以上）に割り当てられる3ルートだけで
+        // CRT暗転 → 復帰 → PUSHで右リール停止を実行する。
+        //
+        // GachaView側の割り当て:
+        // SSR      → .warning / .reverse / .premium
+        // SR以下   → .superChance / .chance / .normal
         switch currentRoute {
-        case .superChance, .warning, .reverse, .premium:
+        case .warning, .reverse, .premium:
             return true
-        case .normal, .chance:
+
+        case .normal, .chance, .superChance:
             return false
         }
+    }
+
+    private func expectationLevel(
+        for route: SlotAnimationRoute
+    ) -> SlotExpectationLevel {
+        switch route {
+        case .normal:
+            return .normal
+        case .chance:
+            return .chance
+        case .superChance:
+            return .hot
+        case .warning:
+            return .gekiatsu
+        case .reverse, .premium:
+            return .premium
+        }
+    }
+
+    private func performSlipIfNeeded(
+        index: Int
+    ) async {
+        let chance: Int
+
+        switch expectationLevel {
+        case .normal:
+            chance = index == 2 ? 12 : 5
+        case .chance:
+            chance = index == 2 ? 34 : 16
+        case .hot:
+            chance = index == 2 ? 62 : 32
+        case .gekiatsu:
+            chance = index == 2 ? 86 : 52
+        case .premium:
+            chance = index == 2 ? 100 : 72
+        }
+
+        guard Int.random(in: 0..<100) < chance else {
+            return
+        }
+
+        reelSlipIndex = index
+        reelSlipIntensity = expectationLevel.slipIntensity
+        reelSlipTrigger += 1
+
+        let duration =
+            0.12
+            + Double(expectationLevel.rawValue) * 0.055
+            + Double(index) * 0.025
+
+        await sleep(duration)
     }
 
     private func stopReel(
@@ -930,27 +1014,95 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 
-    // MARK: - Push Sequence
+    // MARK: - SSR Physical PUSH
 
-    private func showPushSequence() async {
+    private func showSSRPushAndAlignment() async {
         cinematicPhase = .pushStandby
         cinematicTrigger += 1
-        stage = .push
+        stage = .idle
 
-        statusText = "PUSH"
-        subStatusText = "DECIDE YOUR FATE"
+        statusText = ""
+        subStatusText = ""
 
         isPushVisible = true
         isPushEnabled = true
 
+        // 右下の実機風PUSHを待つ。放置時のみ10秒で自動進行。
         await waitForPushOrTimeout(
-            seconds: 5.0
+            seconds: 10.0
         )
 
         guard !Task.isCancelled else { return }
 
         isPushEnabled = false
         isPushVisible = false
+
+        await performSSRAlignmentSpin()
+    }
+
+    private func performSSRAlignmentSpin() async {
+        // PUSHで3リールを短く再始動させ、SSR図柄を完成させる
+        cinematicPhase = .idle
+        stage = .idle
+        statusText = ""
+        subStatusText = ""
+
+        isSpinning = true
+        stoppedReelCount = 0
+        shouldReverseReels = true
+
+        sound.startSpin()
+        sound.intensifySpin()
+
+        await sleep(0.48)
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        shouldReverseReels = false
+
+        await performSlipIfNeeded(index: 0)
+        stopReel(index: 0)
+
+        await sleep(0.18)
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        await performSlipIfNeeded(index: 1)
+        stopReel(index: 1)
+
+        await sleep(0.22)
+
+        guard !Task.isCancelled else {
+            sound.stopSpin()
+            return
+        }
+
+        await performSlipIfNeeded(index: 2)
+        stopReel(index: 2)
+
+        isSpinning = false
+        sound.stopSpin()
+
+        cinematicPhase = .kyuiin
+        cinematicTrigger += 1
+        statusText = ""
+        subStatusText = ""
+
+        sound.playJackpot()
+
+        await sleep(1.05)
+    }
+
+    private func waitForPush() async {
+        await withCheckedContinuation { continuation in
+            pushContinuation = continuation
+        }
     }
 
     private func waitForPushOrTimeout(
@@ -998,21 +1150,14 @@ final class SlotAnimationController: ObservableObject {
     private func showJackpot() async {
         cinematicPhase = .doorOpen
         cinematicTrigger += 1
-        stage = .jackpot
+        stage = .idle
 
-        statusText = "DOOR OPEN"
-        subStatusText = "PREMIUM REVEAL"
+        statusText = ""
+        subStatusText = ""
 
         sound.playJackpot()
 
-        await sleep(1.35)
-
-        guard !Task.isCancelled else { return }
-
-        statusText = "JACKPOT"
-        subStatusText = "PREMIUM WIN"
-
-        await sleep(2.35)
+        await sleep(2.50)
     }
 
     // MARK: - Result
@@ -1041,6 +1186,8 @@ final class SlotAnimationController: ObservableObject {
 
         stage = .idle
         cinematicPhase = .idle
+        isPushVisible = false
+        isPushEnabled = false
     }
 
     // MARK: - Heat Level

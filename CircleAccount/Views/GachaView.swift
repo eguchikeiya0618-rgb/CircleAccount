@@ -4,6 +4,8 @@ import UIKit
 
 struct GachaView: View {
     private let db = Firestore.firestore()
+      private let forceSSRTestMode = true
+      private let forceRainbowSSR = true
 
     @AppStorage("currentUserId")
     private var currentUserId = ""
@@ -33,6 +35,15 @@ struct GachaView: View {
     }
 
     private var reelSymbols: [String] {
+        // SSR演出確認モード中は、抽選結果に関係なく777を表示する
+        if forceSSRTestMode {
+            if forceRainbowSSR {
+                return ["🌈7", "🌈7", "🌈7"]
+            } else {
+                return ["7", "7", "7"]
+            }
+        }
+
         guard let prize = pendingPrize else {
             return ["BAR", "🔔", "🍇"]
         }
@@ -83,6 +94,10 @@ struct GachaView: View {
                             isFirstReelStopEnabled: animation.canStopFirstReel,
                             cinematicPhase: animation.cinematicPhase,
                             cinematicTrigger: animation.cinematicTrigger,
+                            expectationLevel: animation.expectationLevel,
+                            reelSlipTrigger: animation.reelSlipTrigger,
+                            reelSlipIndex: animation.reelSlipIndex,
+                            reelSlipIntensity: animation.reelSlipIntensity,
                             onFirstReelStop: {
                                 animation.stopFirstReel()
                             },
@@ -99,7 +114,6 @@ struct GachaView: View {
                         )
                         .id("slotMachine")
 
-                        soundToggle
                         pointCard
                         prizeList
                         startButton(proxy: proxy)
@@ -474,6 +488,11 @@ struct GachaView: View {
     }
 
     private func animationRoute(for prize: GachaPrize) -> SlotAnimationRoute {
+        // SSR演出確認モード中は、必ずPremiumルートを使う
+        if forceSSRTestMode {
+            return .premium
+        }
+
         switch prize.rarity {
         case 5...:
             let premiumRoll = Int.random(in: 0..<100)
@@ -502,7 +521,6 @@ struct GachaView: View {
                 : .normal
         }
     }
-
     private func resultSubtitle(for prize: GachaPrize) -> String {
         switch prize.rarity {
         case 5...:

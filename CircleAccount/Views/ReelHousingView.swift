@@ -21,6 +21,9 @@ struct ReelHousingView: View {
     let reachPulse: Bool
     let reachOverlayOpacity: Double
     let reachOverlayScale: CGFloat
+    let reelSlipTrigger: Int
+    let reelSlipIndex: Int
+    let reelSlipIntensity: CGFloat
 
     @State private var stoppedFlashIndex: Int? = nil
     @State private var stoppedFlashOpacity: Double = 0
@@ -76,6 +79,16 @@ struct ReelHousingView: View {
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 15)
+
+            ReelSlipEnergyOverlay(
+                trigger: reelSlipTrigger,
+                reelIndex: reelSlipIndex,
+                intensity: reelSlipIntensity,
+                glowColor: machineGlow
+            )
+            .padding(.horizontal, 13)
+            .padding(.vertical, 15)
+            .allowsHitTesting(false)
 
             GeometryReader { proxy in
                 ZStack {
@@ -1011,3 +1024,96 @@ struct ReelHousingView: View {
 
 
 }
+
+
+
+private struct ReelSlipEnergyOverlay: View {
+    let trigger: Int
+    let reelIndex: Int
+    let intensity: CGFloat
+    let glowColor: Color
+
+    @State private var offsetY: CGFloat = -34
+    @State private var opacity = 0.0
+    @State private var scaleY: CGFloat = 0.55
+
+    var body: some View {
+        GeometryReader { proxy in
+            let reelWidth = max((proxy.size.width - 14) / 3, 1)
+            let safeIndex = min(max(reelIndex, 0), 2)
+            let centerX =
+                reelWidth / 2
+                + CGFloat(safeIndex) * (reelWidth + 7)
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                Color.white.opacity(0.88),
+                                glowColor.opacity(0.62),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(
+                        width: reelWidth,
+                        height: proxy.size.height * 0.72
+                    )
+                    .position(
+                        x: centerX,
+                        y: proxy.size.height / 2 + offsetY
+                    )
+                    .scaleEffect(x: 1, y: scaleY)
+                    .opacity(opacity)
+                    .blendMode(.screen)
+
+                ForEach(0..<5, id: \.self) { line in
+                    Capsule()
+                        .fill(Color.white.opacity(0.78))
+                        .frame(
+                            width: reelWidth * 0.72,
+                            height: 1.5 + CGFloat(line % 2)
+                        )
+                        .position(
+                            x: centerX,
+                            y:
+                                proxy.size.height * 0.28
+                                + CGFloat(line) * 15
+                                + offsetY
+                        )
+                        .opacity(opacity * (1 - Double(line) * 0.12))
+                        .blur(radius: 0.5)
+                }
+            }
+        }
+        .onChange(of: trigger) { _, newValue in
+            guard newValue > 0, reelIndex >= 0 else { return }
+            playSlip()
+        }
+    }
+
+    private func playSlip() {
+        offsetY = -38
+        opacity = 0
+        scaleY = 0.48
+
+        withAnimation(.easeOut(duration: 0.055)) {
+            opacity = min(1, 0.60 + Double(intensity) * 0.36)
+            scaleY = 1.08 + intensity * 0.22
+        }
+
+        withAnimation(
+            .easeIn(duration: 0.18 + Double(intensity) * 0.10)
+            .delay(0.045)
+        ) {
+            offsetY = 54 + intensity * 28
+            opacity = 0
+            scaleY = 1.35
+        }
+    }
+}
+

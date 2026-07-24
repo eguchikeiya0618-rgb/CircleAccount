@@ -19,6 +19,10 @@ struct PremiumSlotMachineView: View {
     let isFirstReelStopEnabled: Bool
     let cinematicPhase: SlotCinematicPhase
     let cinematicTrigger: Int
+    let expectationLevel: SlotExpectationLevel
+    let reelSlipTrigger: Int
+    let reelSlipIndex: Int
+    let reelSlipIntensity: CGFloat
     let onFirstReelStop: () -> Void
     let onPush: () -> Void
     let onLeverChanged: (CGFloat) -> Void
@@ -77,6 +81,11 @@ struct PremiumSlotMachineView: View {
     @State private var pushPressTrigger = 0
     @State private var pushPressed = false
 
+    // SSR最終リールPUSH待機演出
+    @State private var pushEmphasisPulse = false
+    @State private var pushTextPulse = false
+    @State private var pushRingPulse = false
+
     @State private var resultPauseOpacity = 0.0
     @State private var resultPauseTextOpacity = 0.0
     @State private var resultPauseScale: CGFloat = 0.88
@@ -121,20 +130,14 @@ struct PremiumSlotMachineView: View {
                 .padding(.trailing, 46)
 
             if heatLevel == .premium {
-                PremiumCelebrationOverlay(
-                    flashOpacity: premiumFlashOpacity
+                ContinuousRainbowShuttleOverlay(
+                    isActive: isSpinning || stoppedReelCount > 0,
+                    intensity: premiumFlashOpacity
                 )
                 .padding(.trailing, 46)
                 .allowsHitTesting(false)
+                .zIndex(20)
             }
-
-            JackpotOverlay(
-                isVisible: jackpotVisible,
-                glowColor: machineGlow
-            )
-            .scaleEffect(jackpotZoomScale)
-            .padding(.trailing, 46)
-            .allowsHitTesting(false)
 
             MachineFlashOverlay(
                 opacity: machineFlashOpacity,
@@ -145,11 +148,6 @@ struct PremiumSlotMachineView: View {
 
             authenticCabinetOverlay
                 .zIndex(51)
-
-            finalResultPauseOverlay
-                .padding(.trailing, 46)
-                .allowsHitTesting(false)
-                .zIndex(52)
 
             EnhancedReelStopFlashOverlay(
                 opacity: enhancedStopFlashOpacity,
@@ -191,38 +189,22 @@ struct PremiumSlotMachineView: View {
             .allowsHitTesting(false)
             .zIndex(63.5)
 
-            SlotPushChanceOverlay(
-                isVisible: isPushVisible,
-                isEnabled: isPushEnabled && !pushPressed,
-                appearanceTrigger: pushChanceTrigger,
-                pressTrigger: pushPressTrigger,
-                isPremium: heatLevel == .premium,
-                onPush: handlePremiumPush
-            )
-            .padding(.trailing, 46)
-            .zIndex(64)
-
             PremiumBurstView(
                 trigger: premiumBurstTrigger,
                 glowColor: machineGlow
             )
             .zIndex(65)
 
-            SlotResultCelebrationOverlay(
-                trigger: resultCelebrationTrigger,
-                kind: resultCelebrationKind
-            )
-            .padding(.trailing, 46)
-            .zIndex(66)
-            .allowsHitTesting(false)
-
             if isConfettiVisible {
-                ConfettiView()
-                    .id(confettiResetToken)
-                    .padding(.trailing, 46)
-                    .transition(.opacity)
-                    .zIndex(67)
-                    .allowsHitTesting(false)
+                RainbowShuttleCelebrationOverlay(
+                    trigger: confettiResetToken,
+                    isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
+                )
+                .id(confettiResetToken)
+                .padding(.trailing, 46)
+                .transition(.opacity)
+                .zIndex(67)
+                .allowsHitTesting(false)
             }
 
             if isSevenJackpot {
@@ -253,6 +235,17 @@ struct PremiumSlotMachineView: View {
                 .zIndex(70)
                 .allowsHitTesting(false)
 
+            if isPushVisible && isPushEnabled && !pushPressed {
+                PremiumPushEmphasisOverlay(
+                    textPulse: pushTextPulse,
+                    ringPulse: pushRingPulse
+                )
+                .padding(.trailing, 46)
+                .allowsHitTesting(false)
+                .transition(.opacity.combined(with: .scale(scale: 0.82)))
+                .zIndex(230)
+            }
+
             SlotSoundControlView(
                 isEnabled: $slotSoundEnabled,
                 volume: $slotSoundVolume,
@@ -279,6 +272,49 @@ struct PremiumSlotMachineView: View {
                 }
             )
             .offset(x: 2, y: 82)
+
+            // 最終右リール停止専用PUSH。
+            // 最前面に独立したButtonを置き、装飾Overlayにタップを奪われないようにする。
+            if isPushVisible {
+                Button(action: handlePremiumPush) {
+                    ZStack {
+                        ForEach(0..<2, id: \.self) { index in
+                            Circle()
+                                .stroke(
+                                    index == 0
+                                        ? Color.red.opacity(0.90)
+                                        : Color.orange.opacity(0.72),
+                                    lineWidth: index == 0 ? 5 : 3
+                                )
+                                .frame(
+                                    width: index == 0 ? 108 : 92,
+                                    height: index == 0 ? 108 : 92
+                                )
+                                .scaleEffect(
+                                    pushRingPulse
+                                        ? (index == 0 ? 1.48 : 1.34)
+                                        : 0.86
+                                )
+                                .opacity(pushRingPulse ? 0 : 0.88)
+                        }
+
+                        Image("PremiumPushButton")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 112, height: 112)
+                    }
+                    .shadow(color: Color.red.opacity(0.95), radius: 24)
+                    .shadow(color: Color.orange.opacity(0.72), radius: 10)
+                    .scaleEffect(pushEmphasisPulse ? 1.14 : 0.98)
+                    .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!isPushEnabled || pushPressed)
+                .allowsHitTesting(isPushEnabled && !pushPressed)
+                .accessibilityLabel("最後の右リールを止めるPUSHボタン")
+                .offset(x: -54, y: 184)
+                .zIndex(250)
+            }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 520)
@@ -331,16 +367,49 @@ struct PremiumSlotMachineView: View {
 
             if newValue == .premium {
                 playPremiumFlash()
-                showLCD(.superHot)
             }
         }
         .onChange(of: isPushVisible) { _, visible in
             if visible {
                 pushPressed = false
                 pushChanceTrigger += 1
-                showLCD(.push)
+                startPushEmphasis()
             } else {
                 pushPressed = false
+                stopPushEmphasis()
+            }
+        }
+        .onChange(of: cinematicPhase) { _, phase in
+            switch phase {
+            case .kyuiin:
+                if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
+                    luckyLampMode = .rainbow
+                    luckyLampTrigger += 1
+                    playRainbowFinalFlash()
+                } else {
+                    luckyLampMode = .gold
+                    luckyLampTrigger += 1
+                    playGoldFinalFlash()
+                }
+
+            case .pushStandby:
+                playPushStandbyCabinetShake()
+
+            case .doorOpen:
+                rewardCardVisible = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+                    guard cinematicPhase == .doorOpen
+                            || cinematicPhase == .ticketReady else { return }
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) {
+                        rewardCardVisible = true
+                    }
+                }
+
+            case .idle:
+                rewardCardVisible = false
+
+            default:
+                break
             }
         }
         .onChange(of: stoppedReelCount) { oldValue, newValue in
@@ -532,6 +601,14 @@ struct PremiumSlotMachineView: View {
                 machineGlow: machineGlow,
                 isSpinning: isSpinning
             )
+
+            PremiumCabinetLEDRails(
+                expectationLevel: expectationLevel,
+                isSpinning: isSpinning,
+                cinematicPhase: cinematicPhase,
+                glowColor: machineGlow
+            )
+            .allowsHitTesting(false)
             VStack(spacing: 15) {
                 MarqueeHeaderView(
                     heatLevel: heatLevel,
@@ -566,6 +643,20 @@ struct PremiumSlotMachineView: View {
         .shadow(color: machineGlow.opacity(0.32), radius: 26)
     }
 
+    private func playPushStandbyCabinetShake() {
+        machineShakeX = 0
+        withAnimation(.linear(duration: 0.055)) { machineShakeX = -5 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+            withAnimation(.linear(duration: 0.055)) { machineShakeX = 5 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.linear(duration: 0.07)) { machineShakeX = -3 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.62)) { machineShakeX = 0 }
+        }
+    }
+
     private var reelHousing: some View {
         ReelHousingView(
             resultSymbols: safeSymbols,
@@ -582,7 +673,10 @@ struct PremiumSlotMachineView: View {
             premiumBacklightPhase: premiumBacklightPhase,
             reachPulse: reachPulse,
             reachOverlayOpacity: reachOverlayOpacity,
-            reachOverlayScale: reachOverlayScale
+            reachOverlayScale: reachOverlayScale,
+            reelSlipTrigger: reelSlipTrigger,
+            reelSlipIndex: reelSlipIndex,
+            reelSlipIntensity: reelSlipIntensity
         )
     }
 
@@ -689,9 +783,9 @@ struct PremiumSlotMachineView: View {
             flashingStopIndex: flashingStopIndex,
             heatLevel: heatLevel,
             machineGlow: machineGlow,
-            isPushVisible: false,
-            isPushEnabled: false,
-            onPush: onPush,
+            isPushVisible: isPushVisible,
+            isPushEnabled: isPushEnabled && !pushPressed,
+            onPush: handlePremiumPush,
             onImpact: { offset in
                 withAnimation(.easeOut(duration: 0.10)) {
                     machineShakeX = offset
@@ -1136,26 +1230,18 @@ struct PremiumSlotMachineView: View {
     }
 
     private func handlePremiumPush() {
-        guard isPushVisible, isPushEnabled, !pushPressed else { return }
+        guard isPushVisible,
+              isPushEnabled,
+              !pushPressed else {
+            return
+        }
 
         pushPressed = true
+        stopPushEmphasis()
         pushPressTrigger += 1
         let impact = UIImpactFeedbackGenerator(style: .heavy)
         impact.prepare()
         impact.impactOccurred(intensity: 1.0)
-
-        playJackpotWhiteout()
-        playPremiumBurst()
-
-        if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-            luckyLampMode = .rainbow
-            luckyLampTrigger += 1
-            playRainbowFinalFlash()
-        } else {
-            luckyLampMode = .gold
-            luckyLampTrigger += 1
-            playGoldFinalFlash()
-        }
 
         withAnimation(.easeOut(duration: 0.06)) {
             machineShakeX = -12
@@ -1168,7 +1254,9 @@ struct PremiumSlotMachineView: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+        // 押し込みを見せてからControllerへ通知。
+        // この通知で初めて最後の右リールが停止する。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
             onPush()
         }
 
@@ -1182,6 +1270,48 @@ struct PremiumSlotMachineView: View {
                 machineShakeX = 0
                 machinePulse = false
             }
+        }
+    }
+
+    private func startPushEmphasis() {
+        pushEmphasisPulse = false
+        pushTextPulse = false
+        pushRingPulse = false
+
+        let notification = UINotificationFeedbackGenerator()
+        notification.prepare()
+        notification.notificationOccurred(.warning)
+
+        withAnimation(
+            .easeInOut(duration: 0.46)
+                .repeatForever(autoreverses: true)
+        ) {
+            pushEmphasisPulse = true
+        }
+
+        withAnimation(
+            .easeInOut(duration: 0.28)
+                .repeatForever(autoreverses: true)
+        ) {
+            pushTextPulse = true
+        }
+
+        withAnimation(
+            .easeOut(duration: 0.92)
+                .repeatForever(autoreverses: false)
+        ) {
+            pushRingPulse = true
+        }
+
+        cabinetStrobeColor = .red
+        cabinetStrobeTrigger += 1
+    }
+
+    private func stopPushEmphasis() {
+        withAnimation(.easeOut(duration: 0.16)) {
+            pushEmphasisPulse = false
+            pushTextPulse = false
+            pushRingPulse = false
         }
     }
 
@@ -1215,25 +1345,27 @@ struct PremiumSlotMachineView: View {
     }
 
     private func lightLuckyLamp() {
+        // LUCKYランプは最初の左リールを止めた瞬間に点灯。
         switch safeSymbols {
-
-        // SSR
         case ["🌈7", "🌈7", "🌈7"]:
             luckyLampMode = .rainbow
             luckyLampTrigger += 1
 
-        // SR
-        case ["7", "7", "7"],
-             ["7", "7", "BAR"],
-             ["BAR", "BAR", "BAR"]:
+        case ["7", "7", "7"]:
             luckyLampMode = .gold
             luckyLampTrigger += 1
 
-        // R・N
         default:
-            luckyLampMode = .off
+            // プレミアムルートのその他図柄は金色。
+            if expectationLevel == .premium {
+                luckyLampMode = .gold
+                luckyLampTrigger += 1
+            } else {
+                luckyLampMode = .off
+            }
         }
     }
+
     private func playFinalResultSequence() {
         finalResultSequenceToken += 1
         let token = finalResultSequenceToken
@@ -1329,7 +1461,6 @@ struct PremiumSlotMachineView: View {
             }
 
             playResultCelebration()
-            playFreezeSequence()
         }
     }
 
@@ -1355,9 +1486,7 @@ struct PremiumSlotMachineView: View {
     private func playResultCelebration() {
         
         if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-            showLCD(.rainbowJackpot)
-            resultCelebrationKind = .rainbowSeven
-            resultCelebrationTrigger += 1
+            resultCelebrationKind = nil
             playConfetti(duration: 3.8)
             playJackpotWhiteout()
             playPremiumBurst()
@@ -1383,9 +1512,7 @@ struct PremiumSlotMachineView: View {
                 }
             }
         } else if safeSymbols == ["7", "7", "7"] {
-            showLCD(.redSeven)
-            resultCelebrationKind = .redSeven
-            resultCelebrationTrigger += 1
+            resultCelebrationKind = nil
             playConfetti(duration: 3.0)
             playJackpotWhiteout()
 
@@ -1746,6 +1873,200 @@ struct PremiumSlotMachineView: View {
 
 
 
+
+
+private struct ContinuousRainbowShuttleOverlay: View {
+    let isActive: Bool
+    let intensity: Double
+
+    @State private var travel = false
+    @State private var twinkle = false
+
+    private let shuttleCount = 10
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                if isActive {
+                    ForEach(0..<shuttleCount, id: \.self) { index in
+                        shuttle(index: index, size: proxy.size)
+                    }
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .onAppear {
+            start()
+        }
+        .onChange(of: isActive) { _, active in
+            if active {
+                start()
+            }
+        }
+    }
+
+    private func shuttle(index: Int, size: CGSize) -> some View {
+        let fromLeft = index.isMultiple(of: 2)
+        let lane = CGFloat(index % 5) / 4.0
+        let delay = Double(index) * 0.24
+
+        let startX: CGFloat = fromLeft ? -55 : size.width + 55
+        let endX: CGFloat = fromLeft ? size.width + 55 : -55
+
+        let startY =
+            size.height * (0.18 + lane * 0.68)
+            + CGFloat((index % 3) * 18)
+
+        let endY =
+            size.height * (0.08 + CGFloat((index + 2) % 5) / 4.0 * 0.76)
+
+        let progress: CGFloat = travel ? 1 : 0
+        let x = startX + (endX - startX) * progress
+        let y = startY + (endY - startY) * progress
+
+        let angle: Double = fromLeft ? -28 : 152
+        let scale = CGFloat(0.76 + Double(index % 4) * 0.10)
+
+        return ZStack {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            rainbowColor(index).opacity(0.92),
+                            rainbowColor(index + 2).opacity(0.68),
+                            Color.clear
+                        ],
+                        startPoint: fromLeft ? .leading : .trailing,
+                        endPoint: fromLeft ? .trailing : .leading
+                    )
+                )
+                .frame(width: 72, height: 6)
+                .blur(radius: 2.2)
+                .offset(x: fromLeft ? -32 : 32)
+                .opacity(0.68)
+
+            Image(shuttleImageName(for: index))
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    width: 50 + CGFloat(index % 3) * 10,
+                    height: 50 + CGFloat(index % 3) * 10
+                )
+                .shadow(color: rainbowColor(index), radius: 12)
+                .shadow(color: .white.opacity(0.82), radius: 4)
+                .opacity(twinkle ? 1.0 : 0.82)
+        }
+        .scaleEffect(scale)
+        .rotationEffect(.degrees(angle))
+        .position(x: x, y: y)
+        .opacity(isActive ? 1 : 0)
+        .animation(
+            .linear(duration: 2.7 + Double(index % 4) * 0.34)
+                .repeatForever(autoreverses: false)
+                .delay(delay),
+            value: travel
+        )
+    }
+
+    private func shuttleImageName(for index: Int) -> String {
+        let images = [
+            "RainbowShuttleNE",
+            "RainbowShuttleNW",
+            "RainbowShuttleSE",
+            "RainbowShuttleSW"
+        ]
+
+        return images[index % images.count]
+    }
+
+    private func rainbowColor(_ index: Int) -> Color {
+        let colors: [Color] = [
+            .red, .orange, .yellow, .green,
+            .cyan, .blue, .purple, .pink
+        ]
+        return colors[index % colors.count]
+    }
+
+    private func start() {
+        travel = false
+        twinkle = false
+
+        DispatchQueue.main.async {
+            travel = true
+
+            withAnimation(
+                .easeInOut(duration: 0.42)
+                    .repeatForever(autoreverses: true)
+            ) {
+                twinkle = true
+            }
+        }
+    }
+}
+
+
+private struct PremiumPushEmphasisOverlay: View {
+    let textPulse: Bool
+    let ringPulse: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color.black.opacity(textPulse ? 0.22 : 0.12)
+
+                RadialGradient(
+                    colors: [
+                        Color.red.opacity(textPulse ? 0.44 : 0.24),
+                        Color.orange.opacity(0.12),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 8,
+                    endRadius: 250
+                )
+                .blendMode(.screen)
+
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white, .yellow, .orange, .red],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: CGFloat(6 - index)
+                        )
+                        .frame(
+                            width: CGFloat(170 + index * 36),
+                            height: CGFloat(170 + index * 36)
+                        )
+                        .scaleEffect(ringPulse ? 1.46 : 0.66)
+                        .opacity(ringPulse ? 0 : Double(0.90 - Double(index) * 0.20))
+                        .shadow(color: .red, radius: 18)
+                }
+
+                Image("PremiumPushPrompt")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: min(proxy.size.width * 0.88, 330),
+                        height: min(proxy.size.height * 0.42, 220)
+                    )
+                    .scaleEffect(textPulse ? 1.08 : 0.94)
+                    .opacity(textPulse ? 1.0 : 0.84)
+                    .shadow(color: .yellow.opacity(0.85), radius: 8)
+                    .shadow(color: .red.opacity(0.95), radius: 24)
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: proxy.size.height * 0.47
+                    )
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
+}
+
+
 private struct AuthenticPachislotCabinetOverlay: View {
     let trigger: Int
     let glowColor: Color
@@ -1891,328 +2212,637 @@ private struct AuthenticPachislotCabinetOverlay: View {
 
 
 
+
+private struct PremiumCabinetLEDRails: View {
+    let expectationLevel: SlotExpectationLevel
+    let isSpinning: Bool
+    let cinematicPhase: SlotCinematicPhase
+    let glowColor: Color
+
+    @State private var travel: CGFloat = -1.2
+    @State private var pulse = false
+    @State private var rainbowRotation = 0.0
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                ledRail(height: proxy.size.height, mirrored: false)
+                    .frame(width: 10)
+                    .position(x: 8, y: proxy.size.height / 2)
+
+                ledRail(height: proxy.size.height, mirrored: true)
+                    .frame(width: 10)
+                    .position(
+                        x: max(proxy.size.width - 8, 8),
+                        y: proxy.size.height / 2
+                    )
+
+                if expectationLevel == .premium {
+                    RoundedRectangle(cornerRadius: 33, style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    .red, .orange, .yellow, .green,
+                                    .cyan, .blue, .purple, .pink, .red
+                                ],
+                                center: .center,
+                                angle: .degrees(rainbowRotation)
+                            ),
+                            lineWidth: 3
+                        )
+                        .padding(4)
+                        .opacity(isSpinning ? 0.92 : 0.62)
+                        .shadow(color: .white, radius: 10)
+                }
+            }
+        }
+        .onAppear { startAnimations() }
+        .onChange(of: isSpinning) { _, _ in startAnimations() }
+        .onChange(of: expectationLevel) { _, _ in startAnimations() }
+    }
+
+    private func ledRail(height: CGFloat, mirrored: Bool) -> some View {
+        ZStack {
+            Capsule().fill(Color.black.opacity(0.78))
+
+            VStack(spacing: 5) {
+                ForEach(0..<18, id: \.self) { index in
+                    Capsule()
+                        .fill(color(for: index))
+                        .frame(height: max((height - 95) / 23, 4))
+                        .opacity(opacity(for: index))
+                        .shadow(
+                            color: color(for: index),
+                            radius: expectationLevel.rawValue >= 3 ? 7 : 4
+                        )
+                }
+            }
+            .padding(.vertical, 12)
+
+            LinearGradient(
+                colors: [
+                    .clear,
+                    Color.white.opacity(0.95),
+                    glowColor.opacity(0.88),
+                    .clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 95)
+            .offset(y: travel * height)
+            .blendMode(.screen)
+        }
+        .scaleEffect(x: mirrored ? -1 : 1)
+    }
+
+    private func color(for index: Int) -> Color {
+        switch expectationLevel {
+        case .normal:
+            return index.isMultiple(of: 3) ? .cyan : glowColor
+        case .chance:
+            return index.isMultiple(of: 2) ? .yellow : .orange
+        case .hot:
+            return index.isMultiple(of: 2) ? .orange : .red
+        case .gekiatsu:
+            return index.isMultiple(of: 3) ? .white : .red
+        case .premium:
+            let colors: [Color] = [
+                .red, .orange, .yellow, .green,
+                .cyan, .blue, .purple, .pink
+            ]
+            return colors[index % colors.count]
+        }
+    }
+
+    private func opacity(for index: Int) -> Double {
+        let base = isSpinning ? 0.78 : 0.42
+        let alternating = index.isMultiple(of: 2) == pulse ? 0.20 : 0
+        let cinematicBoost: Double =
+            cinematicPhase == .kyuiin || cinematicPhase == .doorOpen
+            ? 0.18
+            : 0
+
+        return min(1, base + alternating + cinematicBoost)
+    }
+
+    private func startAnimations() {
+        travel = -1.15
+        pulse = false
+
+        withAnimation(
+            .linear(duration: expectationLevel.rawValue >= 3 ? 0.48 : 0.82)
+            .repeatForever(autoreverses: false)
+        ) {
+            travel = 1.15
+        }
+
+        withAnimation(
+            .easeInOut(duration: 0.34)
+            .repeatForever(autoreverses: true)
+        ) {
+            pulse = true
+        }
+
+        withAnimation(
+            .linear(duration: 1.6)
+            .repeatForever(autoreverses: false)
+        ) {
+            rainbowRotation = 360
+        }
+    }
+}
+
+
 private struct PremiumCinematicPachislotOverlay: View {
     let phase: SlotCinematicPhase
     let trigger: Int
     let glowColor: Color
 
-    @State private var blackoutOpacity = 0.0
-    @State private var messageOpacity = 0.0
-    @State private var messageScale: CGFloat = 0.72
-    @State private var doorProgress: CGFloat = 0
+    @State private var blackOpacity = 0.0
     @State private var flashOpacity = 0.0
-    @State private var freezeLineOffset: CGFloat = -1
-    @State private var ringScale: CGFloat = 0.35
+
+    @State private var screenScaleX: CGFloat = 1
+    @State private var screenScaleY: CGFloat = 1
+    @State private var screenOpacity = 0.0
+
+    @State private var lineScaleX: CGFloat = 1
+    @State private var lineOpacity = 0.0
+    @State private var dotOpacity = 0.0
+
+    @State private var doorProgress: CGFloat = 0
+    @State private var ringScale: CGFloat = 0.30
+    @State private var ringOpacity = 0.0
 
     var body: some View {
-        ZStack {
-            Color.black
-                .opacity(blackoutOpacity)
-
-            if phase == .silentFreeze {
-                freezeLayer
-            }
-
-            if phase == .doorOpen {
-                doorLayer
-            }
-
-            if phase == .kyuiin {
-                kyuiinLayer
-            }
-
-            if shouldShowMessage {
-                messageLayer
-            }
-
-            Color.white
-                .opacity(flashOpacity)
-                .blendMode(.screen)
-        }
-        .clipShape(
-            RoundedRectangle(cornerRadius: 34, style: .continuous)
-        )
-        .onChange(of: trigger) { _, newValue in
-            guard newValue > 0 else { return }
-            playPhase()
-        }
-    }
-
-    private var shouldShowMessage: Bool {
-        switch phase {
-        case .silentFreeze, .pushStandby, .finalSilence:
-            return true
-        case .idle, .leverBlackout, .delayedStart,
-             .kyuiin, .doorOpen, .ticketReady:
-            return false
-        }
-    }
-
-    private var phaseText: String {
-        switch phase {
-        case .leverBlackout, .delayedStart:
-            return ""
-        case .silentFreeze:
-            return "SILENT FREEZE"
-        case .pushStandby:
-            return "PUSH"
-        case .finalSilence:
-            return "…"
-        case .ticketReady:
-            return "TICKET GET"
-        default:
-            return ""
-        }
-    }
-
-    private var messageLayer: some View {
-        VStack(spacing: 8) {
-            Text(phaseText)
-                .font(
-                    .system(
-                        size: phase == .pushStandby ? 48 : 32,
-                        weight: .black,
-                        design: .rounded
-                    )
-                )
-                .tracking(2.0)
-                .foregroundStyle(
-                    phase == .ticketReady
-                        ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: [.white, .yellow, .orange],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        : AnyShapeStyle(Color.white)
-                )
-                .shadow(
-                    color: phase == .ticketReady ? .yellow : glowColor,
-                    radius: 16
-                )
-
-            if phase == .pushStandby {
-                Image(systemName: "hand.tap.fill")
-                    .font(.system(size: 30, weight: .black))
-                    .foregroundStyle(.red)
-                    .shadow(color: .red, radius: 14)
-            }
-        }
-        .scaleEffect(messageScale)
-        .opacity(messageOpacity)
-    }
-
-    private var freezeLayer: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.black.opacity(0.78)
+                Color.black
+                    .opacity(blackOpacity)
 
-                VStack(spacing: 4) {
-                    ForEach(0..<54, id: \.self) { index in
-                        Rectangle()
-                            .fill(
-                                index.isMultiple(of: 3)
-                                    ? Color.white.opacity(0.11)
-                                    : glowColor.opacity(0.07)
-                            )
-                            .frame(height: 1)
+                // CRT画面そのもの。OFF時は縦に潰れ、ON時は横線から復帰する。
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.98),
+                                glowColor.opacity(0.78),
+                                Color.white.opacity(0.94)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(
+                        width: proxy.size.width,
+                        height: proxy.size.height
+                    )
+                    .scaleEffect(
+                        x: screenScaleX,
+                        y: screenScaleY,
+                        anchor: .center
+                    )
+                    .opacity(screenOpacity)
+                    .blendMode(.screen)
+                    .shadow(color: .white, radius: 22)
+                    .shadow(color: glowColor, radius: 34)
+
+                // テレビが消える瞬間の横線
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .white,
+                                glowColor,
+                                .white,
+                                .clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(
+                        width: proxy.size.width * 0.96,
+                        height: 5
+                    )
+                    .scaleEffect(x: lineScaleX)
+                    .opacity(lineOpacity)
+                    .shadow(color: .white, radius: 12)
+                    .shadow(color: glowColor, radius: 24)
+
+                // 横線が一点に収束する瞬間
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 9, height: 9)
+                    .opacity(dotOpacity)
+                    .shadow(color: .white, radius: 14)
+                    .shadow(color: glowColor, radius: 26)
+
+                if phase == .kyuiin {
+                    ZStack {
+                        ForEach(0..<20, id: \.self) { index in
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            .white,
+                                            index.isMultiple(of: 2) ? .yellow : .orange,
+                                            .clear
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 155, height: index.isMultiple(of: 4) ? 7 : 3)
+                                .offset(x: 82)
+                                .rotationEffect(.degrees(Double(index) * 18))
+                                .scaleEffect(ringScale)
+                                .opacity(ringOpacity)
+                                .blendMode(.screen)
+                        }
+
+                        VStack(spacing: 2) {
+                            Text("JACKPOT!!")
+                                .font(.system(size: 44, weight: .black, design: .rounded))
+                                .italic()
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.white, .yellow, .orange, .red],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .strokeText(color: .red, width: 2.2)
+                                .shadow(color: .yellow, radius: 10)
+                                .shadow(color: .red, radius: 20)
+
+                            Text("777 WIN")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .tracking(3)
+                                .foregroundStyle(Color.white.opacity(0.92))
+                        }
+                        .scaleEffect(ringScale)
+                        .opacity(ringOpacity)
                     }
                 }
-                .offset(y: proxy.size.height * freezeLineOffset)
-                .blendMode(.screen)
 
-                Image(systemName: "snowflake")
-                    .font(.system(size: 72, weight: .thin))
-                    .foregroundStyle(Color.white.opacity(0.72))
-                    .shadow(color: .cyan, radius: 20)
-            }
-        }
-    }
-
-    private var kyuiinLayer: some View {
-        ZStack {
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            .red, .orange, .yellow, .green,
-                            .cyan, .blue, .purple, .pink, .red
-                        ],
-                        center: .center
-                    ),
-                    lineWidth: 12
-                )
-                .frame(width: 220, height: 220)
-                .scaleEffect(ringScale)
-                .shadow(color: .white, radius: 24)
-
-            Text("キュイン!!")
-                .font(.system(size: 45, weight: .black, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white, .yellow, .pink, .cyan, .white],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .shadow(color: .pink, radius: 18)
-        }
-        .opacity(messageOpacity)
-    }
-
-    private var doorLayer: some View {
-        GeometryReader { proxy in
-            ZStack {
-                Color.black.opacity(0.58)
-
-                HStack(spacing: 0) {
-                    doorPanel(
-                        width: proxy.size.width / 2,
-                        height: proxy.size.height,
-                        isLeft: true
-                    )
-                    .offset(x: -doorProgress * proxy.size.width / 2)
-
-                    doorPanel(
-                        width: proxy.size.width / 2,
-                        height: proxy.size.height,
-                        isLeft: false
-                    )
-                    .offset(x: doorProgress * proxy.size.width / 2)
+                if phase == .doorOpen {
+                    doorLayer(size: proxy.size)
                 }
 
-                RadialGradient(
-                    colors: [
-                        Color.white.opacity(0.95),
-                        glowColor.opacity(0.70),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: 210
-                )
-                .scaleEffect(doorProgress)
-                .opacity(Double(doorProgress))
-                .blendMode(.screen)
+                Color.white
+                    .opacity(flashOpacity)
+                    .blendMode(.screen)
             }
+            .frame(
+                width: proxy.size.width,
+                height: proxy.size.height
+            )
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            playCurrentPhase()
+        }
+        .onChange(of: phase) { _, _ in
+            playCurrentPhase()
+        }
+        .onChange(of: trigger) { _, _ in
+            playCurrentPhase()
         }
     }
 
-    private func doorPanel(
-        width: CGFloat,
-        height: CGFloat,
-        isLeft: Bool
-    ) -> some View {
-        Rectangle()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.black,
-                        Color(red: 0.16, green: 0.02, blue: 0.03),
-                        Color.black
-                    ],
-                    startPoint: isLeft ? .leading : .trailing,
-                    endPoint: isLeft ? .trailing : .leading
-                )
-            )
-            .overlay {
+    @ViewBuilder
+    private func doorLayer(size: CGSize) -> some View {
+        ZStack {
+            Color.black.opacity(0.58)
+
+            HStack(spacing: 0) {
                 Rectangle()
-                    .stroke(Color.red.opacity(0.75), lineWidth: 3)
-                    .shadow(color: .red, radius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .black,
+                                Color(red: 0.16, green: 0.02, blue: 0.03),
+                                .black
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: size.width / 2)
+                    .offset(x: -doorProgress * size.width / 2)
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .black,
+                                Color(red: 0.16, green: 0.02, blue: 0.03),
+                                .black
+                            ],
+                            startPoint: .trailing,
+                            endPoint: .leading
+                        )
+                    )
+                    .frame(width: size.width / 2)
+                    .offset(x: doorProgress * size.width / 2)
             }
-            .frame(width: width, height: height)
+
+            RadialGradient(
+                colors: [
+                    Color.white.opacity(0.96),
+                    glowColor.opacity(0.72),
+                    .clear
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 220
+            )
+            .scaleEffect(max(doorProgress, 0.01))
+            .opacity(Double(doorProgress))
+            .blendMode(.screen)
+        }
     }
 
-    private func playPhase() {
-        blackoutOpacity = 0
-        messageOpacity = 0
-        messageScale = 0.72
-        doorProgress = 0
+    private func reset() {
+        blackOpacity = 0
         flashOpacity = 0
-        freezeLineOffset = -1
-        ringScale = 0.35
 
+        screenScaleX = 1
+        screenScaleY = 1
+        screenOpacity = 0
+
+        lineScaleX = 1
+        lineOpacity = 0
+        dotOpacity = 0
+
+        doorProgress = 0
+        ringScale = 0.30
+        ringOpacity = 0
+    }
+
+    private func playCurrentPhase() {
         switch phase {
         case .idle:
-            break
+            reset()
 
         case .leverBlackout:
+            reset()
             withAnimation(.easeOut(duration: 0.08)) {
-                blackoutOpacity = 0.96
-                messageOpacity = 1
+                blackOpacity = 0.96
             }
 
         case .delayedStart:
-            blackoutOpacity = 0.72
-            withAnimation(
-                .spring(response: 0.34, dampingFraction: 0.55)
-            ) {
-                messageOpacity = 1
-                messageScale = 1
-            }
-            withAnimation(.easeOut(duration: 0.34).delay(0.18)) {
-                blackoutOpacity = 0
+            reset()
+            blackOpacity = 0.78
+            withAnimation(.easeOut(duration: 0.34).delay(0.16)) {
+                blackOpacity = 0
             }
 
         case .silentFreeze:
-            blackoutOpacity = 0.64
-            messageOpacity = 1
-            withAnimation(.linear(duration: 0.55)) {
-                freezeLineOffset = 1
-            }
-
-        case .pushStandby:
-            blackoutOpacity = 0.52
-            withAnimation(
-                .spring(response: 0.34, dampingFraction: 0.44)
-            ) {
-                messageOpacity = 1
-                messageScale = 1.08
-            }
+            playCRTOff()
 
         case .finalSilence:
-            withAnimation(.easeOut(duration: 0.10)) {
-                blackoutOpacity = 0.76
-                messageOpacity = 1
-                messageScale = 1
-            }
+            // 完全な真っ黒状態を維持
+            blackOpacity = 1
+            flashOpacity = 0
+            screenOpacity = 0
+            lineOpacity = 0
+            dotOpacity = 0
+
+        case .pushStandby:
+            playCRTOn()
 
         case .kyuiin:
+            reset()
             flashOpacity = 1
-            messageOpacity = 1
-            withAnimation(.easeOut(duration: 0.18)) {
+            ringOpacity = 1
+            withAnimation(.easeOut(duration: 0.16)) {
                 flashOpacity = 0
             }
             withAnimation(
-                .spring(response: 0.44, dampingFraction: 0.45)
+                .spring(
+                    response: 0.44,
+                    dampingFraction: 0.45
+                )
             ) {
                 ringScale = 1.18
             }
 
         case .doorOpen:
-            blackoutOpacity = 0.66
-            flashOpacity = 0.75
-            withAnimation(.easeOut(duration: 0.18)) {
+            reset()
+            blackOpacity = 0.66
+            flashOpacity = 0.76
+            withAnimation(.easeOut(duration: 0.16)) {
                 flashOpacity = 0
             }
-            withAnimation(
-                .easeInOut(duration: 0.95)
-            ) {
+            withAnimation(.easeInOut(duration: 0.95)) {
                 doorProgress = 1
             }
 
         case .ticketReady:
-            blackoutOpacity = 0.36
-            withAnimation(
-                .spring(response: 0.42, dampingFraction: 0.52)
-            ) {
-                messageOpacity = 1
-                messageScale = 1
+            withAnimation(.easeOut(duration: 0.22)) {
+                blackOpacity = 0
+            }
+        }
+    }
+
+    private func playCRTOff() {
+        reset()
+
+        flashOpacity = 1
+        screenOpacity = 0.98
+        blackOpacity = 0
+
+        withAnimation(.easeOut(duration: 0.10)) {
+            flashOpacity = 0
+        }
+
+        // 全画面が縦方向に潰れる
+        withAnimation(.easeIn(duration: 0.42).delay(0.08)) {
+            screenScaleY = 0.012
+            blackOpacity = 1
+        }
+
+        // 横線を一瞬残す
+        withAnimation(.easeOut(duration: 0.08).delay(0.48)) {
+            lineOpacity = 1
+        }
+
+        // 横線が中央の一点へ収束
+        withAnimation(.easeIn(duration: 0.22).delay(0.64)) {
+            lineScaleX = 0.018
+            screenScaleX = 0.018
+            screenOpacity = 0
+        }
+
+        withAnimation(.easeOut(duration: 0.05).delay(0.84)) {
+            lineOpacity = 0
+            dotOpacity = 1
+        }
+
+        // 点も消えて完全暗転
+        withAnimation(.easeOut(duration: 0.13).delay(0.98)) {
+            dotOpacity = 0
+        }
+    }
+
+    private func playCRTOn() {
+        // 真っ黒な中に一点を表示
+        blackOpacity = 1
+        flashOpacity = 0
+        screenScaleX = 0.018
+        screenScaleY = 0.012
+        screenOpacity = 0
+        lineScaleX = 0.018
+        lineOpacity = 0
+        dotOpacity = 1
+
+        // 点 → 横線
+        withAnimation(.easeOut(duration: 0.08).delay(0.04)) {
+            dotOpacity = 0
+            lineOpacity = 1
+        }
+
+        withAnimation(.easeOut(duration: 0.28).delay(0.10)) {
+            lineScaleX = 1
+            screenScaleX = 1
+        }
+
+        // 横線 → 通常画面
+        withAnimation(.easeOut(duration: 0.62).delay(0.36)) {
+            screenScaleY = 1
+            screenOpacity = 0.90
+            blackOpacity = 0
+        }
+
+        withAnimation(.easeOut(duration: 0.18).delay(0.90)) {
+            lineOpacity = 0
+            screenOpacity = 0
+        }
+    }
+}
+
+private struct RainbowShuttleCelebrationOverlay: View {
+    let trigger: Int
+    let isRainbowJackpot: Bool
+
+    @State private var progress: CGFloat = 0
+    @State private var opacity = 0.0
+
+    private let shuttleCount = 13
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                ForEach(0..<shuttleCount, id: \.self) { index in
+                    shuttle(index: index, size: proxy.size)
+                }
+
+                if isRainbowJackpot {
+                    Text("🌈 JACKPOT!! 🌈")
+                        .font(.system(size: 31, weight: .black, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .strokeText(color: .white.opacity(0.90), width: 1.2)
+                        .shadow(color: .white, radius: 8)
+                        .shadow(color: .purple, radius: 18)
+                        .scaleEffect(0.76 + progress * 0.32)
+                        .opacity(opacity)
+                        .position(x: proxy.size.width / 2, y: proxy.size.height * 0.46)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .onAppear { play() }
+        .onChange(of: trigger) { _, _ in play() }
+    }
+
+    private func shuttle(index: Int, size: CGSize) -> some View {
+        let lane = CGFloat(index % 5) / 4
+        let startFromLeft = index.isMultiple(of: 2)
+        let startX: CGFloat = startFromLeft ? -70 : size.width + 70
+        let endX: CGFloat = size.width * (0.16 + lane * 0.68)
+        let startY: CGFloat = size.height + 55 + CGFloat(index % 4) * 26
+        let endY: CGFloat = -70 - CGFloat(index % 5) * 20
+
+        let x = startX + (endX - startX) * progress
+        let y = startY + (endY - startY) * progress
+        let spin = Double(progress) * Double(520 + index * 47)
+
+        return ZStack {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            rainbowColor(index),
+                            rainbowColor(index + 2).opacity(0.75),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 90, height: 7)
+                .blur(radius: 2)
+                .offset(x: startFromLeft ? -38 : 38)
+                .rotationEffect(.degrees(startFromLeft ? -26 : 206))
+                .opacity(opacity * 0.72)
+
+            Image(imageName(for: index))
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    width: CGFloat(52 + index % 3 * 11),
+                    height: CGFloat(52 + index % 3 * 11)
+                )
+                .shadow(color: rainbowColor(index), radius: 12)
+                .shadow(color: .white.opacity(0.8), radius: 5)
+            
+        }
+        .rotationEffect(.degrees(spin))
+        .position(x: x, y: y)
+        .opacity(opacity)
+    }
+
+    private func imageName(for index: Int) -> String {
+
+        let images = [
+            "RainbowShuttleNE",
+            "RainbowShuttleNW",
+            "RainbowShuttleSE",
+            "RainbowShuttleSW"
+        ]
+
+        return images[index % images.count]
+    }
+    private func rainbowColor(_ index: Int) -> Color {
+        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink]
+        return colors[index % colors.count]
+    }
+
+    private func play() {
+        progress = 0
+        opacity = 1
+
+        withAnimation(.easeOut(duration: 2.55)) {
+            progress = 1
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.95) {
+            withAnimation(.easeOut(duration: 0.55)) {
+                opacity = 0
             }
         }
     }
 }
+
 
 private struct EnhancedReelStopFlashOverlay: View {
     let opacity: Double
@@ -2669,6 +3299,10 @@ private extension View {
                 isFirstReelStopEnabled: true,
                 cinematicPhase: .doorOpen,
                 cinematicTrigger: 1,
+                expectationLevel: .premium,
+                reelSlipTrigger: 1,
+                reelSlipIndex: 2,
+                reelSlipIntensity: 1.0,
                 onFirstReelStop: {},
                 onPush: {},
                 onLeverChanged: { _ in },
