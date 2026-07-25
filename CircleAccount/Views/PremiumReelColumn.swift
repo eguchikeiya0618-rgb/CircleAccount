@@ -21,6 +21,8 @@ struct PremiumReelColumn: View {
     @State private var slipOffset: CGFloat = -34
     @State private var reelCompression: CGFloat = 1.0
     @State private var horizontalShake: CGFloat = 0
+    @State private var lockKickOffset: CGFloat = 0
+    @State private var stopGlowScale: CGFloat = 1.0
 
     // 回転中だけ使用するダミー絵柄列
     @State private var rollingPool: [String] = []
@@ -48,6 +50,8 @@ struct PremiumReelColumn: View {
                 let baseIndex = Int(floor(phase))
                 let fractional = phase - floor(phase)
                 let verticalOffset = CGFloat(fractional) * rowHeight
+                let currentVelocity = spinVelocity(at: context.date)
+                let velocityBlur = motionBlurRadius(for: currentVelocity)
 
                 ZStack {
                     reelBackground
@@ -55,7 +59,8 @@ struct PremiumReelColumn: View {
                     if isSpinning || isDecelerating {
                         spinningReel(
                             baseIndex: baseIndex,
-                            verticalOffset: verticalOffset
+                            verticalOffset: verticalOffset,
+                            motionBlur: velocityBlur
                         )
                     } else {
                         stoppedReel
@@ -80,7 +85,10 @@ struct PremiumReelColumn: View {
                     y: reelCompression,
                     anchor: .center
                 )
-                .offset(x: horizontalShake)
+                .offset(
+                    x: horizontalShake,
+                    y: lockKickOffset
+                )
                 .clipped()
                 .clipShape(
                     RoundedRectangle(
@@ -138,7 +146,8 @@ struct PremiumReelColumn: View {
 
     private func spinningReel(
         baseIndex: Int,
-        verticalOffset: CGFloat
+        verticalOffset: CGFloat,
+        motionBlur: CGFloat
     ) -> some View {
         ZStack {
             VStack(spacing: 0) {
@@ -206,7 +215,7 @@ struct PremiumReelColumn: View {
             .blendMode(.screen)
         }
         .compositingGroup()
-        .blur(radius: 0.35)
+        .blur(radius: motionBlur)
     }
 
     private var visibleStoppedSymbol: String {
@@ -236,7 +245,7 @@ struct PremiumReelColumn: View {
             .frame(height: rowHeight)
             .frame(maxWidth: .infinity)
             .scaleEffect(
-                stopBounce ? 1.17 : 1.0
+                (stopBounce ? 1.17 : 1.0) * stopGlowScale
             )
             .shadow(
                 color:
@@ -543,6 +552,41 @@ struct PremiumReelColumn: View {
             + cruisingDistance
     }
 
+
+    private func spinVelocity(at date: Date) -> Double {
+        if isDecelerating {
+            let duration = decelerationDuration
+            let elapsed = min(
+                max(date.timeIntervalSince(decelerationStartDate), 0),
+                duration
+            )
+            let progress = duration > 0 ? elapsed / duration : 1
+            return decelerationInitialSpeed * pow(max(0, 1 - progress), 2)
+        }
+
+        guard isSpinning else { return 0 }
+
+        let elapsed = max(date.timeIntervalSince(spinStartDate), 0)
+        let targetSpeed = 20.5 + Double(reelIndex) * 2.75
+        let accelerationDuration = 0.58 + Double(reelIndex) * 0.055
+        let progress = min(1, elapsed / accelerationDuration)
+        let smoothAcceleration = progress * progress * (3 - 2 * progress)
+        return targetSpeed * smoothAcceleration
+    }
+
+    private func motionBlurRadius(for velocity: Double) -> CGFloat {
+        guard velocity > 0 else { return 0 }
+
+        let normalized = min(max(velocity / 26.0, 0), 1)
+
+        if isDecelerating {
+            // 停止直前に輪郭が戻り、ロックする瞬間を見やすくする。
+            return CGFloat(0.15 + normalized * 1.75)
+        }
+
+        return CGFloat(0.25 + normalized * 2.05)
+    }
+
     private var decelerationDuration: Double {
         switch reelIndex {
         case 0:
@@ -660,6 +704,8 @@ struct PremiumReelColumn: View {
     private func playStopAnimation() {
         stopBounce = false
         horizontalShake = 0
+        lockKickOffset = 0
+        stopGlowScale = 1.0
 
         let drop: CGFloat
         let rebound: CGFloat
@@ -702,85 +748,79 @@ struct PremiumReelColumn: View {
         settlingOffset = drop
         slipOffset = drop - 20
         slipOpacity = 0.86
-        flashOpacity =
-            reelIndex == 2
-                ? 0.92
-                : 0.58
+        flashOpacity = reelIndex == 2 ? 0.92 : 0.58
 
         reelCompression = compressStart
         horizontalShake = firstShake
+        lockKickOffset = -2
+        stopGlowScale = 0.985
 
-        withAnimation(
-            .easeOut(duration: 0.075)
-        ) {
+        // まず停止位置を少し通り過ぎる。実機の慣性を表現する。
+        withAnimation(.easeOut(duration: 0.072)) {
             settlingOffset = rebound
-            slipOffset = rebound + 7
+            slipOffset = rebound + 9
             reelCompression = compressEnd
             horizontalShake = secondShake
+            lockKickOffset = 5
+            stopGlowScale = 1.035
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.075
-        ) {
-            withAnimation(
-                .spring(
-                    response: 0.17,
-                    dampingFraction: 0.31
-                )
-            ) {
-                stopBounce = true
-                settlingOffset = -5
-                reelCompression = 1.025
-                horizontalShake = -secondShake * 0.72
+        // 約0.28コマだけ逆方向へ戻し、歯車が噛み合うロック感を作る。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.072) {
+            withAnimation(.easeInOut(duration: 0.060)) {
+                settlingOffset = -rowHeight * 0.28
+                lockKickOffset = -4
+                reelCompression = 1.035
+                horizontalShake = -secondShake * 0.86
+                stopGlowScale = 1.075
             }
 
-            withAnimation(
-                .easeOut(duration: 0.105)
-            ) {
+            withAnimation(.easeOut(duration: 0.115)) {
                 slipOpacity = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.16
-        ) {
+        // ロック後の小さな反発。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.132) {
             withAnimation(
-                .easeOut(duration: 0.07)
+                .spring(response: 0.17, dampingFraction: 0.34)
             ) {
-                horizontalShake = secondShake * 0.38
+                stopBounce = true
+                settlingOffset = -4
+                lockKickOffset = 2
+                reelCompression = 0.985
+                horizontalShake = secondShake * 0.42
+                stopGlowScale = 1.025
             }
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.22
-        ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.205) {
+            withAnimation(.easeOut(duration: 0.065)) {
+                horizontalShake = -secondShake * 0.24
+                lockKickOffset = -1
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.265) {
             withAnimation(
-                .spring(
-                    response: 0.22,
-                    dampingFraction: 0.58
-                )
+                .spring(response: 0.24, dampingFraction: 0.60)
             ) {
                 settlingOffset = 0
                 reelCompression = 1
                 horizontalShake = 0
+                lockKickOffset = 0
+                stopGlowScale = 1
             }
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.31
-        ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
             withAnimation(
-                .spring(
-                    response: 0.24,
-                    dampingFraction: 0.72
-                )
+                .spring(response: 0.24, dampingFraction: 0.72)
             ) {
                 stopBounce = false
             }
 
-            withAnimation(
-                .easeOut(duration: 0.24)
-            ) {
+            withAnimation(.easeOut(duration: 0.24)) {
                 flashOpacity = 0
             }
         }
@@ -795,6 +835,8 @@ struct PremiumReelColumn: View {
         flashOpacity = 0
         reelCompression = 1
         horizontalShake = 0
+        lockKickOffset = 0
+        stopGlowScale = 1.0
     }
 
     private func previousSymbol(
@@ -846,3 +888,4 @@ struct PremiumReelColumn: View {
                 : remainder + divisor
     }
 }
+

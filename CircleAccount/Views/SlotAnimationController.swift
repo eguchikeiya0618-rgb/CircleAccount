@@ -479,7 +479,8 @@ final class SlotAnimationController: ObservableObject {
         heatLevel = .superChance
         statusText = "SUPER CHANCE"
         subStatusText = "HIGH EXPECTATION"
-        stage = .superChance
+        // 旧SUPER CHANCE全画面表示は使わない。
+        stage = .idle
         sound.playWarning()
 
         await sleep(2.15)
@@ -526,14 +527,15 @@ final class SlotAnimationController: ObservableObject {
         heatLevel = .warning
         statusText = "SYSTEM ERROR"
         subStatusText = "UNKNOWN SIGNAL"
-        stage = .blackout
+        stage = .idle
         sound.stopSpin()
 
         await sleep(1.55)
 
         guard !Task.isCancelled else { return }
 
-        stage = .warning
+        // 旧WARNING／激アツ全画面表示は使わない。
+        stage = .idle
         sound.playWarning()
 
         await sleep(2.20)
@@ -584,14 +586,15 @@ final class SlotAnimationController: ObservableObject {
         heatLevel = .premium
         statusText = "PREMIUM SIGNAL"
         subStatusText = "REVERSE LOCK DETECTED"
-        stage = .blackout
+        stage = .idle
         sound.stopSpin()
 
         await sleep(1.35)
 
         guard !Task.isCancelled else { return }
 
-        stage = .reverse
+        // 旧REVERSE全画面表示は使わず、逆回転だけ残す。
+        stage = .idle
         shouldReverseReels = true
         sound.playWarning()
 
@@ -600,7 +603,7 @@ final class SlotAnimationController: ObservableObject {
         guard !Task.isCancelled else { return }
 
         shouldReverseReels = false
-        stage = .superChance
+        stage = .idle
 
         sound.intensifySpin()
 
@@ -727,7 +730,10 @@ final class SlotAnimationController: ObservableObject {
             sound.stopSpin()
             cinematicPhase = .finalSilence
             cinematicTrigger += 1
-            await sleep(2.00)
+
+            // 本格タイプライター次回予告を最後まで見せてから
+            // CRT復帰・PUSH待機へ進む。
+            await sleep(6.55)
 
             guard !Task.isCancelled else {
                 sound.stopSpin()
@@ -1235,3 +1241,5 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 }
+
+

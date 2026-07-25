@@ -79,12 +79,29 @@ struct PremiumSlotMachineView: View {
     @State private var blackoutTrigger = 0
     @State private var pushChanceTrigger = 0
     @State private var pushPressTrigger = 0
+    @State private var nextEpisodePreviewTrigger = 0
+    @State private var vJackpotTrigger = 0
     @State private var pushPressed = false
 
     // SSR最終リールPUSH待機演出
     @State private var pushEmphasisPulse = false
     @State private var pushTextPulse = false
     @State private var pushRingPulse = false
+    @State private var pushPromptEntrance: CGFloat = 0
+    @State private var pushPromptGlow = false
+    @State private var pushPromptSweep: CGFloat = -1.2
+    @State private var pushButtonDepth: CGFloat = 0
+    @State private var pushButtonSweep: CGFloat = -1.2
+    @State private var pushEnergyRotation = 0.0
+
+    // 実機風PUSH待機演出
+    @State private var pushCameraBreath = false
+    @State private var pushMicroVibration: CGFloat = 0
+    @State private var pushImpactFlashOpacity = 0.0
+    @State private var pushImpactRingScale: CGFloat = 0.55
+    @State private var pushImpactRingOpacity = 0.0
+    @State private var pushFlameBurstScale: CGFloat = 1.0
+    @State private var pushFlameBurstOpacity = 0.0
 
     @State private var resultPauseOpacity = 0.0
     @State private var resultPauseTextOpacity = 0.0
@@ -93,6 +110,7 @@ struct PremiumSlotMachineView: View {
 
     @State private var lcdPresentation: SlotLCDPresentation?
     @State private var lcdTrigger = 0
+    
     @State private var spinEffectPlan = SlotSpinEffectPlan.normal
     @State private var effectSequenceToken = 0
 
@@ -165,14 +183,21 @@ struct PremiumSlotMachineView: View {
             .allowsHitTesting(false)
             .zIndex(60)
 
-            SlotLCDOverlayView(
+            CustomSlotLCDOverlayView(
                 trigger: lcdTrigger,
                 presentation: lcdPresentation
             )
             .padding(.trailing, 46)
             .allowsHitTesting(false)
-            .zIndex(61)
 
+            .zIndex(
+                lcdPresentation == .superHot
+                    ? 999
+                    : 61
+            )
+
+           
+            
             SlotBlackoutOverlay(
                 trigger: blackoutTrigger
             )
@@ -194,6 +219,23 @@ struct PremiumSlotMachineView: View {
                 glowColor: machineGlow
             )
             .zIndex(65)
+
+
+            RetroNextEpisodePreviewOverlay(
+                trigger: nextEpisodePreviewTrigger,
+                isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
+            )
+            .padding(.trailing, 46)
+            .allowsHitTesting(false)
+            .zIndex(270)
+
+            PremiumVJackpotOverlay(
+                trigger: vJackpotTrigger,
+                isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
+            )
+            .padding(.trailing, 46)
+            .allowsHitTesting(false)
+            .zIndex(280)
 
             if isConfettiVisible {
                 RainbowShuttleCelebrationOverlay(
@@ -238,7 +280,10 @@ struct PremiumSlotMachineView: View {
             if isPushVisible && isPushEnabled && !pushPressed {
                 PremiumPushEmphasisOverlay(
                     textPulse: pushTextPulse,
-                    ringPulse: pushRingPulse
+                    ringPulse: pushRingPulse,
+                    entranceProgress: pushPromptEntrance,
+                    glowPulse: pushPromptGlow,
+                    sweepProgress: pushPromptSweep
                 )
                 .padding(.trailing, 46)
                 .allowsHitTesting(false)
@@ -278,6 +323,33 @@ struct PremiumSlotMachineView: View {
             if isPushVisible {
                 Button(action: handlePremiumPush) {
                     ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(pushImpactFlashOpacity))
+                            .frame(width: 176, height: 176)
+                            .blur(radius: 2)
+                            .blendMode(.screen)
+
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        .white,
+                                        .yellow,
+                                        .orange,
+                                        .red,
+                                        .clear
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 10
+                            )
+                            .frame(width: 170, height: 170)
+                            .scaleEffect(pushImpactRingScale)
+                            .opacity(pushImpactRingOpacity)
+                            .shadow(color: .red, radius: 22)
+                            .blendMode(.screen)
+
                         ForEach(0..<2, id: \.self) { index in
                             Circle()
                                 .stroke(
@@ -287,44 +359,183 @@ struct PremiumSlotMachineView: View {
                                     lineWidth: index == 0 ? 5 : 3
                                 )
                                 .frame(
-                                    width: index == 0 ? 108 : 92,
-                                    height: index == 0 ? 108 : 92
+                                    width: index == 0 ? 154 : 136,
+                                    height: index == 0 ? 154 : 136
                                 )
                                 .scaleEffect(
                                     pushRingPulse
                                         ? (index == 0 ? 1.48 : 1.34)
                                         : 0.86
                                 )
-                                .opacity(pushRingPulse ? 0 : 0.88)
+                                .opacity(pushRingPulse ? 0 : 0.52)
                         }
 
-                        Image("PremiumPushButton")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 112, height: 112)
+                        ZStack {
+                            // 台座は完全固定。実機らしい「筐体の重さ」を残す。
+                            Image("PremiumPushBase")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 182, height: 182)
+                                .offset(y: 22)
+                                .brightness(pushPromptGlow ? 0.035 : 0)
+                                .shadow(
+                                    color: Color.pink.opacity(0.40),
+                                    radius: 10
+                                )
+
+                            // 炎とボタン本体だけを独立して動かす。
+                            ZStack {
+                                ZStack {
+                                    Image("PremiumPushFlame")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 166, height: 166)
+                                        .rotationEffect(
+                                            .degrees(pushEnergyRotation)
+                                        )
+                                        .scaleEffect(
+                                            pushEmphasisPulse ? 1.045 : 0.985
+                                        )
+                                        .opacity(
+                                            pushPromptGlow ? 1.0 : 0.78
+                                        )
+                                        .brightness(
+                                            pushPromptGlow ? 0.12 : 0
+                                        )
+                                        .shadow(
+                                            color: Color.red.opacity(0.96),
+                                            radius: pushPromptGlow ? 22 : 13
+                                        )
+                                        .shadow(
+                                            color: Color.orange.opacity(0.74),
+                                            radius: pushPromptGlow ? 30 : 18
+                                        )
+                                        .blendMode(.screen)
+
+                                    Image("PremiumPushFlame")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 154, height: 154)
+                                        .rotationEffect(
+                                            .degrees(-pushEnergyRotation * 0.62)
+                                        )
+                                        .opacity(
+                                            pushPromptGlow ? 0.72 : 0.44
+                                        )
+                                        .blur(radius: 1.2)
+                                        .blendMode(.screen)
+                                }
+                                .offset(y: -15)
+                                .scaleEffect(
+                                    x: pushFlameBurstScale,
+                                    y: 0.94 * pushFlameBurstScale
+                                )
+                                .opacity(
+                                    max(
+                                        pushFlameBurstOpacity,
+                                        pushPromptGlow ? 1.0 : 0.84
+                                    )
+                                )
+                                .mask {
+                                    ZStack {
+                                        Circle()
+                                            .stroke(lineWidth: 52)
+                                            .frame(width: 158, height: 158)
+
+                                        Circle()
+                                            .stroke(lineWidth: 30)
+                                            .frame(width: 138, height: 138)
+                                    }
+                                }
+
+                                Image("PremiumPushButtonCore")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 152, height: 152)
+                                    .offset(
+                                        y: -4 + pushButtonDepth * 9
+                                    )
+                                    .scaleEffect(
+                                        x: 1.0,
+                                        y: 1.0 - pushButtonDepth * 0.11,
+                                        anchor: .bottom
+                                    )
+                                    .scaleEffect(
+                                        pushEmphasisPulse ? 1.03 : 0.99
+                                    )
+                                    .brightness(
+                                        pushButtonDepth > 0 ? -0.12 :
+                                            (pushPromptGlow ? 0.07 : 0)
+                                    )
+                                    .shadow(
+                                        color: Color.red.opacity(0.90),
+                                        radius: pushPromptGlow ? 14 : 8
+                                    )
+
+                                LinearGradient(
+                                    colors: [
+                                        .clear,
+                                        .white.opacity(0.66),
+                                        .yellow.opacity(0.42),
+                                        .clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(width: 78, height: 28)
+                                .rotationEffect(.degrees(-24))
+                                .offset(
+                                    x: pushButtonSweep * 72,
+                                    y: -5 + pushButtonSweep * 16
+                                )
+                                .blur(radius: 3)
+                                .blendMode(.screen)
+                                .mask(
+                                    Circle()
+                                        .frame(width: 138, height: 138)
+                                        .offset(y: -4)
+                                )
+                            }
+                            .scaleEffect(pushEmphasisPulse ? 1.035 : 0.985)
+                        }
+                        .frame(width: 196, height: 178)
                     }
                     .shadow(color: Color.red.opacity(0.95), radius: 24)
                     .shadow(color: Color.orange.opacity(0.72), radius: 10)
-                    .scaleEffect(pushEmphasisPulse ? 1.14 : 0.98)
-                    .contentShape(Circle())
+                    .scaleEffect(1.0)
+                    .contentShape(
+                        RoundedRectangle(
+                            cornerRadius: 42,
+                            style: .continuous
+                        )
+                    )
                 }
                 .buttonStyle(.plain)
                 .disabled(!isPushEnabled || pushPressed)
                 .allowsHitTesting(isPushEnabled && !pushPressed)
                 .accessibilityLabel("最後の右リールを止めるPUSHボタン")
-                .offset(x: -54, y: 184)
+                .offset(x: -34, y: 166)
                 .zIndex(250)
             }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 520)
         .scaleEffect(
-            x: machinePulse ? 1.012 : 1.0,
-            y: machinePulse ? 0.992 : 1.0,
+            x:
+                machinePulse
+                ? 1.012
+                : (pushCameraBreath && isPushVisible ? 1.014 : 1.0),
+            y:
+                machinePulse
+                ? 0.992
+                : (pushCameraBreath && isPushVisible ? 1.008 : 1.0),
             anchor: .center
         )
         .rotationEffect(.degrees(machineTiltDegrees))
-        .offset(x: machineShakeX, y: machineDropY)
+        .offset(
+            x: machineShakeX + pushMicroVibration,
+            y: machineDropY
+        )
         .onAppear {
             prepareDisplaySymbols()
             startContinuousAnimations()
@@ -394,6 +605,11 @@ struct PremiumSlotMachineView: View {
 
             case .pushStandby:
                 playPushStandbyCabinetShake()
+
+            case .finalSilence:
+                // 激アツ演出後、既存のCRT暗転が完了した瞬間に
+                // 次回予告を開始する。
+                nextEpisodePreviewTrigger += 1
 
             case .doorOpen:
                 rewardCardVisible = false
@@ -783,8 +999,10 @@ struct PremiumSlotMachineView: View {
             flashingStopIndex: flashingStopIndex,
             heatLevel: heatLevel,
             machineGlow: machineGlow,
-            isPushVisible: isPushVisible,
-            isPushEnabled: isPushEnabled && !pushPressed,
+            // 独立した3レイヤーPUSHを前面表示するため、
+            // コントロールパネル内の旧PUSH表示は非表示にする。
+            isPushVisible: false,
+            isPushEnabled: false,
             onPush: handlePremiumPush,
             onImpact: { offset in
                 withAnimation(.easeOut(duration: 0.10)) {
@@ -815,6 +1033,7 @@ struct PremiumSlotMachineView: View {
 
         spinEffectPlan = SlotEffectDirector.makePlan(
             heatLevel: heatLevel,
+            expectationLevel: expectationLevel,
             resultSymbols: safeSymbols
         )
     }
@@ -1237,30 +1456,81 @@ struct PremiumSlotMachineView: View {
         }
 
         pushPressed = true
+
+        withAnimation(.easeIn(duration: 0.085)) {
+            pushButtonDepth = 1
+            pushMicroVibration = -1.4
+        }
+
+        // ほんの一瞬だけ「溜め」を作る
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
+            pushImpactFlashOpacity = 1
+            pushImpactRingOpacity = 1
+            pushImpactRingScale = 0.58
+            pushFlameBurstScale = 0.96
+            pushFlameBurstOpacity = 1
+
+            withAnimation(.easeOut(duration: 0.16)) {
+                pushImpactFlashOpacity = 0
+            }
+
+            withAnimation(.easeOut(duration: 0.34)) {
+                pushImpactRingScale = 1.75
+                pushImpactRingOpacity = 0
+                pushFlameBurstScale = 1.26
+                pushFlameBurstOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(
+                .spring(
+                    response: 0.22,
+                    dampingFraction: 0.46
+                )
+            ) {
+                pushButtonDepth = 0
+            }
+        }
+
         stopPushEmphasis()
         pushPressTrigger += 1
+
+        // 次回予告は激アツ後の完全暗転で再生済み。
+        // PUSH時は巨大V・777・JACKPOT演出だけを開始する。
+        vJackpotTrigger += 1
+
         let impact = UIImpactFeedbackGenerator(style: .heavy)
         impact.prepare()
         impact.impactOccurred(intensity: 1.0)
 
-        withAnimation(.easeOut(duration: 0.06)) {
-            machineShakeX = -12
+        withAnimation(.easeOut(duration: 0.045)) {
+            machineShakeX = -16
+            machineDropY = 7
             machinePulse = true
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
-            withAnimation(.easeInOut(duration: 0.07)) {
-                machineShakeX = 12
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.055) {
+            withAnimation(.easeInOut(duration: 0.055)) {
+                machineShakeX = 14
+                machineDropY = -3
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.060)) {
+                machineShakeX = -8
+                machineDropY = 2
             }
         }
 
         // 押し込みを見せてからControllerへ通知。
         // この通知で初めて最後の右リールが停止する。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
             onPush()
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
             withAnimation(
                 .spring(
                     response: 0.30,
@@ -1268,6 +1538,7 @@ struct PremiumSlotMachineView: View {
                 )
             ) {
                 machineShakeX = 0
+                machineDropY = 0
                 machinePulse = false
             }
         }
@@ -1277,6 +1548,19 @@ struct PremiumSlotMachineView: View {
         pushEmphasisPulse = false
         pushTextPulse = false
         pushRingPulse = false
+        pushPromptEntrance = 0
+        pushPromptGlow = false
+        pushPromptSweep = -1.2
+        pushButtonDepth = 0
+        pushButtonSweep = -1.2
+        pushEnergyRotation = 0
+        pushCameraBreath = false
+        pushMicroVibration = 0
+        pushImpactFlashOpacity = 0
+        pushImpactRingScale = 0.55
+        pushImpactRingOpacity = 0
+        pushFlameBurstScale = 1.0
+        pushFlameBurstOpacity = 0
 
         let notification = UINotificationFeedbackGenerator()
         notification.prepare()
@@ -1303,6 +1587,63 @@ struct PremiumSlotMachineView: View {
             pushRingPulse = true
         }
 
+        withAnimation(
+            .spring(
+                response: 0.46,
+                dampingFraction: 0.54
+            )
+        ) {
+            pushPromptEntrance = 1
+        }
+
+        withAnimation(
+            .easeInOut(duration: 0.48)
+                .repeatForever(autoreverses: true)
+        ) {
+            pushPromptGlow = true
+        }
+
+        withAnimation(
+            .linear(duration: 1.25)
+                .repeatForever(autoreverses: false)
+        ) {
+            pushPromptSweep = 1.2
+        }
+
+        withAnimation(
+            .linear(duration: 1.10)
+                .repeatForever(autoreverses: false)
+        ) {
+            pushButtonSweep = 1.2
+        }
+
+        withAnimation(
+            .linear(duration: 2.20)
+                .repeatForever(autoreverses: false)
+        ) {
+            pushEnergyRotation = 360
+        }
+
+        withAnimation(
+            .easeInOut(duration: 0.72)
+                .repeatForever(autoreverses: true)
+        ) {
+            pushCameraBreath = true
+        }
+
+        let vibrationSteps: [CGFloat] = [
+            0.0, -0.7, 0.5, -0.35, 0.25, 0.0
+        ]
+
+        for (index, value) in vibrationSteps.enumerated() {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Double(index) * 0.045
+            ) {
+                guard isPushVisible, !pushPressed else { return }
+                pushMicroVibration = value
+            }
+        }
+
         cabinetStrobeColor = .red
         cabinetStrobeTrigger += 1
     }
@@ -1312,6 +1653,19 @@ struct PremiumSlotMachineView: View {
             pushEmphasisPulse = false
             pushTextPulse = false
             pushRingPulse = false
+            pushPromptEntrance = 0
+            pushPromptGlow = false
+            pushPromptSweep = -1.2
+            pushButtonDepth = 0
+            pushButtonSweep = -1.2
+            pushEnergyRotation = 0
+            pushCameraBreath = false
+            pushMicroVibration = 0
+            pushImpactFlashOpacity = 0
+            pushImpactRingScale = 0.55
+            pushImpactRingOpacity = 0
+            pushFlameBurstScale = 1.0
+            pushFlameBurstOpacity = 0
         }
     }
 
@@ -1405,7 +1759,7 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.32
+            deadline: .now() + 0.58
         ) {
             guard token == finalResultSequenceToken else { return }
 
@@ -1428,7 +1782,7 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.385
+            deadline: .now() + 0.655
         ) {
             guard token == finalResultSequenceToken else { return }
 
@@ -1444,7 +1798,7 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.47
+            deadline: .now() + 0.74
         ) {
             guard token == finalResultSequenceToken else { return }
 
@@ -2008,9 +2362,23 @@ private struct ContinuousRainbowShuttleOverlay: View {
 private struct PremiumPushEmphasisOverlay: View {
     let textPulse: Bool
     let ringPulse: Bool
+    let entranceProgress: CGFloat
+    let glowPulse: Bool
+    let sweepProgress: CGFloat
+
+    private let arrowCount = 3
 
     var body: some View {
         GeometryReader { proxy in
+            let promptWidth = min(proxy.size.width * 0.78, 294)
+            let promptHeight = min(proxy.size.height * 0.38, 198)
+
+            // 矢印画像だけをPUSH文字より小さく表示する。
+            // Assets側の余白を考慮し、横幅・高さを独立して調整。
+            let arrowWidth = promptWidth * 0.72
+            let arrowHeight = promptHeight * 0.66
+            let arrowOffsetY = promptHeight * 0.16
+
             ZStack {
                 Color.black.opacity(textPulse ? 0.22 : 0.12)
 
@@ -2041,31 +2409,228 @@ private struct PremiumPushEmphasisOverlay: View {
                             height: CGFloat(170 + index * 36)
                         )
                         .scaleEffect(ringPulse ? 1.46 : 0.66)
-                        .opacity(ringPulse ? 0 : Double(0.90 - Double(index) * 0.20))
+                        .opacity(
+                            ringPulse
+                                ? 0
+                                : Double(0.90 - Double(index) * 0.20)
+                        )
                         .shadow(color: .red, radius: 18)
                 }
 
-                Image("PremiumPushPrompt")
-                    .resizable()
-                    .scaledToFit()
+                ZStack {
+                    // 「押せ！PUSH!!」本体。文字には強い白スイープを掛けず、
+                    // 赤と金の質感をそのまま残す。
+                    Image("PremiumPushPrompt")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(
+                            width: promptWidth,
+                            height: promptHeight
+                        )
+                        .shadow(
+                            color: Color.red.opacity(0.82),
+                            radius: glowPulse ? 25 : 14
+                        )
+
+                    // 矢印の常時点灯レイヤー。
+                    Image("PremiumPushArrows")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(
+                            width: arrowWidth,
+                            height: arrowHeight
+                        )
+                        .offset(y: arrowOffsetY)
+                        .opacity(glowPulse ? 0.76 : 0.54)
+                        .brightness(glowPulse ? 0.10 : 0.02)
+                        .shadow(
+                            color: Color.orange.opacity(0.88),
+                            radius: glowPulse ? 13 : 7
+                        )
+                        .blendMode(.screen)
+
+                    // 左→中央→右へLEDが走る実機風アニメーション。
+                    TimelineView(
+                        .animation(
+                            minimumInterval: 1.0 / 30.0,
+                            paused: false
+                        )
+                    ) { context in
+                        let time = context.date.timeIntervalSinceReferenceDate
+
+                        ZStack {
+                            ForEach(0..<arrowCount, id: \.self) { index in
+                                animatedArrowSegment(
+                                    index: index,
+                                    time: time,
+                                    width: arrowWidth,
+                                    height: arrowHeight
+                                )
+                            }
+
+                            // 矢印だけを横切る鋭いハイライト。
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    .white.opacity(0.98),
+                                    .yellow.opacity(0.92),
+                                    .white.opacity(0.82),
+                                    .clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(width: 44, height: arrowHeight * 0.82)
+                            .rotationEffect(.degrees(18))
+                            .offset(x: movingArrowSweepX(time: time, width: arrowWidth))
+                            .blur(radius: 2.2)
+                            .blendMode(.screen)
+                            .mask {
+                                Image("PremiumPushArrows")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(
+                                        width: arrowWidth,
+                                        height: arrowHeight
+                                    )
+                            }
+                        }
+                    }
                     .frame(
-                        width: min(proxy.size.width * 0.88, 330),
-                        height: min(proxy.size.height * 0.42, 220)
+                        width: arrowWidth,
+                        height: arrowHeight
                     )
-                    .scaleEffect(textPulse ? 1.08 : 0.94)
-                    .opacity(textPulse ? 1.0 : 0.84)
-                    .shadow(color: .yellow.opacity(0.85), radius: 8)
-                    .shadow(color: .red.opacity(0.95), radius: 24)
-                    .position(
-                        x: proxy.size.width / 2,
-                        y: proxy.size.height * 0.47
-                    )
+                    .offset(y: arrowOffsetY)
+
+                    // 中央から下へ落ちる衝撃光。矢印がPUSHを促すように見せる。
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0),
+                                    Color.yellow.opacity(textPulse ? 0.88 : 0.48),
+                                    Color.orange.opacity(textPulse ? 0.64 : 0.30),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: arrowWidth * 0.48, height: 34)
+                        .offset(y: arrowOffsetY + arrowHeight * 0.32)
+                        .blur(radius: 8)
+                        .opacity(textPulse ? 0.72 : 0.34)
+                        .blendMode(.screen)
+                }
+                .scaleEffect(
+                    0.56
+                    + entranceProgress * 0.36
+                    + (textPulse ? 0.035 : -0.008)
+                )
+                .opacity(Double(entranceProgress))
+                .brightness(glowPulse ? 0.05 : 0)
+                .shadow(
+                    color: .yellow.opacity(glowPulse ? 0.88 : 0.38),
+                    radius: glowPulse ? 14 : 7
+                )
+                .shadow(
+                    color: .red.opacity(glowPulse ? 1.0 : 0.60),
+                    radius: glowPulse ? 31 : 16
+                )
+                .position(
+                    x: proxy.size.width / 2,
+                    y: proxy.size.height * 0.54
+                )
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
-}
 
+    private func animatedArrowSegment(
+        index: Int,
+        time: Double,
+        width: CGFloat,
+        height: CGFloat
+    ) -> some View {
+        let cycleDuration = 0.84
+        let stagger = cycleDuration / Double(arrowCount)
+        let localTime = positiveRemainder(
+            time - Double(index) * stagger,
+            cycleDuration
+        )
+        let progress = localTime / cycleDuration
+
+        // 0付近で鋭く点灯し、その後ゆっくり減衰。
+        let pulse = pow(max(0, 1 - progress), 2.8)
+        let secondaryPulse = max(
+            0,
+            sin(progress * .pi)
+        )
+
+        let scale = 0.96 + CGFloat(pulse) * 0.16
+        let verticalDrop = CGFloat(secondaryPulse) * 7
+        let segmentOpacity = 0.30 + pulse * 0.70
+
+        return Image("PremiumPushArrows")
+            .resizable()
+            .scaledToFit()
+            .frame(width: width, height: height)
+            .mask {
+                ZStack {
+                    Color.clear
+
+                    Rectangle()
+                        .frame(
+                            width: width / CGFloat(arrowCount),
+                            height: height
+                        )
+                        .offset(
+                            x:
+                                (CGFloat(index) - 1)
+                                * width
+                                / CGFloat(arrowCount)
+                        )
+                }
+                .frame(width: width, height: height)
+            }
+            .scaleEffect(scale, anchor: .center)
+            .offset(y: verticalDrop)
+            .opacity(segmentOpacity)
+            .brightness(0.10 + pulse * 0.44)
+            .contrast(1.08 + pulse * 0.26)
+            .shadow(
+                color: Color.white.opacity(0.42 + pulse * 0.58),
+                radius: 2 + pulse * 8
+            )
+            .shadow(
+                color: Color.yellow.opacity(0.58 + pulse * 0.42),
+                radius: 7 + pulse * 14
+            )
+            .shadow(
+                color: Color.red.opacity(0.60 + pulse * 0.36),
+                radius: 12 + pulse * 20
+            )
+            .blendMode(.screen)
+    }
+
+    private func movingArrowSweepX(
+        time: Double,
+        width: CGFloat
+    ) -> CGFloat {
+        let duration = 1.16
+        let progress = positiveRemainder(time, duration) / duration
+        return -width * 0.62 + width * 1.24 * CGFloat(progress)
+    }
+
+    private func positiveRemainder(
+        _ value: Double,
+        _ divisor: Double
+    ) -> Double {
+        guard divisor > 0 else { return 0 }
+        let remainder = value.truncatingRemainder(dividingBy: divisor)
+        return remainder >= 0 ? remainder : remainder + divisor
+    }
+}
 
 private struct AuthenticPachislotCabinetOverlay: View {
     let trigger: Int
@@ -3312,3 +3877,9 @@ private extension View {
         }
     }
 }
+
+
+
+
+
+

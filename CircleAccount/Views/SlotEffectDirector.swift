@@ -44,24 +44,53 @@ struct SlotSpinEffectPlan {
 enum SlotEffectDirector {
     static func makePlan(
         heatLevel: SlotHeatLevel,
+        expectationLevel: SlotExpectationLevel,
         resultSymbols: [String]
     ) -> SlotSpinEffectPlan {
         let safeSymbols = Array(resultSymbols.prefix(3))
+
         let isRainbow =
             safeSymbols == ["🌈7", "🌈7", "🌈7"]
 
         let isRedSeven =
             safeSymbols == ["7", "7", "7"]
 
-        if isRainbow {
+        // SSR系ルートは回転開始直後のheatLevelに依存させない。
+        // Controllerが持つ期待度から、必ず第2停止後に新しい激アツカットインを出す。
+        if expectationLevel == .gekiatsu
+            || expectationLevel == .premium {
             return SlotSpinEffectPlan(
                 level: .premium,
-                startPresentation: .superHot,
-                firstStopPresentation: .superHot,
+                startPresentation: .start,
+                firstStopPresentation: .chance,
                 secondStopPresentation: .superHot,
                 usesWarningSound: true,
                 intensifiesSpin: true,
-                usesBlackoutTease: true,
+                usesBlackoutTease: false,
+                usesFakePremiumTease: false
+            )
+        }
+
+        /*
+         新しい激アツカットインは必ず第2リール停止後に1回だけ表示する。
+
+         以前の設定では .superHot を
+         ・回転開始
+         ・第1リール停止
+         ・第2リール停止
+         の3回発火させていたため、後続の暗転復帰表示などに上書きされ、
+         新しい爆発演出が途中で消える状態になっていた。
+        */
+
+        if isRainbow {
+            return SlotSpinEffectPlan(
+                level: .premium,
+                startPresentation: .start,
+                firstStopPresentation: .chance,
+                secondStopPresentation: .superHot,
+                usesWarningSound: true,
+                intensifiesSpin: true,
+                usesBlackoutTease: false,
                 usesFakePremiumTease: false
             )
         }
@@ -70,7 +99,7 @@ enum SlotEffectDirector {
             return weightedPlan(
                 [
                     (
-                        50,
+                        58,
                         SlotSpinEffectPlan(
                             level: .hot,
                             startPresentation: .chance,
@@ -83,7 +112,7 @@ enum SlotEffectDirector {
                         )
                     ),
                     (
-                        35,
+                        27,
                         SlotSpinEffectPlan(
                             level: .hot,
                             startPresentation: .start,
@@ -99,12 +128,12 @@ enum SlotEffectDirector {
                         15,
                         SlotSpinEffectPlan(
                             level: .premium,
-                            startPresentation: .superHot,
-                            firstStopPresentation: .superHot,
+                            startPresentation: .chance,
+                            firstStopPresentation: .reach,
                             secondStopPresentation: .superHot,
                             usesWarningSound: true,
                             intensifiesSpin: true,
-                            usesBlackoutTease: true,
+                            usesBlackoutTease: false,
                             usesFakePremiumTease: false
                         )
                     )
@@ -117,23 +146,23 @@ enum SlotEffectDirector {
             return weightedPlan(
                 [
                     (
-                        62,
+                        72,
                         SlotSpinEffectPlan(
                             level: .premium,
-                            startPresentation: .superHot,
-                            firstStopPresentation: .superHot,
+                            startPresentation: .chance,
+                            firstStopPresentation: .reach,
                             secondStopPresentation: .superHot,
                             usesWarningSound: true,
                             intensifiesSpin: true,
-                            usesBlackoutTease: true,
+                            usesBlackoutTease: false,
                             usesFakePremiumTease: false
                         )
                     ),
                     (
-                        38,
+                        28,
                         SlotSpinEffectPlan(
                             level: .hot,
-                            startPresentation: .chance,
+                            startPresentation: .start,
                             firstStopPresentation: .chance,
                             secondStopPresentation: .superHot,
                             usesWarningSound: true,
@@ -182,12 +211,12 @@ enum SlotEffectDirector {
                         5,
                         SlotSpinEffectPlan(
                             level: .premium,
-                            startPresentation: .superHot,
-                            firstStopPresentation: .superHot,
+                            startPresentation: .chance,
+                            firstStopPresentation: .reach,
                             secondStopPresentation: .superHot,
                             usesWarningSound: true,
                             intensifiesSpin: true,
-                            usesBlackoutTease: true,
+                            usesBlackoutTease: false,
                             usesFakePremiumTease: true
                         )
                     )
@@ -221,3 +250,5 @@ enum SlotEffectDirector {
         return entries.last?.plan ?? .normal
     }
 }
+
+
