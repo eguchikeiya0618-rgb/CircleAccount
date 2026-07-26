@@ -81,6 +81,11 @@ final class SlotAnimationController: ObservableObject {
     private var firstReelStopContinuation:
         CheckedContinuation<Void, Never>?
 
+    private var typewriterContinuation:
+        CheckedContinuation<Void, Never>?
+
+    private var typewriterObserver: NSObjectProtocol?
+
     private(set) var isSequenceRunning = false
 
     // MARK: - Prepare
@@ -222,6 +227,10 @@ final class SlotAnimationController: ObservableObject {
         firstReelStopContinuation?.resume()
         firstReelStopContinuation = nil
         canStopFirstReel = false
+
+        removeTypewriterObserver()
+        typewriterContinuation?.resume()
+        typewriterContinuation = nil
 
         sound.stopAll()
 
@@ -731,9 +740,10 @@ final class SlotAnimationController: ObservableObject {
             cinematicPhase = .finalSilence
             cinematicTrigger += 1
 
-            // 本格タイプライター次回予告を最後まで見せてから
-            // CRT復帰・PUSH待機へ進む。
-            await sleep(6.55)
+            // 本格タイプライター次回予告が本当に終了するまで待つ。
+            // 固定秒数ではないため、文字数・テンポを変更しても
+            // PUSHが途中で割り込むことはない。
+            await waitForTypewriterPreviewCompletion()
 
             guard !Task.isCancelled else {
                 sound.stopSpin()
@@ -944,6 +954,47 @@ final class SlotAnimationController: ObservableObject {
                 self.canStopFirstReel = false
             }
         }
+    }
+
+
+    // MARK: - Typewriter Preview Synchronization
+
+    private func waitForTypewriterPreviewCompletion() async {
+        removeTypewriterObserver()
+
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                typewriterContinuation = continuation
+
+                typewriterObserver = NotificationCenter.default.addObserver(
+                    forName: .retroTypewriterPreviewDidFinish,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.resumeTypewriterContinuation()
+                    }
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.resumeTypewriterContinuation()
+            }
+        }
+    }
+
+    private func resumeTypewriterContinuation() {
+        removeTypewriterObserver()
+
+        typewriterContinuation?.resume()
+        typewriterContinuation = nil
+    }
+
+    private func removeTypewriterObserver() {
+        guard let typewriterObserver else { return }
+
+        NotificationCenter.default.removeObserver(typewriterObserver)
+        self.typewriterObserver = nil
     }
 
     // MARK: - Haptics
@@ -1219,6 +1270,11 @@ final class SlotAnimationController: ObservableObject {
         canStopFirstReel = false
         firstReelStopContinuation?.resume()
         firstReelStopContinuation = nil
+
+        removeTypewriterObserver()
+        typewriterContinuation?.resume()
+        typewriterContinuation = nil
+
         isSequenceRunning = false
     }
 
@@ -1241,5 +1297,6 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 }
+
 
 

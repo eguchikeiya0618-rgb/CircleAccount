@@ -221,9 +221,8 @@ struct PremiumSlotMachineView: View {
             .zIndex(65)
 
 
-            RetroNextEpisodePreviewOverlay(
-                trigger: nextEpisodePreviewTrigger,
-                isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
+            RetroImageTypewriterPreviewOverlay(
+                trigger: nextEpisodePreviewTrigger
             )
             .padding(.trailing, 46)
             .allowsHitTesting(false)
