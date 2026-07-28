@@ -1,6 +1,8 @@
 import SwiftUI
 import Combine
 import UIKit
+import AVKit
+import AVFoundation
 
 enum SlotAnimationRoute: Equatable {
     case normal
@@ -569,14 +571,7 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        await showSSRPushAndAlignment()
-
-        guard !Task.isCancelled else { return }
-
-        await showJackpot()
-
-        guard !Task.isCancelled else { return }
-
+        // SSR用PUSHと動画演出は stopReels 内で完了済み。
         await showCardAndFinish()
     }
 
@@ -637,14 +632,7 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        await showSSRPushAndAlignment()
-
-        guard !Task.isCancelled else { return }
-
-        await showJackpot()
-
-        guard !Task.isCancelled else { return }
-
+        // SSR用PUSHと動画演出は stopReels 内で完了済み。
         await showCardAndFinish()
     }
 
@@ -667,9 +655,7 @@ final class SlotAnimationController: ObservableObject {
         await stopReels(intervals: [1.20, 1.50, 0.60])
         guard !Task.isCancelled else { return }
 
-        await showJackpot()
-        guard !Task.isCancelled else { return }
-
+        // SSR用PUSHと動画演出は stopReels 内で完了済み。
         await showCardAndFinish()
     }
 
@@ -714,7 +700,8 @@ final class SlotAnimationController: ObservableObject {
             statusText = ""
             subStatusText = ""
 
-            // 第2リール停止後の筐体振動
+            // 第2リール停止後は旧CRT暗転・次回予告を使わず、
+            // そのまま最終PUSHへ進める。
             let warningImpact = UIImpactFeedbackGenerator(style: .rigid)
             warningImpact.prepare()
             warningImpact.impactOccurred(intensity: 0.72)
@@ -725,36 +712,8 @@ final class SlotAnimationController: ObservableObject {
                 return
             }
 
-            // CRT電源OFF：画面が縦に潰れ、横線、点、暗転へ
-            cinematicPhase = .silentFreeze
-            cinematicTrigger += 1
-            await sleep(1.20)
-
-            guard !Task.isCancelled else {
-                sound.stopSpin()
-                return
-            }
-
-            // 完全暗転・無音
-            sound.stopSpin()
-            cinematicPhase = .finalSilence
-            cinematicTrigger += 1
-
-            // 本格タイプライター次回予告が本当に終了するまで待つ。
-            // 固定秒数ではないため、文字数・テンポを変更しても
-            // PUSHが途中で割り込むことはない。
-            await waitForTypewriterPreviewCompletion()
-
-            guard !Task.isCancelled else {
-                sound.stopSpin()
-                return
-            }
-
-            // 先にPUSHを有効化し、CRT復帰直後から押せるようにする
             isPushVisible = true
             isPushEnabled = true
-
-            // CRT電源ON：点、横線、通常画面へ復帰
             cinematicPhase = .pushStandby
             cinematicTrigger += 1
 
@@ -819,7 +778,13 @@ final class SlotAnimationController: ObservableObject {
             cinematicPhase = .kyuiin
             cinematicTrigger += 1
             sound.playJackpot()
-            await sleep(2.10)
+            await sleep(1.10)
+
+            guard !Task.isCancelled else { return }
+
+            // 既存のタイプライター・PUSHを残したまま、
+            // PUSH後だけ VMovie → BonusMovie を全画面再生する。
+            await playBonusVideoSequence()
         } else {
             await sleep(intervals[2])
             guard !Task.isCancelled else { sound.stopSpin(); return }
@@ -1202,6 +1167,111 @@ final class SlotAnimationController: ObservableObject {
         Int.random(in: 0..<100) < 70
     }
 
+
+    // MARK: - Bonus Video Sequence
+
+    private func playBonusVideoSequence() async {
+        print("▶️ Controller: playBonusVideoSequence START")
+
+        statusText = ""
+        subStatusText = ""
+        stage = .idle
+
+        await playBundledVideo(named: "VMovie")
+
+        print("▶️ Controller: VMovie END")
+
+        guard !Task.isCancelled else { return }
+
+        await playBundledVideo(named: "BonusMovie")
+
+        print("▶️ Controller: BonusMovie END")
+    }
+    private func playBundledVideo(named name: String) async {
+        guard let url = Bundle.main.url(
+            forResource: name,
+            withExtension: "mp4"
+        ) else {
+            print("⚠️ \(name).mp4 がアプリBundleに見つかりません")
+            return
+        }
+
+        guard let presenter = topViewController() else {
+            print("⚠️ 動画を表示できるViewControllerが見つかりません")
+            return
+        }
+
+        let player = AVPlayer(url: url)
+        let playerViewController = AVPlayerViewController()
+        playerViewController.player = player
+        playerViewController.showsPlaybackControls = false
+        playerViewController.videoGravity = .resizeAspectFill
+        playerViewController.modalPresentationStyle = .fullScreen
+
+        await withCheckedContinuation { continuation in
+            presenter.present(
+                playerViewController,
+                animated: false
+            ) {
+                player.play()
+                continuation.resume()
+            }
+        }
+
+        guard let item = player.currentItem else {
+            playerViewController.dismiss(animated: false)
+            return
+        }
+
+        for await _ in NotificationCenter.default.notifications(
+            named: .AVPlayerItemDidPlayToEndTime,
+            object: item
+        ) {
+            break
+        }
+
+        player.pause()
+
+        await withCheckedContinuation { continuation in
+            playerViewController.dismiss(animated: false) {
+                continuation.resume()
+            }
+        }
+    }
+
+    private func topViewController(
+        from base: UIViewController? = nil
+    ) -> UIViewController? {
+        let root: UIViewController?
+
+        if let base {
+            root = base
+        } else {
+            root = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first(where: { $0.isKeyWindow })?
+                .rootViewController
+        }
+
+        if let navigation = root as? UINavigationController {
+            return topViewController(
+                from: navigation.visibleViewController
+            )
+        }
+
+        if let tab = root as? UITabBarController,
+           let selected = tab.selectedViewController {
+            return topViewController(from: selected)
+        }
+
+        if let presented = root?.presentedViewController {
+            return topViewController(from: presented)
+        }
+
+        return root
+    }
+
     // MARK: - Jackpot
 
     private func showJackpot() async {
@@ -1297,6 +1367,8 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 }
+
+
 
 
 

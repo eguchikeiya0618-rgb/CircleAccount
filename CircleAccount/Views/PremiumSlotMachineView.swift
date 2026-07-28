@@ -79,29 +79,11 @@ struct PremiumSlotMachineView: View {
     @State private var blackoutTrigger = 0
     @State private var pushChanceTrigger = 0
     @State private var pushPressTrigger = 0
-    @State private var nextEpisodePreviewTrigger = 0
-    @State private var vJackpotTrigger = 0
     @State private var pushPressed = false
 
-    // SSR最終リールPUSH待機演出
-    @State private var pushEmphasisPulse = false
-    @State private var pushTextPulse = false
-    @State private var pushRingPulse = false
-    @State private var pushPromptEntrance: CGFloat = 0
-    @State private var pushPromptGlow = false
-    @State private var pushPromptSweep: CGFloat = -1.2
-    @State private var pushButtonDepth: CGFloat = 0
-    @State private var pushButtonSweep: CGFloat = -1.2
-    @State private var pushEnergyRotation = 0.0
-
-    // 実機風PUSH待機演出
-    @State private var pushCameraBreath = false
-    @State private var pushMicroVibration: CGFloat = 0
-    @State private var pushImpactFlashOpacity = 0.0
-    @State private var pushImpactRingScale: CGFloat = 0.55
-    @State private var pushImpactRingOpacity = 0.0
-    @State private var pushFlameBurstScale: CGFloat = 1.0
-    @State private var pushFlameBurstOpacity = 0.0
+    // PUSH後の VMovie → BonusMovie 専用シーケンス
+    @State private var bonusVideoTrigger = 0
+    @State private var isBonusVideoActive = false
 
     @State private var resultPauseOpacity = 0.0
     @State private var resultPauseTextOpacity = 0.0
@@ -110,7 +92,6 @@ struct PremiumSlotMachineView: View {
 
     @State private var lcdPresentation: SlotLCDPresentation?
     @State private var lcdTrigger = 0
-    
     @State private var spinEffectPlan = SlotSpinEffectPlan.normal
     @State private var effectSequenceToken = 0
 
@@ -148,13 +129,11 @@ struct PremiumSlotMachineView: View {
                 .padding(.trailing, 46)
 
             if heatLevel == .premium {
-                ContinuousRainbowShuttleOverlay(
-                    isActive: isSpinning || stoppedReelCount > 0,
-                    intensity: premiumFlashOpacity
+                PremiumCelebrationOverlay(
+                    flashOpacity: premiumFlashOpacity
                 )
                 .padding(.trailing, 46)
                 .allowsHitTesting(false)
-                .zIndex(20)
             }
 
             MachineFlashOverlay(
@@ -183,21 +162,14 @@ struct PremiumSlotMachineView: View {
             .allowsHitTesting(false)
             .zIndex(60)
 
-            CustomSlotLCDOverlayView(
+            SlotLCDOverlayView(
                 trigger: lcdTrigger,
                 presentation: lcdPresentation
             )
             .padding(.trailing, 46)
             .allowsHitTesting(false)
+            .zIndex(61)
 
-            .zIndex(
-                lcdPresentation == .superHot
-                    ? 999
-                    : 61
-            )
-
-           
-            
             SlotBlackoutOverlay(
                 trigger: blackoutTrigger
             )
@@ -220,33 +192,46 @@ struct PremiumSlotMachineView: View {
             )
             .zIndex(65)
 
-
-            RetroImageTypewriterPreviewOverlay(
-                trigger: nextEpisodePreviewTrigger
-            )
-            .padding(.trailing, 46)
-            .allowsHitTesting(false)
-            .zIndex(270)
-
-            PremiumVJackpotOverlay(
-                trigger: vJackpotTrigger,
-                isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
-            )
-            .padding(.trailing, 46)
-            .allowsHitTesting(false)
-            .zIndex(280)
-
             if isConfettiVisible {
-                RainbowShuttleCelebrationOverlay(
-                    trigger: confettiResetToken,
-                    isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
-                )
-                .id(confettiResetToken)
-                .padding(.trailing, 46)
-                .transition(.opacity)
-                .zIndex(67)
-                .allowsHitTesting(false)
+                ConfettiView()
+                    .id(confettiResetToken)
+                    .padding(.trailing, 46)
+                    .transition(.opacity)
+                    .zIndex(67)
+                    .allowsHitTesting(false)
             }
+
+            PremiumBonusVideoSequenceOverlay(
+                trigger: bonusVideoTrigger,
+                vMovieName: "VMovie",
+                bonusMovieName: "BonusMovie",
+                onFinished: {
+                    guard isBonusVideoActive else { return }
+
+                    isBonusVideoActive = false
+                    onPush()
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                        withAnimation(
+                            .spring(
+                                response: 0.42,
+                                dampingFraction: 0.68
+                            )
+                        ) {
+                            rewardCardVisible = true
+                        }
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.40) {
+                        withAnimation(.easeOut(duration: 0.30)) {
+                            rewardCardVisible = false
+                        }
+                    }
+                }
+            )
+            .padding(.trailing, 46)
+            .allowsHitTesting(false)
+            .zIndex(1000)
 
             if isSevenJackpot {
                 RewardCardView(
@@ -276,20 +261,6 @@ struct PremiumSlotMachineView: View {
                 .zIndex(70)
                 .allowsHitTesting(false)
 
-            if isPushVisible && isPushEnabled && !pushPressed {
-                PremiumPushEmphasisOverlay(
-                    textPulse: pushTextPulse,
-                    ringPulse: pushRingPulse,
-                    entranceProgress: pushPromptEntrance,
-                    glowPulse: pushPromptGlow,
-                    sweepProgress: pushPromptSweep
-                )
-                .padding(.trailing, 46)
-                .allowsHitTesting(false)
-                .transition(.opacity.combined(with: .scale(scale: 0.82)))
-                .zIndex(230)
-            }
-
             SlotSoundControlView(
                 isEnabled: $slotSoundEnabled,
                 volume: $slotSoundVolume,
@@ -316,225 +287,16 @@ struct PremiumSlotMachineView: View {
                 }
             )
             .offset(x: 2, y: 82)
-
-            // 最終右リール停止専用PUSH。
-            // 最前面に独立したButtonを置き、装飾Overlayにタップを奪われないようにする。
-            if isPushVisible {
-                Button(action: handlePremiumPush) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(pushImpactFlashOpacity))
-                            .frame(width: 176, height: 176)
-                            .blur(radius: 2)
-                            .blendMode(.screen)
-
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        .white,
-                                        .yellow,
-                                        .orange,
-                                        .red,
-                                        .clear
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 10
-                            )
-                            .frame(width: 170, height: 170)
-                            .scaleEffect(pushImpactRingScale)
-                            .opacity(pushImpactRingOpacity)
-                            .shadow(color: .red, radius: 22)
-                            .blendMode(.screen)
-
-                        ForEach(0..<2, id: \.self) { index in
-                            Circle()
-                                .stroke(
-                                    index == 0
-                                        ? Color.red.opacity(0.90)
-                                        : Color.orange.opacity(0.72),
-                                    lineWidth: index == 0 ? 5 : 3
-                                )
-                                .frame(
-                                    width: index == 0 ? 154 : 136,
-                                    height: index == 0 ? 154 : 136
-                                )
-                                .scaleEffect(
-                                    pushRingPulse
-                                        ? (index == 0 ? 1.48 : 1.34)
-                                        : 0.86
-                                )
-                                .opacity(pushRingPulse ? 0 : 0.52)
-                        }
-
-                        ZStack {
-                            // 台座は完全固定。実機らしい「筐体の重さ」を残す。
-                            Image("PremiumPushBase")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 182, height: 182)
-                                .offset(y: 22)
-                                .brightness(pushPromptGlow ? 0.035 : 0)
-                                .shadow(
-                                    color: Color.pink.opacity(0.40),
-                                    radius: 10
-                                )
-
-                            // 炎とボタン本体だけを独立して動かす。
-                            ZStack {
-                                ZStack {
-                                    Image("PremiumPushFlame")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 166, height: 166)
-                                        .rotationEffect(
-                                            .degrees(pushEnergyRotation)
-                                        )
-                                        .scaleEffect(
-                                            pushEmphasisPulse ? 1.045 : 0.985
-                                        )
-                                        .opacity(
-                                            pushPromptGlow ? 1.0 : 0.78
-                                        )
-                                        .brightness(
-                                            pushPromptGlow ? 0.12 : 0
-                                        )
-                                        .shadow(
-                                            color: Color.red.opacity(0.96),
-                                            radius: pushPromptGlow ? 22 : 13
-                                        )
-                                        .shadow(
-                                            color: Color.orange.opacity(0.74),
-                                            radius: pushPromptGlow ? 30 : 18
-                                        )
-                                        .blendMode(.screen)
-
-                                    Image("PremiumPushFlame")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 154, height: 154)
-                                        .rotationEffect(
-                                            .degrees(-pushEnergyRotation * 0.62)
-                                        )
-                                        .opacity(
-                                            pushPromptGlow ? 0.72 : 0.44
-                                        )
-                                        .blur(radius: 1.2)
-                                        .blendMode(.screen)
-                                }
-                                .offset(y: -15)
-                                .scaleEffect(
-                                    x: pushFlameBurstScale,
-                                    y: 0.94 * pushFlameBurstScale
-                                )
-                                .opacity(
-                                    max(
-                                        pushFlameBurstOpacity,
-                                        pushPromptGlow ? 1.0 : 0.84
-                                    )
-                                )
-                                .mask {
-                                    ZStack {
-                                        Circle()
-                                            .stroke(lineWidth: 52)
-                                            .frame(width: 158, height: 158)
-
-                                        Circle()
-                                            .stroke(lineWidth: 30)
-                                            .frame(width: 138, height: 138)
-                                    }
-                                }
-
-                                Image("PremiumPushButtonCore")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 152, height: 152)
-                                    .offset(
-                                        y: -4 + pushButtonDepth * 9
-                                    )
-                                    .scaleEffect(
-                                        x: 1.0,
-                                        y: 1.0 - pushButtonDepth * 0.11,
-                                        anchor: .bottom
-                                    )
-                                    .scaleEffect(
-                                        pushEmphasisPulse ? 1.03 : 0.99
-                                    )
-                                    .brightness(
-                                        pushButtonDepth > 0 ? -0.12 :
-                                            (pushPromptGlow ? 0.07 : 0)
-                                    )
-                                    .shadow(
-                                        color: Color.red.opacity(0.90),
-                                        radius: pushPromptGlow ? 14 : 8
-                                    )
-
-                                LinearGradient(
-                                    colors: [
-                                        .clear,
-                                        .white.opacity(0.66),
-                                        .yellow.opacity(0.42),
-                                        .clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .frame(width: 78, height: 28)
-                                .rotationEffect(.degrees(-24))
-                                .offset(
-                                    x: pushButtonSweep * 72,
-                                    y: -5 + pushButtonSweep * 16
-                                )
-                                .blur(radius: 3)
-                                .blendMode(.screen)
-                                .mask(
-                                    Circle()
-                                        .frame(width: 138, height: 138)
-                                        .offset(y: -4)
-                                )
-                            }
-                            .scaleEffect(pushEmphasisPulse ? 1.035 : 0.985)
-                        }
-                        .frame(width: 196, height: 178)
-                    }
-                    .shadow(color: Color.red.opacity(0.95), radius: 24)
-                    .shadow(color: Color.orange.opacity(0.72), radius: 10)
-                    .scaleEffect(1.0)
-                    .contentShape(
-                        RoundedRectangle(
-                            cornerRadius: 42,
-                            style: .continuous
-                        )
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(!isPushEnabled || pushPressed)
-                .allowsHitTesting(isPushEnabled && !pushPressed)
-                .accessibilityLabel("最後の右リールを止めるPUSHボタン")
-                .offset(x: -34, y: 166)
-                .zIndex(250)
-            }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 520)
         .scaleEffect(
-            x:
-                machinePulse
-                ? 1.012
-                : (pushCameraBreath && isPushVisible ? 1.014 : 1.0),
-            y:
-                machinePulse
-                ? 0.992
-                : (pushCameraBreath && isPushVisible ? 1.008 : 1.0),
+            x: machinePulse ? 1.012 : 1.0,
+            y: machinePulse ? 0.992 : 1.0,
             anchor: .center
         )
         .rotationEffect(.degrees(machineTiltDegrees))
-        .offset(
-            x: machineShakeX + pushMicroVibration,
-            y: machineDropY
-        )
+        .offset(x: machineShakeX, y: machineDropY)
         .onAppear {
             prepareDisplaySymbols()
             startContinuousAnimations()
@@ -583,36 +345,20 @@ struct PremiumSlotMachineView: View {
             if visible {
                 pushPressed = false
                 pushChanceTrigger += 1
-                startPushEmphasis()
             } else {
                 pushPressed = false
-                stopPushEmphasis()
             }
         }
         .onChange(of: cinematicPhase) { _, phase in
             switch phase {
             case .kyuiin:
-                if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-                    luckyLampMode = .rainbow
-                    luckyLampTrigger += 1
-                    playRainbowFinalFlash()
-                } else {
-                    luckyLampMode = .gold
-                    luckyLampTrigger += 1
-                    playGoldFinalFlash()
-                }
-
-            case .pushStandby:
-                playPushStandbyCabinetShake()
-
-            case .finalSilence:
-                // 激アツ演出後、既存のCRT暗転が完了した瞬間に
-                // 次回予告を開始する。
-                nextEpisodePreviewTrigger += 1
+                luckyLampMode = .rainbow
+                luckyLampTrigger += 1
+                playRainbowFinalFlash()
 
             case .doorOpen:
                 rewardCardVisible = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     guard cinematicPhase == .doorOpen
                             || cinematicPhase == .ticketReady else { return }
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) {
@@ -637,6 +383,7 @@ struct PremiumSlotMachineView: View {
                     freezeSequenceRunning = false
                     resultCelebrationKind = nil
                     isConfettiVisible = false
+                    isBonusVideoActive = false
                     
                     luckyLampMode = .off
                     lcdPresentation = nil
@@ -858,20 +605,6 @@ struct PremiumSlotMachineView: View {
         .shadow(color: machineGlow.opacity(0.32), radius: 26)
     }
 
-    private func playPushStandbyCabinetShake() {
-        machineShakeX = 0
-        withAnimation(.linear(duration: 0.055)) { machineShakeX = -5 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-            withAnimation(.linear(duration: 0.055)) { machineShakeX = 5 }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.linear(duration: 0.07)) { machineShakeX = -3 }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.62)) { machineShakeX = 0 }
-        }
-    }
-
     private var reelHousing: some View {
         ReelHousingView(
             resultSymbols: safeSymbols,
@@ -998,10 +731,8 @@ struct PremiumSlotMachineView: View {
             flashingStopIndex: flashingStopIndex,
             heatLevel: heatLevel,
             machineGlow: machineGlow,
-            // 独立した3レイヤーPUSHを前面表示するため、
-            // コントロールパネル内の旧PUSH表示は非表示にする。
-            isPushVisible: false,
-            isPushEnabled: false,
+            isPushVisible: isPushVisible,
+            isPushEnabled: isPushEnabled && !pushPressed,
             onPush: handlePremiumPush,
             onImpact: { offset in
                 withAnimation(.easeOut(duration: 0.10)) {
@@ -1450,86 +1181,48 @@ struct PremiumSlotMachineView: View {
     private func handlePremiumPush() {
         guard isPushVisible,
               isPushEnabled,
-              !pushPressed else {
+              !pushPressed,
+              !isBonusVideoActive else {
             return
         }
 
         pushPressed = true
-
-        withAnimation(.easeIn(duration: 0.085)) {
-            pushButtonDepth = 1
-            pushMicroVibration = -1.4
-        }
-
-        // ほんの一瞬だけ「溜め」を作る
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
-            pushImpactFlashOpacity = 1
-            pushImpactRingOpacity = 1
-            pushImpactRingScale = 0.58
-            pushFlameBurstScale = 0.96
-            pushFlameBurstOpacity = 1
-
-            withAnimation(.easeOut(duration: 0.16)) {
-                pushImpactFlashOpacity = 0
-            }
-
-            withAnimation(.easeOut(duration: 0.34)) {
-                pushImpactRingScale = 1.75
-                pushImpactRingOpacity = 0
-                pushFlameBurstScale = 1.26
-                pushFlameBurstOpacity = 0
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(
-                .spring(
-                    response: 0.22,
-                    dampingFraction: 0.46
-                )
-            ) {
-                pushButtonDepth = 0
-            }
-        }
-
-        stopPushEmphasis()
         pushPressTrigger += 1
-
-        // 次回予告は激アツ後の完全暗転で再生済み。
-        // PUSH時は巨大V・777・JACKPOT演出だけを開始する。
-        vJackpotTrigger += 1
 
         let impact = UIImpactFeedbackGenerator(style: .heavy)
         impact.prepare()
         impact.impactOccurred(intensity: 1.0)
 
-        withAnimation(.easeOut(duration: 0.045)) {
-            machineShakeX = -16
-            machineDropY = 7
+        // 旧JACKPOT演出を開始せず、動画シーケンスへ直行する。
+        rewardCardVisible = false
+        isConfettiVisible = false
+        pseudoRepeatVisible = false
+        freezeEffectVisible = false
+        freezeSequenceRunning = false
+        resultCelebrationKind = nil
+        resultPauseOpacity = 0
+        resultPauseTextOpacity = 0
+        jackpotWhiteoutOpacity = 0
+        premiumFlashOpacity = 0
+        machineFlashOpacity = 0
+
+        withAnimation(.easeOut(duration: 0.06)) {
+            machineShakeX = -12
             machinePulse = true
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.055) {
-            withAnimation(.easeInOut(duration: 0.055)) {
-                machineShakeX = 14
-                machineDropY = -3
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            withAnimation(.easeInOut(duration: 0.07)) {
+                machineShakeX = 12
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.easeInOut(duration: 0.060)) {
-                machineShakeX = -8
-                machineDropY = 2
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            isBonusVideoActive = true
+            bonusVideoTrigger += 1
         }
 
-        // 押し込みを見せてからControllerへ通知。
-        // この通知で初めて最後の右リールが停止する。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
-            onPush()
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
             withAnimation(
                 .spring(
                     response: 0.30,
@@ -1537,134 +1230,8 @@ struct PremiumSlotMachineView: View {
                 )
             ) {
                 machineShakeX = 0
-                machineDropY = 0
                 machinePulse = false
             }
-        }
-    }
-
-    private func startPushEmphasis() {
-        pushEmphasisPulse = false
-        pushTextPulse = false
-        pushRingPulse = false
-        pushPromptEntrance = 0
-        pushPromptGlow = false
-        pushPromptSweep = -1.2
-        pushButtonDepth = 0
-        pushButtonSweep = -1.2
-        pushEnergyRotation = 0
-        pushCameraBreath = false
-        pushMicroVibration = 0
-        pushImpactFlashOpacity = 0
-        pushImpactRingScale = 0.55
-        pushImpactRingOpacity = 0
-        pushFlameBurstScale = 1.0
-        pushFlameBurstOpacity = 0
-
-        let notification = UINotificationFeedbackGenerator()
-        notification.prepare()
-        notification.notificationOccurred(.warning)
-
-        withAnimation(
-            .easeInOut(duration: 0.46)
-                .repeatForever(autoreverses: true)
-        ) {
-            pushEmphasisPulse = true
-        }
-
-        withAnimation(
-            .easeInOut(duration: 0.28)
-                .repeatForever(autoreverses: true)
-        ) {
-            pushTextPulse = true
-        }
-
-        withAnimation(
-            .easeOut(duration: 0.92)
-                .repeatForever(autoreverses: false)
-        ) {
-            pushRingPulse = true
-        }
-
-        withAnimation(
-            .spring(
-                response: 0.46,
-                dampingFraction: 0.54
-            )
-        ) {
-            pushPromptEntrance = 1
-        }
-
-        withAnimation(
-            .easeInOut(duration: 0.48)
-                .repeatForever(autoreverses: true)
-        ) {
-            pushPromptGlow = true
-        }
-
-        withAnimation(
-            .linear(duration: 1.25)
-                .repeatForever(autoreverses: false)
-        ) {
-            pushPromptSweep = 1.2
-        }
-
-        withAnimation(
-            .linear(duration: 1.10)
-                .repeatForever(autoreverses: false)
-        ) {
-            pushButtonSweep = 1.2
-        }
-
-        withAnimation(
-            .linear(duration: 2.20)
-                .repeatForever(autoreverses: false)
-        ) {
-            pushEnergyRotation = 360
-        }
-
-        withAnimation(
-            .easeInOut(duration: 0.72)
-                .repeatForever(autoreverses: true)
-        ) {
-            pushCameraBreath = true
-        }
-
-        let vibrationSteps: [CGFloat] = [
-            0.0, -0.7, 0.5, -0.35, 0.25, 0.0
-        ]
-
-        for (index, value) in vibrationSteps.enumerated() {
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + Double(index) * 0.045
-            ) {
-                guard isPushVisible, !pushPressed else { return }
-                pushMicroVibration = value
-            }
-        }
-
-        cabinetStrobeColor = .red
-        cabinetStrobeTrigger += 1
-    }
-
-    private func stopPushEmphasis() {
-        withAnimation(.easeOut(duration: 0.16)) {
-            pushEmphasisPulse = false
-            pushTextPulse = false
-            pushRingPulse = false
-            pushPromptEntrance = 0
-            pushPromptGlow = false
-            pushPromptSweep = -1.2
-            pushButtonDepth = 0
-            pushButtonSweep = -1.2
-            pushEnergyRotation = 0
-            pushCameraBreath = false
-            pushMicroVibration = 0
-            pushImpactFlashOpacity = 0
-            pushImpactRingScale = 0.55
-            pushImpactRingOpacity = 0
-            pushFlameBurstScale = 1.0
-            pushFlameBurstOpacity = 0
         }
     }
 
@@ -1698,27 +1265,25 @@ struct PremiumSlotMachineView: View {
     }
 
     private func lightLuckyLamp() {
-        // LUCKYランプは最初の左リールを止めた瞬間に点灯。
         switch safeSymbols {
+
+        // SSR
         case ["🌈7", "🌈7", "🌈7"]:
             luckyLampMode = .rainbow
             luckyLampTrigger += 1
 
-        case ["7", "7", "7"]:
+        // SR
+        case ["7", "7", "7"],
+             ["7", "7", "BAR"],
+             ["BAR", "BAR", "BAR"]:
             luckyLampMode = .gold
             luckyLampTrigger += 1
 
+        // R・N
         default:
-            // プレミアムルートのその他図柄は金色。
-            if expectationLevel == .premium {
-                luckyLampMode = .gold
-                luckyLampTrigger += 1
-            } else {
-                luckyLampMode = .off
-            }
+            luckyLampMode = .off
         }
     }
-
     private func playFinalResultSequence() {
         finalResultSequenceToken += 1
         let token = finalResultSequenceToken
@@ -1758,7 +1323,7 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.58
+            deadline: .now() + 0.32
         ) {
             guard token == finalResultSequenceToken else { return }
 
@@ -1781,7 +1346,7 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.655
+            deadline: .now() + 0.385
         ) {
             guard token == finalResultSequenceToken else { return }
 
@@ -1797,7 +1362,7 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.74
+            deadline: .now() + 0.47
         ) {
             guard token == finalResultSequenceToken else { return }
 
@@ -2226,411 +1791,6 @@ struct PremiumSlotMachineView: View {
 
 
 
-
-
-private struct ContinuousRainbowShuttleOverlay: View {
-    let isActive: Bool
-    let intensity: Double
-
-    @State private var travel = false
-    @State private var twinkle = false
-
-    private let shuttleCount = 10
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                if isActive {
-                    ForEach(0..<shuttleCount, id: \.self) { index in
-                        shuttle(index: index, size: proxy.size)
-                    }
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .onAppear {
-            start()
-        }
-        .onChange(of: isActive) { _, active in
-            if active {
-                start()
-            }
-        }
-    }
-
-    private func shuttle(index: Int, size: CGSize) -> some View {
-        let fromLeft = index.isMultiple(of: 2)
-        let lane = CGFloat(index % 5) / 4.0
-        let delay = Double(index) * 0.24
-
-        let startX: CGFloat = fromLeft ? -55 : size.width + 55
-        let endX: CGFloat = fromLeft ? size.width + 55 : -55
-
-        let startY =
-            size.height * (0.18 + lane * 0.68)
-            + CGFloat((index % 3) * 18)
-
-        let endY =
-            size.height * (0.08 + CGFloat((index + 2) % 5) / 4.0 * 0.76)
-
-        let progress: CGFloat = travel ? 1 : 0
-        let x = startX + (endX - startX) * progress
-        let y = startY + (endY - startY) * progress
-
-        let angle: Double = fromLeft ? -28 : 152
-        let scale = CGFloat(0.76 + Double(index % 4) * 0.10)
-
-        return ZStack {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            rainbowColor(index).opacity(0.92),
-                            rainbowColor(index + 2).opacity(0.68),
-                            Color.clear
-                        ],
-                        startPoint: fromLeft ? .leading : .trailing,
-                        endPoint: fromLeft ? .trailing : .leading
-                    )
-                )
-                .frame(width: 72, height: 6)
-                .blur(radius: 2.2)
-                .offset(x: fromLeft ? -32 : 32)
-                .opacity(0.68)
-
-            Image(shuttleImageName(for: index))
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: 50 + CGFloat(index % 3) * 10,
-                    height: 50 + CGFloat(index % 3) * 10
-                )
-                .shadow(color: rainbowColor(index), radius: 12)
-                .shadow(color: .white.opacity(0.82), radius: 4)
-                .opacity(twinkle ? 1.0 : 0.82)
-        }
-        .scaleEffect(scale)
-        .rotationEffect(.degrees(angle))
-        .position(x: x, y: y)
-        .opacity(isActive ? 1 : 0)
-        .animation(
-            .linear(duration: 2.7 + Double(index % 4) * 0.34)
-                .repeatForever(autoreverses: false)
-                .delay(delay),
-            value: travel
-        )
-    }
-
-    private func shuttleImageName(for index: Int) -> String {
-        let images = [
-            "RainbowShuttleNE",
-            "RainbowShuttleNW",
-            "RainbowShuttleSE",
-            "RainbowShuttleSW"
-        ]
-
-        return images[index % images.count]
-    }
-
-    private func rainbowColor(_ index: Int) -> Color {
-        let colors: [Color] = [
-            .red, .orange, .yellow, .green,
-            .cyan, .blue, .purple, .pink
-        ]
-        return colors[index % colors.count]
-    }
-
-    private func start() {
-        travel = false
-        twinkle = false
-
-        DispatchQueue.main.async {
-            travel = true
-
-            withAnimation(
-                .easeInOut(duration: 0.42)
-                    .repeatForever(autoreverses: true)
-            ) {
-                twinkle = true
-            }
-        }
-    }
-}
-
-
-private struct PremiumPushEmphasisOverlay: View {
-    let textPulse: Bool
-    let ringPulse: Bool
-    let entranceProgress: CGFloat
-    let glowPulse: Bool
-    let sweepProgress: CGFloat
-
-    private let arrowCount = 3
-
-    var body: some View {
-        GeometryReader { proxy in
-            let promptWidth = min(proxy.size.width * 0.78, 294)
-            let promptHeight = min(proxy.size.height * 0.38, 198)
-
-            // 矢印画像だけをPUSH文字より小さく表示する。
-            // Assets側の余白を考慮し、横幅・高さを独立して調整。
-            let arrowWidth = promptWidth * 0.72
-            let arrowHeight = promptHeight * 0.66
-            let arrowOffsetY = promptHeight * 0.16
-
-            ZStack {
-                Color.black.opacity(textPulse ? 0.22 : 0.12)
-
-                RadialGradient(
-                    colors: [
-                        Color.red.opacity(textPulse ? 0.44 : 0.24),
-                        Color.orange.opacity(0.12),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 8,
-                    endRadius: 250
-                )
-                .blendMode(.screen)
-
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white, .yellow, .orange, .red],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: CGFloat(6 - index)
-                        )
-                        .frame(
-                            width: CGFloat(170 + index * 36),
-                            height: CGFloat(170 + index * 36)
-                        )
-                        .scaleEffect(ringPulse ? 1.46 : 0.66)
-                        .opacity(
-                            ringPulse
-                                ? 0
-                                : Double(0.90 - Double(index) * 0.20)
-                        )
-                        .shadow(color: .red, radius: 18)
-                }
-
-                ZStack {
-                    // 「押せ！PUSH!!」本体。文字には強い白スイープを掛けず、
-                    // 赤と金の質感をそのまま残す。
-                    Image("PremiumPushPrompt")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(
-                            width: promptWidth,
-                            height: promptHeight
-                        )
-                        .shadow(
-                            color: Color.red.opacity(0.82),
-                            radius: glowPulse ? 25 : 14
-                        )
-
-                    // 矢印の常時点灯レイヤー。
-                    Image("PremiumPushArrows")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(
-                            width: arrowWidth,
-                            height: arrowHeight
-                        )
-                        .offset(y: arrowOffsetY)
-                        .opacity(glowPulse ? 0.76 : 0.54)
-                        .brightness(glowPulse ? 0.10 : 0.02)
-                        .shadow(
-                            color: Color.orange.opacity(0.88),
-                            radius: glowPulse ? 13 : 7
-                        )
-                        .blendMode(.screen)
-
-                    // 左→中央→右へLEDが走る実機風アニメーション。
-                    TimelineView(
-                        .animation(
-                            minimumInterval: 1.0 / 30.0,
-                            paused: false
-                        )
-                    ) { context in
-                        let time = context.date.timeIntervalSinceReferenceDate
-
-                        ZStack {
-                            ForEach(0..<arrowCount, id: \.self) { index in
-                                animatedArrowSegment(
-                                    index: index,
-                                    time: time,
-                                    width: arrowWidth,
-                                    height: arrowHeight
-                                )
-                            }
-
-                            // 矢印だけを横切る鋭いハイライト。
-                            LinearGradient(
-                                colors: [
-                                    .clear,
-                                    .white.opacity(0.98),
-                                    .yellow.opacity(0.92),
-                                    .white.opacity(0.82),
-                                    .clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(width: 44, height: arrowHeight * 0.82)
-                            .rotationEffect(.degrees(18))
-                            .offset(x: movingArrowSweepX(time: time, width: arrowWidth))
-                            .blur(radius: 2.2)
-                            .blendMode(.screen)
-                            .mask {
-                                Image("PremiumPushArrows")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(
-                                        width: arrowWidth,
-                                        height: arrowHeight
-                                    )
-                            }
-                        }
-                    }
-                    .frame(
-                        width: arrowWidth,
-                        height: arrowHeight
-                    )
-                    .offset(y: arrowOffsetY)
-
-                    // 中央から下へ落ちる衝撃光。矢印がPUSHを促すように見せる。
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0),
-                                    Color.yellow.opacity(textPulse ? 0.88 : 0.48),
-                                    Color.orange.opacity(textPulse ? 0.64 : 0.30),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: arrowWidth * 0.48, height: 34)
-                        .offset(y: arrowOffsetY + arrowHeight * 0.32)
-                        .blur(radius: 8)
-                        .opacity(textPulse ? 0.72 : 0.34)
-                        .blendMode(.screen)
-                }
-                .scaleEffect(
-                    0.56
-                    + entranceProgress * 0.36
-                    + (textPulse ? 0.035 : -0.008)
-                )
-                .opacity(Double(entranceProgress))
-                .brightness(glowPulse ? 0.05 : 0)
-                .shadow(
-                    color: .yellow.opacity(glowPulse ? 0.88 : 0.38),
-                    radius: glowPulse ? 14 : 7
-                )
-                .shadow(
-                    color: .red.opacity(glowPulse ? 1.0 : 0.60),
-                    radius: glowPulse ? 31 : 16
-                )
-                .position(
-                    x: proxy.size.width / 2,
-                    y: proxy.size.height * 0.54
-                )
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-    }
-
-    private func animatedArrowSegment(
-        index: Int,
-        time: Double,
-        width: CGFloat,
-        height: CGFloat
-    ) -> some View {
-        let cycleDuration = 0.84
-        let stagger = cycleDuration / Double(arrowCount)
-        let localTime = positiveRemainder(
-            time - Double(index) * stagger,
-            cycleDuration
-        )
-        let progress = localTime / cycleDuration
-
-        // 0付近で鋭く点灯し、その後ゆっくり減衰。
-        let pulse = pow(max(0, 1 - progress), 2.8)
-        let secondaryPulse = max(
-            0,
-            sin(progress * .pi)
-        )
-
-        let scale = 0.96 + CGFloat(pulse) * 0.16
-        let verticalDrop = CGFloat(secondaryPulse) * 7
-        let segmentOpacity = 0.30 + pulse * 0.70
-
-        return Image("PremiumPushArrows")
-            .resizable()
-            .scaledToFit()
-            .frame(width: width, height: height)
-            .mask {
-                ZStack {
-                    Color.clear
-
-                    Rectangle()
-                        .frame(
-                            width: width / CGFloat(arrowCount),
-                            height: height
-                        )
-                        .offset(
-                            x:
-                                (CGFloat(index) - 1)
-                                * width
-                                / CGFloat(arrowCount)
-                        )
-                }
-                .frame(width: width, height: height)
-            }
-            .scaleEffect(scale, anchor: .center)
-            .offset(y: verticalDrop)
-            .opacity(segmentOpacity)
-            .brightness(0.10 + pulse * 0.44)
-            .contrast(1.08 + pulse * 0.26)
-            .shadow(
-                color: Color.white.opacity(0.42 + pulse * 0.58),
-                radius: 2 + pulse * 8
-            )
-            .shadow(
-                color: Color.yellow.opacity(0.58 + pulse * 0.42),
-                radius: 7 + pulse * 14
-            )
-            .shadow(
-                color: Color.red.opacity(0.60 + pulse * 0.36),
-                radius: 12 + pulse * 20
-            )
-            .blendMode(.screen)
-    }
-
-    private func movingArrowSweepX(
-        time: Double,
-        width: CGFloat
-    ) -> CGFloat {
-        let duration = 1.16
-        let progress = positiveRemainder(time, duration) / duration
-        return -width * 0.62 + width * 1.24 * CGFloat(progress)
-    }
-
-    private func positiveRemainder(
-        _ value: Double,
-        _ divisor: Double
-    ) -> Double {
-        guard divisor > 0 else { return 0 }
-        let remainder = value.truncatingRemainder(dividingBy: divisor)
-        return remainder >= 0 ? remainder : remainder + divisor
-    }
-}
-
 private struct AuthenticPachislotCabinetOverlay: View {
     let trigger: Int
     let glowColor: Color
@@ -2923,490 +2083,318 @@ private struct PremiumCinematicPachislotOverlay: View {
     let trigger: Int
     let glowColor: Color
 
-    @State private var blackOpacity = 0.0
-    @State private var flashOpacity = 0.0
-
-    @State private var screenScaleX: CGFloat = 1
-    @State private var screenScaleY: CGFloat = 1
-    @State private var screenOpacity = 0.0
-
-    @State private var lineScaleX: CGFloat = 1
-    @State private var lineOpacity = 0.0
-    @State private var dotOpacity = 0.0
-
+    @State private var blackoutOpacity = 0.0
+    @State private var messageOpacity = 0.0
+    @State private var messageScale: CGFloat = 0.72
     @State private var doorProgress: CGFloat = 0
-    @State private var ringScale: CGFloat = 0.30
-    @State private var ringOpacity = 0.0
+    @State private var flashOpacity = 0.0
+    @State private var freezeLineOffset: CGFloat = -1
+    @State private var ringScale: CGFloat = 0.35
 
     var body: some View {
+        ZStack {
+            Color.black
+                .opacity(blackoutOpacity)
+
+            if phase == .silentFreeze {
+                freezeLayer
+            }
+
+            if phase == .doorOpen {
+                doorLayer
+            }
+
+            if phase == .kyuiin {
+                kyuiinLayer
+            }
+
+            if shouldShowMessage {
+                messageLayer
+            }
+
+            Color.white
+                .opacity(flashOpacity)
+                .blendMode(.screen)
+        }
+        .clipShape(
+            RoundedRectangle(cornerRadius: 34, style: .continuous)
+        )
+        .onChange(of: trigger) { _, newValue in
+            guard newValue > 0 else { return }
+            playPhase()
+        }
+        .onChange(of: phase) { _, newPhase in
+            if newPhase == .idle {
+                resetVisualState()
+            }
+        }
+        .onDisappear {
+            resetVisualState()
+        }
+    }
+
+    private var shouldShowMessage: Bool {
+        false
+    }
+
+    private var phaseText: String {
+        switch phase {
+        case .leverBlackout, .delayedStart:
+            return ""
+        case .silentFreeze:
+            return "SILENT FREEZE"
+        case .pushStandby:
+            return "PUSH"
+        case .finalSilence:
+            return ""
+        case .ticketReady:
+            return "TICKET GET"
+        default:
+            return ""
+        }
+    }
+
+    private var messageLayer: some View {
+        VStack(spacing: 8) {
+            Text(phaseText)
+                .font(
+                    .system(
+                        size: phase == .pushStandby ? 48 : 32,
+                        weight: .black,
+                        design: .rounded
+                    )
+                )
+                .tracking(2.0)
+                .foregroundStyle(
+                    phase == .ticketReady
+                        ? AnyShapeStyle(
+                            LinearGradient(
+                                colors: [.white, .yellow, .orange],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        : AnyShapeStyle(Color.white)
+                )
+                .shadow(
+                    color: phase == .ticketReady ? .yellow : glowColor,
+                    radius: 16
+                )
+
+            if phase == .pushStandby {
+                Image(systemName: "hand.tap.fill")
+                    .font(.system(size: 30, weight: .black))
+                    .foregroundStyle(.red)
+                    .shadow(color: .red, radius: 14)
+            }
+        }
+        .scaleEffect(messageScale)
+        .opacity(messageOpacity)
+    }
+
+    private var freezeLayer: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.black
-                    .opacity(blackOpacity)
+                Color.black.opacity(0.78)
 
-                // CRT画面そのもの。OFF時は縦に潰れ、ON時は横線から復帰する。
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.98),
-                                glowColor.opacity(0.78),
-                                Color.white.opacity(0.94)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(
-                        width: proxy.size.width,
-                        height: proxy.size.height
-                    )
-                    .scaleEffect(
-                        x: screenScaleX,
-                        y: screenScaleY,
-                        anchor: .center
-                    )
-                    .opacity(screenOpacity)
-                    .blendMode(.screen)
-                    .shadow(color: .white, radius: 22)
-                    .shadow(color: glowColor, radius: 34)
-
-                // テレビが消える瞬間の横線
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .white,
-                                glowColor,
-                                .white,
-                                .clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(
-                        width: proxy.size.width * 0.96,
-                        height: 5
-                    )
-                    .scaleEffect(x: lineScaleX)
-                    .opacity(lineOpacity)
-                    .shadow(color: .white, radius: 12)
-                    .shadow(color: glowColor, radius: 24)
-
-                // 横線が一点に収束する瞬間
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 9, height: 9)
-                    .opacity(dotOpacity)
-                    .shadow(color: .white, radius: 14)
-                    .shadow(color: glowColor, radius: 26)
-
-                if phase == .kyuiin {
-                    ZStack {
-                        ForEach(0..<20, id: \.self) { index in
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            .white,
-                                            index.isMultiple(of: 2) ? .yellow : .orange,
-                                            .clear
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: 155, height: index.isMultiple(of: 4) ? 7 : 3)
-                                .offset(x: 82)
-                                .rotationEffect(.degrees(Double(index) * 18))
-                                .scaleEffect(ringScale)
-                                .opacity(ringOpacity)
-                                .blendMode(.screen)
-                        }
-
-                        VStack(spacing: 2) {
-                            Text("JACKPOT!!")
-                                .font(.system(size: 44, weight: .black, design: .rounded))
-                                .italic()
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.white, .yellow, .orange, .red],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .strokeText(color: .red, width: 2.2)
-                                .shadow(color: .yellow, radius: 10)
-                                .shadow(color: .red, radius: 20)
-
-                            Text("777 WIN")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .tracking(3)
-                                .foregroundStyle(Color.white.opacity(0.92))
-                        }
-                        .scaleEffect(ringScale)
-                        .opacity(ringOpacity)
+                VStack(spacing: 4) {
+                    ForEach(0..<54, id: \.self) { index in
+                        Rectangle()
+                            .fill(
+                                index.isMultiple(of: 3)
+                                    ? Color.white.opacity(0.11)
+                                    : glowColor.opacity(0.07)
+                            )
+                            .frame(height: 1)
                     }
                 }
+                .offset(y: proxy.size.height * freezeLineOffset)
+                .blendMode(.screen)
 
-                if phase == .doorOpen {
-                    doorLayer(size: proxy.size)
+                Image(systemName: "snowflake")
+                    .font(.system(size: 72, weight: .thin))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .shadow(color: .cyan, radius: 20)
+            }
+        }
+    }
+
+    private var kyuiinLayer: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            .red, .orange, .yellow, .green,
+                            .cyan, .blue, .purple, .pink, .red
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 12
+                )
+                .frame(width: 220, height: 220)
+                .scaleEffect(ringScale)
+                .shadow(color: .white, radius: 24)
+
+        }
+        .opacity(messageOpacity)
+    }
+
+    private var doorLayer: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color.black.opacity(0.58)
+
+                HStack(spacing: 0) {
+                    doorPanel(
+                        width: proxy.size.width / 2,
+                        height: proxy.size.height,
+                        isLeft: true
+                    )
+                    .offset(x: -doorProgress * proxy.size.width / 2)
+
+                    doorPanel(
+                        width: proxy.size.width / 2,
+                        height: proxy.size.height,
+                        isLeft: false
+                    )
+                    .offset(x: doorProgress * proxy.size.width / 2)
                 }
 
-                Color.white
-                    .opacity(flashOpacity)
-                    .blendMode(.screen)
+                RadialGradient(
+                    colors: [
+                        Color.white.opacity(0.95),
+                        glowColor.opacity(0.70),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 210
+                )
+                .scaleEffect(doorProgress)
+                .opacity(Double(doorProgress))
+                .blendMode(.screen)
             }
-            .frame(
-                width: proxy.size.width,
-                height: proxy.size.height
-            )
-        }
-        .allowsHitTesting(false)
-        .onAppear {
-            playCurrentPhase()
-        }
-        .onChange(of: phase) { _, _ in
-            playCurrentPhase()
-        }
-        .onChange(of: trigger) { _, _ in
-            playCurrentPhase()
         }
     }
 
-    @ViewBuilder
-    private func doorLayer(size: CGSize) -> some View {
-        ZStack {
-            Color.black.opacity(0.58)
-
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .black,
-                                Color(red: 0.16, green: 0.02, blue: 0.03),
-                                .black
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: size.width / 2)
-                    .offset(x: -doorProgress * size.width / 2)
-
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .black,
-                                Color(red: 0.16, green: 0.02, blue: 0.03),
-                                .black
-                            ],
-                            startPoint: .trailing,
-                            endPoint: .leading
-                        )
-                    )
-                    .frame(width: size.width / 2)
-                    .offset(x: doorProgress * size.width / 2)
-            }
-
-            RadialGradient(
-                colors: [
-                    Color.white.opacity(0.96),
-                    glowColor.opacity(0.72),
-                    .clear
-                ],
-                center: .center,
-                startRadius: 0,
-                endRadius: 220
+    private func doorPanel(
+        width: CGFloat,
+        height: CGFloat,
+        isLeft: Bool
+    ) -> some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(red: 0.16, green: 0.02, blue: 0.03),
+                        Color.black
+                    ],
+                    startPoint: isLeft ? .leading : .trailing,
+                    endPoint: isLeft ? .trailing : .leading
+                )
             )
-            .scaleEffect(max(doorProgress, 0.01))
-            .opacity(Double(doorProgress))
-            .blendMode(.screen)
-        }
+            .overlay {
+                Rectangle()
+                    .stroke(Color.red.opacity(0.75), lineWidth: 3)
+                    .shadow(color: .red, radius: 12)
+            }
+            .frame(width: width, height: height)
     }
 
-    private func reset() {
-        blackOpacity = 0
-        flashOpacity = 0
+    private func resetVisualState() {
+        withAnimation(.easeOut(duration: 0.12)) {
+            blackoutOpacity = 0
+            messageOpacity = 0
+            flashOpacity = 0
+            doorProgress = 0
+        }
 
-        screenScaleX = 1
-        screenScaleY = 1
-        screenOpacity = 0
+        messageScale = 0.72
+        freezeLineOffset = -1
+        ringScale = 0.35
+    }
 
-        lineScaleX = 1
-        lineOpacity = 0
-        dotOpacity = 0
-
+    private func playPhase() {
+        blackoutOpacity = 0
+        messageOpacity = 0
+        messageScale = 0.72
         doorProgress = 0
-        ringScale = 0.30
-        ringOpacity = 0
-    }
+        flashOpacity = 0
+        freezeLineOffset = -1
+        ringScale = 0.35
 
-    private func playCurrentPhase() {
         switch phase {
         case .idle:
-            reset()
+            break
 
         case .leverBlackout:
-            reset()
             withAnimation(.easeOut(duration: 0.08)) {
-                blackOpacity = 0.96
+                blackoutOpacity = 0.96
+                messageOpacity = 1
             }
 
         case .delayedStart:
-            reset()
-            blackOpacity = 0.78
-            withAnimation(.easeOut(duration: 0.34).delay(0.16)) {
-                blackOpacity = 0
+            blackoutOpacity = 0.72
+            withAnimation(
+                .spring(response: 0.34, dampingFraction: 0.55)
+            ) {
+                messageOpacity = 1
+                messageScale = 1
+            }
+            withAnimation(.easeOut(duration: 0.34).delay(0.18)) {
+                blackoutOpacity = 0
             }
 
         case .silentFreeze:
-            playCRTOff()
-
-        case .finalSilence:
-            // 完全な真っ黒状態を維持
-            blackOpacity = 1
-            flashOpacity = 0
-            screenOpacity = 0
-            lineOpacity = 0
-            dotOpacity = 0
+            blackoutOpacity = 0.64
+            messageOpacity = 1
+            withAnimation(.linear(duration: 0.55)) {
+                freezeLineOffset = 1
+            }
 
         case .pushStandby:
-            playCRTOn()
+            withAnimation(.easeOut(duration: 0.18)) {
+                blackoutOpacity = 0.16
+            }
+
+        case .finalSilence:
+            withAnimation(.easeOut(duration: 0.10)) {
+                blackoutOpacity = 0.28
+            }
 
         case .kyuiin:
-            reset()
             flashOpacity = 1
-            ringOpacity = 1
-            withAnimation(.easeOut(duration: 0.16)) {
+            messageOpacity = 1
+            withAnimation(.easeOut(duration: 0.18)) {
                 flashOpacity = 0
             }
             withAnimation(
-                .spring(
-                    response: 0.44,
-                    dampingFraction: 0.45
-                )
+                .spring(response: 0.44, dampingFraction: 0.45)
             ) {
                 ringScale = 1.18
             }
 
         case .doorOpen:
-            reset()
-            blackOpacity = 0.66
-            flashOpacity = 0.76
-            withAnimation(.easeOut(duration: 0.16)) {
+            blackoutOpacity = 0.66
+            flashOpacity = 0.75
+            withAnimation(.easeOut(duration: 0.18)) {
                 flashOpacity = 0
             }
-            withAnimation(.easeInOut(duration: 0.95)) {
+            withAnimation(
+                .easeInOut(duration: 0.95)
+            ) {
                 doorProgress = 1
             }
 
         case .ticketReady:
-            withAnimation(.easeOut(duration: 0.22)) {
-                blackOpacity = 0
-            }
-        }
-    }
-
-    private func playCRTOff() {
-        reset()
-
-        flashOpacity = 1
-        screenOpacity = 0.98
-        blackOpacity = 0
-
-        withAnimation(.easeOut(duration: 0.10)) {
-            flashOpacity = 0
-        }
-
-        // 全画面が縦方向に潰れる
-        withAnimation(.easeIn(duration: 0.42).delay(0.08)) {
-            screenScaleY = 0.012
-            blackOpacity = 1
-        }
-
-        // 横線を一瞬残す
-        withAnimation(.easeOut(duration: 0.08).delay(0.48)) {
-            lineOpacity = 1
-        }
-
-        // 横線が中央の一点へ収束
-        withAnimation(.easeIn(duration: 0.22).delay(0.64)) {
-            lineScaleX = 0.018
-            screenScaleX = 0.018
-            screenOpacity = 0
-        }
-
-        withAnimation(.easeOut(duration: 0.05).delay(0.84)) {
-            lineOpacity = 0
-            dotOpacity = 1
-        }
-
-        // 点も消えて完全暗転
-        withAnimation(.easeOut(duration: 0.13).delay(0.98)) {
-            dotOpacity = 0
-        }
-    }
-
-    private func playCRTOn() {
-        // 真っ黒な中に一点を表示
-        blackOpacity = 1
-        flashOpacity = 0
-        screenScaleX = 0.018
-        screenScaleY = 0.012
-        screenOpacity = 0
-        lineScaleX = 0.018
-        lineOpacity = 0
-        dotOpacity = 1
-
-        // 点 → 横線
-        withAnimation(.easeOut(duration: 0.08).delay(0.04)) {
-            dotOpacity = 0
-            lineOpacity = 1
-        }
-
-        withAnimation(.easeOut(duration: 0.28).delay(0.10)) {
-            lineScaleX = 1
-            screenScaleX = 1
-        }
-
-        // 横線 → 通常画面
-        withAnimation(.easeOut(duration: 0.62).delay(0.36)) {
-            screenScaleY = 1
-            screenOpacity = 0.90
-            blackOpacity = 0
-        }
-
-        withAnimation(.easeOut(duration: 0.18).delay(0.90)) {
-            lineOpacity = 0
-            screenOpacity = 0
-        }
-    }
-}
-
-private struct RainbowShuttleCelebrationOverlay: View {
-    let trigger: Int
-    let isRainbowJackpot: Bool
-
-    @State private var progress: CGFloat = 0
-    @State private var opacity = 0.0
-
-    private let shuttleCount = 13
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                ForEach(0..<shuttleCount, id: \.self) { index in
-                    shuttle(index: index, size: proxy.size)
-                }
-
-                if isRainbowJackpot {
-                    Text("🌈 JACKPOT!! 🌈")
-                        .font(.system(size: 31, weight: .black, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .strokeText(color: .white.opacity(0.90), width: 1.2)
-                        .shadow(color: .white, radius: 8)
-                        .shadow(color: .purple, radius: 18)
-                        .scaleEffect(0.76 + progress * 0.32)
-                        .opacity(opacity)
-                        .position(x: proxy.size.width / 2, y: proxy.size.height * 0.46)
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .onAppear { play() }
-        .onChange(of: trigger) { _, _ in play() }
-    }
-
-    private func shuttle(index: Int, size: CGSize) -> some View {
-        let lane = CGFloat(index % 5) / 4
-        let startFromLeft = index.isMultiple(of: 2)
-        let startX: CGFloat = startFromLeft ? -70 : size.width + 70
-        let endX: CGFloat = size.width * (0.16 + lane * 0.68)
-        let startY: CGFloat = size.height + 55 + CGFloat(index % 4) * 26
-        let endY: CGFloat = -70 - CGFloat(index % 5) * 20
-
-        let x = startX + (endX - startX) * progress
-        let y = startY + (endY - startY) * progress
-        let spin = Double(progress) * Double(520 + index * 47)
-
-        return ZStack {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            rainbowColor(index),
-                            rainbowColor(index + 2).opacity(0.75),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 90, height: 7)
-                .blur(radius: 2)
-                .offset(x: startFromLeft ? -38 : 38)
-                .rotationEffect(.degrees(startFromLeft ? -26 : 206))
-                .opacity(opacity * 0.72)
-
-            Image(imageName(for: index))
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: CGFloat(52 + index % 3 * 11),
-                    height: CGFloat(52 + index % 3 * 11)
-                )
-                .shadow(color: rainbowColor(index), radius: 12)
-                .shadow(color: .white.opacity(0.8), radius: 5)
-            
-        }
-        .rotationEffect(.degrees(spin))
-        .position(x: x, y: y)
-        .opacity(opacity)
-    }
-
-    private func imageName(for index: Int) -> String {
-
-        let images = [
-            "RainbowShuttleNE",
-            "RainbowShuttleNW",
-            "RainbowShuttleSE",
-            "RainbowShuttleSW"
-        ]
-
-        return images[index % images.count]
-    }
-    private func rainbowColor(_ index: Int) -> Color {
-        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink]
-        return colors[index % colors.count]
-    }
-
-    private func play() {
-        progress = 0
-        opacity = 1
-
-        withAnimation(.easeOut(duration: 2.55)) {
-            progress = 1
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.95) {
-            withAnimation(.easeOut(duration: 0.55)) {
-                opacity = 0
+            withAnimation(.easeOut(duration: 0.24)) {
+                blackoutOpacity = 0
             }
         }
     }
 }
-
 
 private struct EnhancedReelStopFlashOverlay: View {
     let opacity: Double
@@ -3876,9 +2864,5 @@ private extension View {
         }
     }
 }
-
-
-
-
 
 
