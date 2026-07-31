@@ -59,11 +59,14 @@ struct PremiumSlotMachineView: View {
     @State private var premiumBacklightPhase = 0.0
     @State private var premiumBurstTrigger = 0
     @State private var pseudoRepeatVisible = false
+    @State private var isPremiumTypewriterVisible = false
     @State private var isVMovieVisible = false
     @State private var isBonusMovieVisible = false
     @State private var isBonusLogoVisible = false
     @State private var bonusMovieTicketVisible = false
     @State private var hasStartedMovieSequence = false
+    @State private var hasPremiumTypewriterFinished = false
+    @State private var hasStartedVMovie = false
     @State private var hasActivePremiumSpin = false
     @State private var pseudoRepeatCount = 0
     @State private var freezeEffectVisible = false
@@ -250,6 +253,16 @@ struct PremiumSlotMachineView: View {
                 .transition(.opacity)
                 .zIndex(67)
                 .allowsHitTesting(false)
+            }
+
+            if isPremiumTypewriterVisible {
+                PremiumTypewriterOverlay {
+                    guard isPremiumTypewriterVisible else { return }
+
+                    isPremiumTypewriterVisible = false
+                    hasPremiumTypewriterFinished = true
+                }
+                .zIndex(1999)
             }
 
             if isVMovieVisible {
@@ -623,11 +636,14 @@ struct PremiumSlotMachineView: View {
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
                 hasActivePremiumSpin = true
+                isPremiumTypewriterVisible = false
                 isVMovieVisible = false
                 isBonusMovieVisible = false
                 isBonusLogoVisible = false
                 bonusMovieTicketVisible = false
                 hasStartedMovieSequence = false
+                hasPremiumTypewriterFinished = false
+                hasStartedVMovie = false
                 
                 prepareDisplaySymbols()
                 prepareSpinEffectPlan()
@@ -675,29 +691,34 @@ struct PremiumSlotMachineView: View {
                 playPushStandbyCabinetShake()
 
             case .finalSilence:
-                nextEpisodePreviewTrigger += 1
+                if isRainbowJackpot,
+                   hasActivePremiumSpin,
+                   !hasStartedMovieSequence {
+                    hasStartedMovieSequence = true
+                    isPremiumTypewriterVisible = true
+                } else if !isRainbowJackpot {
+                    nextEpisodePreviewTrigger += 1
+                }
 
             case .doorOpen:
-                guard isRainbowJackpot else {
+                guard isRainbowJackpot,
+                      hasActivePremiumSpin,
+                      hasPremiumTypewriterFinished,
+                      !hasStartedVMovie else {
                     break
                 }
 
-                guard hasActivePremiumSpin else {
-                    break
-                }
-
-                guard !hasStartedMovieSequence else {
-                    break
-                }
-
-                hasStartedMovieSequence = true
-
+                hasStartedVMovie = true
                 isVMovieVisible = true
+
             case .idle:
+                isPremiumTypewriterVisible = false
                 isVMovieVisible = false
                 isBonusMovieVisible = false
                 isBonusLogoVisible = false
                 bonusMovieTicketVisible = false
+                hasPremiumTypewriterFinished = false
+                hasStartedVMovie = false
 
             default:
                 break

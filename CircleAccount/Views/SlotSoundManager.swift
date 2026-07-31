@@ -8,6 +8,9 @@ final class SlotSoundManager {
     private let spinPlayer = AVAudioPlayerNode()
     private let accentPlayer = AVAudioPlayerNode()
     private let resultPlayer = AVAudioPlayerNode()
+    private var typewriterPlayers: [AVAudioPlayer] = []
+    private var nextTypewriterPlayerIndex = 0
+    private var typewriterImpactPlayer: AVAudioPlayer?
 
     private var spinStartBuffer: AVAudioPCMBuffer?
     private var spinBuffer: AVAudioPCMBuffer?
@@ -178,6 +181,52 @@ final class SlotSoundManager {
         )
     }
 
+    func playTypewriter() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if typewriterPlayers.isEmpty {
+            prepareTypewriterPlayers()
+        }
+
+        guard !typewriterPlayers.isEmpty else { return }
+
+        let playerIndex: Int
+
+        if let availableIndex = typewriterPlayers.firstIndex(
+            where: { !$0.isPlaying }
+        ) {
+            playerIndex = availableIndex
+        } else {
+            playerIndex = nextTypewriterPlayerIndex
+            nextTypewriterPlayerIndex =
+                (nextTypewriterPlayerIndex + 1)
+                % typewriterPlayers.count
+        }
+
+        let player = typewriterPlayers[playerIndex]
+        player.currentTime = 0
+        player.volume = adjustedVolume(0.86)
+        player.play()
+    }
+
+    func playTypewriterImpact() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if typewriterImpactPlayer == nil {
+            prepareTypewriterImpactPlayer()
+        }
+
+        guard let typewriterImpactPlayer else { return }
+
+        typewriterImpactPlayer.currentTime = 0
+        typewriterImpactPlayer.volume = adjustedVolume(0.92)
+        typewriterImpactPlayer.play()
+    }
+
     func playJackpot() {
         guard isSoundEnabled else { return }
 
@@ -258,6 +307,8 @@ final class SlotSoundManager {
         spinPlayer.stop()
         accentPlayer.stop()
         resultPlayer.stop()
+        typewriterPlayers.forEach { $0.stop() }
+        typewriterImpactPlayer?.stop()
 
         if engine.isRunning {
             engine.pause()
@@ -279,6 +330,53 @@ final class SlotSoundManager {
         } catch {
             print(
                 "SlotSoundManager audio error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareTypewriterPlayers() {
+        guard let url = Bundle.main.url(
+            forResource: "typewriter",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: typewriter.mp3 not found")
+            return
+        }
+
+        typewriterPlayers = (0..<4).compactMap { _ in
+            do {
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.prepareToPlay()
+                return player
+            } catch {
+                print(
+                    "SlotSoundManager typewriter error: "
+                    + error.localizedDescription
+                )
+                return nil
+            }
+        }
+
+        nextTypewriterPlayerIndex = 0
+    }
+
+    private func prepareTypewriterImpactPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "typewriter_impact",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: typewriter_impact.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            typewriterImpactPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager typewriter impact error: "
                 + error.localizedDescription
             )
         }
