@@ -8,6 +8,8 @@ import UIKit
 
 struct PremiumSlotMachineView: View {
     let symbols: [String]
+    let resultTitle: String
+    let resultSubtitle: String
     let isSpinning: Bool
     let stoppedReelCount: Int
     let heatLevel: SlotHeatLevel
@@ -25,6 +27,7 @@ struct PremiumSlotMachineView: View {
     let reelSlipIntensity: CGFloat
     let onFirstReelStop: () -> Void
     let onPush: () -> Void
+    let onPremiumSequenceFinished: () -> Void
     let onLeverChanged: (CGFloat) -> Void
     let onLeverReleased: () -> Void
 
@@ -43,13 +46,11 @@ struct PremiumSlotMachineView: View {
     @State private var stopLineFlashOpacity = 0.0
     @State private var flashingStopIndex: Int?
     @State private var premiumFlashOpacity = 0.0
-    @State private var jackpotVisible = false
     @State private var sparkBurstProgress: CGFloat = 0
     @State private var sparkBurstOpacity = 0.0
     @State private var glassSweepOffset: CGFloat = -1.2
     @State private var machineFlashOpacity = 0.0
     @State private var jackpotWhiteoutOpacity = 0.0
-    @State private var jackpotZoomScale: CGFloat = 1.0
     @State private var frameSweepOffset: CGFloat = -1.4
     @State private var risingLightOffset: CGFloat = 1.2
     @State private var reachPulse = false
@@ -57,8 +58,13 @@ struct PremiumSlotMachineView: View {
     @State private var reachOverlayScale: CGFloat = 0.78
     @State private var premiumBacklightPhase = 0.0
     @State private var premiumBurstTrigger = 0
-    @State private var rewardCardVisible = false
     @State private var pseudoRepeatVisible = false
+    @State private var isVMovieVisible = false
+    @State private var isBonusMovieVisible = false
+    @State private var isBonusLogoVisible = false
+    @State private var bonusMovieTicketVisible = false
+    @State private var hasStartedMovieSequence = false
+    @State private var hasActivePremiumSpin = false
     @State private var pseudoRepeatCount = 0
     @State private var freezeEffectVisible = false
     @State private var freezeSequenceRunning = false
@@ -80,7 +86,6 @@ struct PremiumSlotMachineView: View {
     @State private var pushChanceTrigger = 0
     @State private var pushPressTrigger = 0
     @State private var nextEpisodePreviewTrigger = 0
-    @State private var vJackpotTrigger = 0
     @State private var pushPressed = false
 
     // SSR最終リールPUSH待機演出
@@ -140,6 +145,10 @@ struct PremiumSlotMachineView: View {
     private var isSevenJackpot: Bool {
         safeSymbols == ["7", "7", "7"]
         || safeSymbols == ["🌈7", "🌈7", "🌈7"]
+    }
+
+    private var isRainbowJackpot: Bool {
+        safeSymbols == ["🌈7", "🌈7", "🌈7"]
     }
 
     var body: some View {
@@ -214,28 +223,22 @@ struct PremiumSlotMachineView: View {
             .allowsHitTesting(false)
             .zIndex(63.5)
 
-            PremiumBurstView(
-                trigger: premiumBurstTrigger,
-                glowColor: machineGlow
-            )
-            .zIndex(65)
+            if !isRainbowJackpot {
+                PremiumBurstView(
+                    trigger: premiumBurstTrigger,
+                    glowColor: machineGlow
+                )
+                .zIndex(65)
 
+                RetroNextEpisodePreviewOverlay(
+                    trigger: nextEpisodePreviewTrigger,
+                    isRainbowJackpot: false
+                )
+                .padding(.trailing, 46)
+                .allowsHitTesting(false)
+                .zIndex(270)
 
-            RetroNextEpisodePreviewOverlay(
-                trigger: nextEpisodePreviewTrigger,
-                isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
-            )
-            .padding(.trailing, 46)
-            .allowsHitTesting(false)
-            .zIndex(270)
-
-            PremiumVJackpotOverlay(
-                trigger: vJackpotTrigger,
-                isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
-            )
-            .padding(.trailing, 46)
-            .allowsHitTesting(false)
-            .zIndex(280)
+            }
 
             if isConfettiVisible {
                 RainbowShuttleCelebrationOverlay(
@@ -249,18 +252,75 @@ struct PremiumSlotMachineView: View {
                 .allowsHitTesting(false)
             }
 
-            if isSevenJackpot {
-                RewardCardView(
-                    isVisible: rewardCardVisible,
-                    symbols: safeSymbols,
-                    title: "JACKPOT",
-                    subtitle: statusText.isEmpty ? "PREMIUM GET!" : statusText,
-                    isPremium: true
+            if isVMovieVisible {
+                BundleMovieOverlay(
+                    movieName: "VMovie",
+                    onFinished: {
+                        guard isVMovieVisible else { return }
+                        isVMovieVisible = false
+                        isBonusMovieVisible = true
+                    }
                 )
-                .padding(.trailing, 46)
-                .zIndex(68)
-                .allowsHitTesting(false)
+                .zIndex(2000)
             }
+
+            if isBonusMovieVisible {
+                BundleMovieOverlay(
+                    movieName: "BonusMovie",
+                    endLeadTime: 0.4,
+                    onApproachingEnd: {
+                        guard isBonusMovieVisible else { return }
+
+                        withAnimation(.easeIn(duration: 0.32)) {
+                            bonusMovieTicketVisible = true
+                        }
+                    },
+                    onFinished: {
+                        guard isBonusMovieVisible else { return }
+
+                        isBonusMovieVisible = false
+
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            isBonusLogoVisible = true
+                        }
+                    }
+                )
+                .onAppear {
+                    bonusMovieTicketVisible = false
+                }
+                .zIndex(2001)
+            }
+
+            if bonusMovieTicketVisible {
+                SlotEffectsView(
+                    stage: .cardReveal,
+                    heatLevel: .premium,
+                    resultTitle: resultTitle,
+                    resultSubtitle: resultSubtitle
+                )
+                .transition(.opacity)
+                .zIndex(2002)
+            }
+
+            if isBonusLogoVisible {
+                PremiumBonusConfirmedOverlay {
+                    guard isBonusLogoVisible else { return }
+
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        isBonusLogoVisible = false
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        guard bonusMovieTicketVisible else { return }
+                        onPremiumSequenceFinished()
+                    }
+                }
+                .onAppear {
+                    bonusMovieTicketVisible = true
+                }
+                .zIndex(2003)
+            }
+           
 
             PseudoRepeatOverlay(
                 isVisible: pseudoRepeatVisible,
@@ -562,6 +622,13 @@ struct PremiumSlotMachineView: View {
         }
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
+                hasActivePremiumSpin = true
+                isVMovieVisible = false
+                isBonusMovieVisible = false
+                isBonusLogoVisible = false
+                bonusMovieTicketVisible = false
+                hasStartedMovieSequence = false
+                
                 prepareDisplaySymbols()
                 prepareSpinEffectPlan()
                 machineDropY = 0
@@ -597,6 +664,7 @@ struct PremiumSlotMachineView: View {
                     luckyLampMode = .rainbow
                     luckyLampTrigger += 1
                     playRainbowFinalFlash()
+
                 } else {
                     luckyLampMode = .gold
                     luckyLampTrigger += 1
@@ -607,22 +675,29 @@ struct PremiumSlotMachineView: View {
                 playPushStandbyCabinetShake()
 
             case .finalSilence:
-                // 激アツ演出後、既存のCRT暗転が完了した瞬間に
-                // 次回予告を開始する。
                 nextEpisodePreviewTrigger += 1
 
             case .doorOpen:
-                rewardCardVisible = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
-                    guard cinematicPhase == .doorOpen
-                            || cinematicPhase == .ticketReady else { return }
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) {
-                        rewardCardVisible = true
-                    }
+                guard isRainbowJackpot else {
+                    break
                 }
 
+                guard hasActivePremiumSpin else {
+                    break
+                }
+
+                guard !hasStartedMovieSequence else {
+                    break
+                }
+
+                hasStartedMovieSequence = true
+
+                isVMovieVisible = true
             case .idle:
-                rewardCardVisible = false
+                isVMovieVisible = false
+                isBonusMovieVisible = false
+                isBonusLogoVisible = false
+                bonusMovieTicketVisible = false
 
             default:
                 break
@@ -645,7 +720,6 @@ struct PremiumSlotMachineView: View {
                     effectSequenceToken += 1
                     SlotSoundManager.shared.stopSpin()
                     
-                    hideJackpot()
                 }
                 return
             }
@@ -682,6 +756,10 @@ struct PremiumSlotMachineView: View {
             }
 
             if newValue >= 3 {
+                if isRainbowJackpot {
+                    return
+                }
+
                 playFinalResultSequence()
             }
         }
@@ -1339,17 +1417,8 @@ struct PremiumSlotMachineView: View {
         }
     }
 
-    private func playRewardCardReveal() {
-        rewardCardVisible = true
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            rewardCardVisible = false
-        }
-    }
-
     private func playJackpot() {
         playJackpotWhiteout()
-        jackpotVisible = true
 
         withAnimation(.easeOut(duration: 0.08)) {
             premiumFlashOpacity = 1
@@ -1367,23 +1436,12 @@ struct PremiumSlotMachineView: View {
             }
         }
 
-        // 第三停止後の図柄・チャンス演出・告知ランプを
-        // 十分に見せてから当たりチケットを表示する
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.85) {
-            playRewardCardReveal()
-        }
-
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
             withAnimation(.easeOut(duration: 0.30)) {
                 premiumFlashOpacity = 0
                 machineShakeX = 0
             }
         }
-    }
-
-    private func hideJackpot() {
-        guard jackpotVisible else { return }
-        jackpotVisible = false
     }
 
     private func playPremiumFlash() {
@@ -1495,10 +1553,6 @@ struct PremiumSlotMachineView: View {
 
         stopPushEmphasis()
         pushPressTrigger += 1
-
-        // 次回予告は激アツ後の完全暗転で再生済み。
-        // PUSH時は巨大V・777・JACKPOT演出だけを開始する。
-        vJackpotTrigger += 1
 
         let impact = UIImpactFeedbackGenerator(style: .heavy)
         impact.prepare()
@@ -1838,34 +1892,13 @@ struct PremiumSlotMachineView: View {
     }
 
     private func playResultCelebration() {
-        
         if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-            resultCelebrationKind = nil
-            playConfetti(duration: 3.8)
-            playJackpotWhiteout()
-            playPremiumBurst()
-
-            withAnimation(.easeOut(duration: 0.07)) {
-                machineShakeX = -11
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                withAnimation(.easeInOut(duration: 0.07)) {
-                    machineShakeX = 11
-                }
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {
-                withAnimation(
-                    .spring(
-                        response: 0.30,
-                        dampingFraction: 0.54
-                    )
-                ) {
-                    machineShakeX = 0
-                }
-            }
-        } else if safeSymbols == ["7", "7", "7"] {
+            // VMovie → BonusMovie が終わった後に演出するため、
+            // ここでは何もしない。
+            return
+        }
+       
+         else if safeSymbols == ["7", "7", "7"] {
             resultCelebrationKind = nil
             playConfetti(duration: 3.0)
             playJackpotWhiteout()
@@ -1915,6 +1948,7 @@ struct PremiumSlotMachineView: View {
     }
 
     private func playPremiumBurst() {
+        guard !isRainbowJackpot else { return }
         premiumBurstTrigger += 1
     }
 
@@ -1928,30 +1962,9 @@ struct PremiumSlotMachineView: View {
 
     private func playJackpotWhiteout() {
         jackpotWhiteoutOpacity = 1
-        jackpotZoomScale = 0.88
 
         withAnimation(.easeOut(duration: 0.18)) {
             jackpotWhiteoutOpacity = 0
-        }
-
-        withAnimation(
-            .spring(
-                response: 0.42,
-                dampingFraction: 0.52
-            )
-        ) {
-            jackpotZoomScale = 1.08
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-            withAnimation(
-                .spring(
-                    response: 0.34,
-                    dampingFraction: 0.68
-                )
-            ) {
-                jackpotZoomScale = 1.0
-            }
         }
     }
 
@@ -3004,54 +3017,6 @@ private struct PremiumCinematicPachislotOverlay: View {
                     .shadow(color: .white, radius: 14)
                     .shadow(color: glowColor, radius: 26)
 
-                if phase == .kyuiin {
-                    ZStack {
-                        ForEach(0..<20, id: \.self) { index in
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            .white,
-                                            index.isMultiple(of: 2) ? .yellow : .orange,
-                                            .clear
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: 155, height: index.isMultiple(of: 4) ? 7 : 3)
-                                .offset(x: 82)
-                                .rotationEffect(.degrees(Double(index) * 18))
-                                .scaleEffect(ringScale)
-                                .opacity(ringOpacity)
-                                .blendMode(.screen)
-                        }
-
-                        VStack(spacing: 2) {
-                            Text("JACKPOT!!")
-                                .font(.system(size: 44, weight: .black, design: .rounded))
-                                .italic()
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.white, .yellow, .orange, .red],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .strokeText(color: .red, width: 2.2)
-                                .shadow(color: .yellow, radius: 10)
-                                .shadow(color: .red, radius: 20)
-
-                            Text("777 WIN")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .tracking(3)
-                                .foregroundStyle(Color.white.opacity(0.92))
-                        }
-                        .scaleEffect(ringScale)
-                        .opacity(ringOpacity)
-                    }
-                }
-
                 if phase == .doorOpen {
                     doorLayer(size: proxy.size)
                 }
@@ -3306,7 +3271,7 @@ private struct RainbowShuttleCelebrationOverlay: View {
                 }
 
                 if isRainbowJackpot {
-                    Text("🌈 JACKPOT!! 🌈")
+                    Text("🌈 PREMIUM 🌈")
                         .font(.system(size: 31, weight: .black, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -3824,6 +3789,101 @@ private struct SlotResultCelebrationOverlay: View {
     }
 }
 
+private struct PremiumBonusConfirmedOverlay: View {
+    let onFinished: () -> Void
+
+    @State private var backgroundOpacity = 0.0
+    @State private var flashOpacity = 0.0
+    @State private var logoOpacity = 0.0
+    @State private var logoScale: CGFloat = 0.48
+    @State private var animationToken = 0
+
+    var body: some View {
+        ZStack {
+            Color.black
+                .opacity(backgroundOpacity)
+                .ignoresSafeArea()
+
+            RadialGradient(
+                colors: [
+                    Color.yellow.opacity(0.90),
+                    Color.orange.opacity(0.58),
+                    Color.red.opacity(0.30),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 340
+            )
+            .opacity(logoOpacity)
+            .blendMode(.screen)
+            .ignoresSafeArea()
+
+            Image("PremiumBonusConfirmed")
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(maxWidth: 340)
+                .scaleEffect(logoScale)
+                .opacity(logoOpacity)
+                .shadow(color: .yellow.opacity(0.92), radius: 22)
+                .shadow(color: .red.opacity(0.72), radius: 38)
+
+            Color.white
+                .opacity(flashOpacity)
+                .blendMode(.screen)
+                .ignoresSafeArea()
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            play()
+        }
+        .onDisappear {
+            animationToken += 1
+        }
+    }
+
+    private func play() {
+        animationToken += 1
+        let token = animationToken
+
+        backgroundOpacity = 0
+        flashOpacity = 1
+        logoOpacity = 0
+        logoScale = 0.48
+
+        withAnimation(.easeOut(duration: 0.10)) {
+            backgroundOpacity = 0.55
+            flashOpacity = 0
+        }
+
+        withAnimation(
+            .spring(
+                response: 0.38,
+                dampingFraction: 0.56
+            )
+            .delay(0.08)
+        ) {
+            logoOpacity = 1
+            logoScale = 1
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.72) {
+            guard token == animationToken else { return }
+
+            withAnimation(.easeOut(duration: 0.20)) {
+                backgroundOpacity = 0
+                logoOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) {
+            guard token == animationToken else { return }
+            onFinished()
+        }
+    }
+}
+
 private extension View {
     func strokeText(color: Color, width: CGFloat) -> some View {
         self
@@ -3853,6 +3913,8 @@ private extension View {
         ScrollView {
             PremiumSlotMachineView(
                 symbols: ["🎁", "🎁", "🎁"],
+                resultTitle: "参加費無料券",
+                resultSubtitle: "次回の活動で使用できます",
                 isSpinning: true,
                 stoppedReelCount: 1,
                 heatLevel: .premium,
@@ -3870,6 +3932,7 @@ private extension View {
                 reelSlipIntensity: 1.0,
                 onFirstReelStop: {},
                 onPush: {},
+                onPremiumSequenceFinished: {},
                 onLeverChanged: { _ in },
                 onLeverReleased: {}
             )
@@ -3877,9 +3940,3 @@ private extension View {
         }
     }
 }
-
-
-
-
-
-

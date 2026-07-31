@@ -177,6 +177,20 @@ final class SlotAnimationController: ObservableObject {
         pushContinuation = nil
     }
 
+    func finishPremiumSequence() {
+        guard currentRoute == .premium,
+              !shouldShowResult else {
+            return
+        }
+
+        sound.playRewardReveal()
+        shouldShowResult = true
+        stage = .idle
+        cinematicPhase = .idle
+        isPushVisible = false
+        isPushEnabled = false
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -508,8 +522,6 @@ final class SlotAnimationController: ObservableObject {
         await showJackpot()
 
         guard !Task.isCancelled else { return }
-
-        await showCardAndFinish()
     }
 
     // MARK: - Warning Route
@@ -659,9 +671,8 @@ final class SlotAnimationController: ObservableObject {
         guard !Task.isCancelled else { return }
 
         await showJackpot()
-        guard !Task.isCancelled else { return }
 
-        await showCardAndFinish()
+        guard !Task.isCancelled else { return }
     }
 
     // MARK: - Reel Stop
@@ -1241,5 +1252,3 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 }
-
-

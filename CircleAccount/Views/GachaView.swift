@@ -83,6 +83,8 @@ struct GachaView: View {
 
                         PremiumSlotMachineView(
                             symbols: reelSymbols,
+                            resultTitle: animation.resultTitle,
+                            resultSubtitle: animation.resultSubtitle,
                             isSpinning: animation.isSpinning,
                             stoppedReelCount: animation.stoppedReelCount,
                             heatLevel: animation.heatLevel,
@@ -103,6 +105,9 @@ struct GachaView: View {
                             },
                             onPush: {
                                 animation.pressPush()
+                            },
+                            onPremiumSequenceFinished: {
+                                animation.finishPremiumSequence()
                             },
                             onLeverChanged: { progress in
                                 guard canRunGacha else { return }
@@ -786,4 +791,3 @@ struct UltimateGachaResultView: View {
         GachaView()
     }
 }
-
