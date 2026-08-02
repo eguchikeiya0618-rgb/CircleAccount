@@ -183,10 +183,14 @@ final class SlotAnimationController: ObservableObject {
             return
         }
 
+        cinematicPhase = .ticketReady
+        cinematicTrigger += 1
+        stage = .cardReveal
+
         sound.playRewardReveal()
+        statusText = "PRIZE GET"
+        subStatusText = "CONGRATULATIONS"
         shouldShowResult = true
-        stage = .idle
-        cinematicPhase = .idle
         isPushVisible = false
         isPushEnabled = false
     }
@@ -268,7 +272,7 @@ final class SlotAnimationController: ObservableObject {
             leverProgress = 1
         }
 
-        sound.playLever()
+        SlotSoundManager.shared.playLever()
         await sleep(0.34)
 
         guard !Task.isCancelled else {
@@ -335,6 +339,7 @@ final class SlotAnimationController: ObservableObject {
         isSpinning = true
         stoppedReelCount = 0
 
+        // 始動SEなしでリール回転ループのみ開始
         sound.startSpin()
 
         await sleep(1.10)
@@ -760,6 +765,7 @@ final class SlotAnimationController: ObservableObject {
             cinematicTrigger += 1
 
             // 右リールだけ回転中
+            // 始動SEなしでリール回転ループのみ開始
             sound.startSpin()
             sound.intensifySpin()
 
@@ -1068,6 +1074,7 @@ final class SlotAnimationController: ObservableObject {
         stoppedReelCount = 0
         shouldReverseReels = true
 
+        // 始動SEなしでリール回転ループのみ開始
         sound.startSpin()
         sound.intensifySpin()
 

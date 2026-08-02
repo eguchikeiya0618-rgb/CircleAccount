@@ -61,9 +61,8 @@ struct PremiumSlotMachineView: View {
     @State private var pseudoRepeatVisible = false
     @State private var isPremiumTypewriterVisible = false
     @State private var isVMovieVisible = false
-    @State private var isBonusMovieVisible = false
     @State private var isBonusLogoVisible = false
-    @State private var bonusMovieTicketVisible = false
+    @State private var premiumTicketVisible = false
     @State private var hasStartedMovieSequence = false
     @State private var hasPremiumTypewriterFinished = false
     @State private var hasStartedVMovie = false
@@ -75,10 +74,6 @@ struct PremiumSlotMachineView: View {
     @State private var resultCelebrationKind: SlotResultCelebrationKind?
     @State private var isConfettiVisible = false
     @State private var confettiResetToken = 0
-    @State private var enhancedStopFlashOpacity = 0.0
-    @State private var enhancedStopFlashScale: CGFloat = 0.92
-    @State private var enhancedStopFlashColor = Color.white
-    @State private var enhancedStopFlashRotation = 0.0
 
     @State private var cabinetStrobeTrigger = 0
     @State private var cabinetStrobeColor = Color.cyan
@@ -86,6 +81,7 @@ struct PremiumSlotMachineView: View {
     @State private var luckyLampMode: SlotLuckyLampMode = .off
     @State private var luckyLampTrigger = 0
     @State private var blackoutTrigger = 0
+    @State private var hasPlayedBlackoutCharge = false
     @State private var pushChanceTrigger = 0
     @State private var pushPressTrigger = 0
     @State private var nextEpisodePreviewTrigger = 0
@@ -159,16 +155,6 @@ struct PremiumSlotMachineView: View {
             machineBody
                 .padding(.trailing, 46)
             
-            if heatLevel == .premium {
-                ContinuousRainbowShuttleOverlay(
-                    isActive: isSpinning || stoppedReelCount > 0,
-                    intensity: premiumFlashOpacity
-                )
-                .padding(.trailing, 46)
-                .allowsHitTesting(false)
-                .zIndex(20)
-            }
-            
             MachineFlashOverlay(
                 opacity: machineFlashOpacity,
                 glowColor: machineGlow
@@ -178,16 +164,6 @@ struct PremiumSlotMachineView: View {
             
             authenticCabinetOverlay
                 .zIndex(51)
-            
-            EnhancedReelStopFlashOverlay(
-                opacity: enhancedStopFlashOpacity,
-                scale: enhancedStopFlashScale,
-                color: enhancedStopFlashColor,
-                rotation: enhancedStopFlashRotation
-            )
-            .padding(.trailing, 46)
-            .allowsHitTesting(false)
-            .zIndex(55)
             
             JackpotWhiteoutOverlay(
                 opacity: jackpotWhiteoutOpacity
@@ -243,7 +219,7 @@ struct PremiumSlotMachineView: View {
             }
 
             if isConfettiVisible {
-                RainbowShuttleCelebrationOverlay(
+                RainbowCelebrationOverlay(
                     trigger: confettiResetToken,
                     isRainbowJackpot: safeSymbols == ["🌈7", "🌈7", "🌈7"]
                 )
@@ -271,40 +247,32 @@ struct PremiumSlotMachineView: View {
                     onFinished: {
                         guard isVMovieVisible else { return }
                         isVMovieVisible = false
-                        isBonusMovieVisible = true
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            guard hasActivePremiumSpin,
+                                  !premiumTicketVisible else {
+                                return
+                            }
+
+                            withAnimation(.easeIn(duration: 0.20)) {
+                                premiumTicketVisible = true
+                            }
+
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 4.20) {
+                                guard hasActivePremiumSpin,
+                                      premiumTicketVisible else {
+                                    return
+                                }
+
+                                onPremiumSequenceFinished()
+                            }
+                        }
                     }
                 )
                 .zIndex(2000)
             }
 
-            if isBonusMovieVisible {
-                BundleMovieOverlay(
-                    movieName: "BonusMovie",
-                    endLeadTime: 0.4,
-                    onApproachingEnd: {
-                        guard isBonusMovieVisible else { return }
-
-                        withAnimation(.easeIn(duration: 0.32)) {
-                            bonusMovieTicketVisible = true
-                        }
-                    },
-                    onFinished: {
-                        guard isBonusMovieVisible else { return }
-
-                        isBonusMovieVisible = false
-
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            isBonusLogoVisible = true
-                        }
-                    }
-                )
-                .onAppear {
-                    bonusMovieTicketVisible = false
-                }
-                .zIndex(2001)
-            }
-
-            if bonusMovieTicketVisible {
+            if premiumTicketVisible {
                 SlotEffectsView(
                     stage: .cardReveal,
                     heatLevel: .premium,
@@ -324,12 +292,12 @@ struct PremiumSlotMachineView: View {
                     }
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        guard bonusMovieTicketVisible else { return }
+                        guard premiumTicketVisible else { return }
                         onPremiumSequenceFinished()
                     }
                 }
                 .onAppear {
-                    bonusMovieTicketVisible = true
+                    premiumTicketVisible = true
                 }
                 .zIndex(2003)
             }
@@ -642,12 +610,12 @@ struct PremiumSlotMachineView: View {
                 hasActivePremiumSpin = true
                 isPremiumTypewriterVisible = false
                 isVMovieVisible = false
-                isBonusMovieVisible = false
                 isBonusLogoVisible = false
-                bonusMovieTicketVisible = false
+                premiumTicketVisible = false
                 hasStartedMovieSequence = false
                 hasPremiumTypewriterFinished = false
                 hasStartedVMovie = false
+                hasPlayedBlackoutCharge = false
                 
                 prepareDisplaySymbols()
                 prepareSpinEffectPlan()
@@ -666,6 +634,17 @@ struct PremiumSlotMachineView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
                 guard blackoutTrigger == newTrigger else { return }
                 SlotSoundManager.shared.playGekiatsu()
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.50) {
+                guard isRainbowJackpot,
+                      hasActivePremiumSpin,
+                      !hasPlayedBlackoutCharge else {
+                    return
+                }
+
+                hasPlayedBlackoutCharge = true
+                SlotSoundManager.shared.playBlackoutCharge()
             }
         }
         .onChange(of: heatLevel) { _, newValue in
@@ -692,16 +671,17 @@ struct PremiumSlotMachineView: View {
                 if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
                     luckyLampMode = .rainbow
                     luckyLampTrigger += 1
-                    playRainbowFinalFlash()
 
                 } else {
                     luckyLampMode = .gold
                     luckyLampTrigger += 1
-                    playGoldFinalFlash()
                 }
 
             case .pushStandby:
                 playPushStandbyCabinetShake()
+
+            case .silentFreeze:
+                SlotSoundManager.shared.stopBlackoutCharge()
 
             case .finalSilence:
                 if isRainbowJackpot,
@@ -723,13 +703,14 @@ struct PremiumSlotMachineView: View {
 
                 hasStartedVMovie = true
                 isVMovieVisible = true
+                SlotSoundManager.shared.playVMovieSequenceSounds()
 
             case .idle:
+                SlotSoundManager.shared.stopBlackoutCharge()
                 isPremiumTypewriterVisible = false
                 isVMovieVisible = false
-                isBonusMovieVisible = false
                 isBonusLogoVisible = false
-                bonusMovieTicketVisible = false
+                premiumTicketVisible = false
                 hasPremiumTypewriterFinished = false
                 hasStartedVMovie = false
 
@@ -759,7 +740,6 @@ struct PremiumSlotMachineView: View {
             }
 
             playStopImpact(stoppedCount: newValue)
-            playEnhancedStopFlash(stoppedCount: newValue)
             playSparkBurst()
             playMachineFlash()
             playReachSequence(stoppedCount: newValue)
@@ -1217,29 +1197,6 @@ struct PremiumSlotMachineView: View {
         if spinEffectPlan.level >= .hot {
             playMachineFlash()
         }
-
-        if spinEffectPlan.usesFakePremiumTease {
-            let token = effectSequenceToken
-
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + 0.16
-            ) {
-                guard token == effectSequenceToken,
-                      isSpinning,
-                      stoppedReelCount == 1 else {
-                    return
-                }
-
-                enhancedStopFlashColor = .purple
-                enhancedStopFlashOpacity = 0.46
-                enhancedStopFlashScale = 0.90
-
-                withAnimation(.easeOut(duration: 0.28)) {
-                    enhancedStopFlashOpacity = 0
-                    enhancedStopFlashScale = 1.10
-                }
-            }
-        }
     }
 
     private func playSecondStopEffect() {
@@ -1553,6 +1510,9 @@ struct PremiumSlotMachineView: View {
         }
 
         pushPressed = true
+
+        SlotSoundManager.shared.playPushPress()
+        SlotSoundManager.shared.suppressNextPushSound()
 
         withAnimation(.easeIn(duration: 0.085)) {
             pushButtonDepth = 1
@@ -1934,7 +1894,7 @@ struct PremiumSlotMachineView: View {
 
     private func playResultCelebration() {
         if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-            // VMovie → BonusMovie が終わった後に演出するため、
+            // VMovie終了後のRewardCard経路で演出するため、
             // ここでは何もしない。
             return
         }
@@ -2017,119 +1977,6 @@ struct PremiumSlotMachineView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             withAnimation(.spring(response: 0.30, dampingFraction: 0.66)) {
                 machinePulse = false
-            }
-        }
-    }
-
-    private func playEnhancedStopFlash(
-        stoppedCount: Int
-    ) {
-        let stoppedIndex = min(max(stoppedCount - 1, 0), 2)
-
-        enhancedStopFlashRotation += 16
-
-        switch stoppedIndex {
-        case 0:
-            enhancedStopFlashColor = .white
-            enhancedStopFlashOpacity = 0.54
-            enhancedStopFlashScale = 0.94
-
-            withAnimation(.easeOut(duration: 0.18)) {
-                enhancedStopFlashOpacity = 0
-                enhancedStopFlashScale = 1.04
-            }
-
-        case 1:
-            enhancedStopFlashColor = Color(
-                red: 0.72,
-                green: 0.90,
-                blue: 1.00
-            )
-            enhancedStopFlashOpacity = 0.72
-            enhancedStopFlashScale = 0.91
-
-            withAnimation(.easeOut(duration: 0.24)) {
-                enhancedStopFlashOpacity = 0
-                enhancedStopFlashScale = 1.09
-            }
-
-        default:
-            if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-                playRainbowFinalFlash()
-            } else if safeSymbols == ["7", "7", "7"] {
-                playGoldFinalFlash()
-            } else {
-                enhancedStopFlashColor = .white
-                enhancedStopFlashOpacity = 0.95
-                enhancedStopFlashScale = 0.84
-
-                withAnimation(.easeOut(duration: 0.34)) {
-                    enhancedStopFlashOpacity = 0
-                    enhancedStopFlashScale = 1.18
-                }
-            }
-        }
-    }
-
-    private func playGoldFinalFlash() {
-        enhancedStopFlashColor = Color.yellow
-        enhancedStopFlashOpacity = 1
-        enhancedStopFlashScale = 0.78
-
-        withAnimation(.easeOut(duration: 0.15)) {
-            enhancedStopFlashScale = 1.22
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.10
-        ) {
-            enhancedStopFlashColor = .white
-            enhancedStopFlashOpacity = 0.96
-            enhancedStopFlashScale = 0.90
-
-            withAnimation(.easeOut(duration: 0.42)) {
-                enhancedStopFlashOpacity = 0
-                enhancedStopFlashScale = 1.30
-            }
-        }
-    }
-
-    private func playRainbowFinalFlash() {
-        let rainbowColors: [Color] = [
-            .red,
-            .orange,
-            .yellow,
-            .green,
-            .cyan,
-            .blue,
-            .purple,
-            .pink
-        ]
-
-        enhancedStopFlashOpacity = 1
-        enhancedStopFlashScale = 0.76
-
-        for (index, color) in rainbowColors.enumerated() {
-            DispatchQueue.main.asyncAfter(
-                deadline: .now()
-                + Double(index) * 0.055
-            ) {
-                enhancedStopFlashColor = color
-                enhancedStopFlashScale =
-                    index.isMultiple(of: 2)
-                    ? 1.08
-                    : 0.96
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.48
-        ) {
-            enhancedStopFlashColor = .white
-
-            withAnimation(.easeOut(duration: 0.48)) {
-                enhancedStopFlashOpacity = 0
-                enhancedStopFlashScale = 1.34
             }
         }
     }
@@ -2281,136 +2128,6 @@ struct PremiumSlotMachineView: View {
 
 
 
-
-
-private struct ContinuousRainbowShuttleOverlay: View {
-    let isActive: Bool
-    let intensity: Double
-
-    @State private var travel = false
-    @State private var twinkle = false
-
-    private let shuttleCount = 10
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                if isActive {
-                    ForEach(0..<shuttleCount, id: \.self) { index in
-                        shuttle(index: index, size: proxy.size)
-                    }
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .onAppear {
-            start()
-        }
-        .onChange(of: isActive) { _, active in
-            if active {
-                start()
-            }
-        }
-    }
-
-    private func shuttle(index: Int, size: CGSize) -> some View {
-        let fromLeft = index.isMultiple(of: 2)
-        let lane = CGFloat(index % 5) / 4.0
-        let delay = Double(index) * 0.24
-
-        let startX: CGFloat = fromLeft ? -55 : size.width + 55
-        let endX: CGFloat = fromLeft ? size.width + 55 : -55
-
-        let startY =
-            size.height * (0.18 + lane * 0.68)
-            + CGFloat((index % 3) * 18)
-
-        let endY =
-            size.height * (0.08 + CGFloat((index + 2) % 5) / 4.0 * 0.76)
-
-        let progress: CGFloat = travel ? 1 : 0
-        let x = startX + (endX - startX) * progress
-        let y = startY + (endY - startY) * progress
-
-        let angle: Double = fromLeft ? -28 : 152
-        let scale = CGFloat(0.76 + Double(index % 4) * 0.10)
-
-        return ZStack {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            rainbowColor(index).opacity(0.92),
-                            rainbowColor(index + 2).opacity(0.68),
-                            Color.clear
-                        ],
-                        startPoint: fromLeft ? .leading : .trailing,
-                        endPoint: fromLeft ? .trailing : .leading
-                    )
-                )
-                .frame(width: 72, height: 6)
-                .blur(radius: 2.2)
-                .offset(x: fromLeft ? -32 : 32)
-                .opacity(0.68)
-
-            Image(shuttleImageName(for: index))
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: 50 + CGFloat(index % 3) * 10,
-                    height: 50 + CGFloat(index % 3) * 10
-                )
-                .shadow(color: rainbowColor(index), radius: 12)
-                .shadow(color: .white.opacity(0.82), radius: 4)
-                .opacity(twinkle ? 1.0 : 0.82)
-        }
-        .scaleEffect(scale)
-        .rotationEffect(.degrees(angle))
-        .position(x: x, y: y)
-        .opacity(isActive ? 1 : 0)
-        .animation(
-            .linear(duration: 2.7 + Double(index % 4) * 0.34)
-                .repeatForever(autoreverses: false)
-                .delay(delay),
-            value: travel
-        )
-    }
-
-    private func shuttleImageName(for index: Int) -> String {
-        let images = [
-            "RainbowShuttleNE",
-            "RainbowShuttleNW",
-            "RainbowShuttleSE",
-            "RainbowShuttleSW"
-        ]
-
-        return images[index % images.count]
-    }
-
-    private func rainbowColor(_ index: Int) -> Color {
-        let colors: [Color] = [
-            .red, .orange, .yellow, .green,
-            .cyan, .blue, .purple, .pink
-        ]
-        return colors[index % colors.count]
-    }
-
-    private func start() {
-        travel = false
-        twinkle = false
-
-        DispatchQueue.main.async {
-            travel = true
-
-            withAnimation(
-                .easeInOut(duration: 0.42)
-                    .repeatForever(autoreverses: true)
-            ) {
-                twinkle = true
-            }
-        }
-    }
-}
 
 
 private struct PremiumPushEmphasisOverlay: View {
@@ -3295,22 +3012,16 @@ private struct PremiumCinematicPachislotOverlay: View {
     }
 }
 
-private struct RainbowShuttleCelebrationOverlay: View {
+private struct RainbowCelebrationOverlay: View {
     let trigger: Int
     let isRainbowJackpot: Bool
 
     @State private var progress: CGFloat = 0
     @State private var opacity = 0.0
 
-    private let shuttleCount = 13
-
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                ForEach(0..<shuttleCount, id: \.self) { index in
-                    shuttle(index: index, size: proxy.size)
-                }
-
                 if isRainbowJackpot {
                     Text("🌈 PREMIUM 🌈")
                         .font(.system(size: 31, weight: .black, design: .rounded))
@@ -3335,69 +3046,6 @@ private struct RainbowShuttleCelebrationOverlay: View {
         .onChange(of: trigger) { _, _ in play() }
     }
 
-    private func shuttle(index: Int, size: CGSize) -> some View {
-        let lane = CGFloat(index % 5) / 4
-        let startFromLeft = index.isMultiple(of: 2)
-        let startX: CGFloat = startFromLeft ? -70 : size.width + 70
-        let endX: CGFloat = size.width * (0.16 + lane * 0.68)
-        let startY: CGFloat = size.height + 55 + CGFloat(index % 4) * 26
-        let endY: CGFloat = -70 - CGFloat(index % 5) * 20
-
-        let x = startX + (endX - startX) * progress
-        let y = startY + (endY - startY) * progress
-        let spin = Double(progress) * Double(520 + index * 47)
-
-        return ZStack {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            rainbowColor(index),
-                            rainbowColor(index + 2).opacity(0.75),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 90, height: 7)
-                .blur(radius: 2)
-                .offset(x: startFromLeft ? -38 : 38)
-                .rotationEffect(.degrees(startFromLeft ? -26 : 206))
-                .opacity(opacity * 0.72)
-
-            Image(imageName(for: index))
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: CGFloat(52 + index % 3 * 11),
-                    height: CGFloat(52 + index % 3 * 11)
-                )
-                .shadow(color: rainbowColor(index), radius: 12)
-                .shadow(color: .white.opacity(0.8), radius: 5)
-            
-        }
-        .rotationEffect(.degrees(spin))
-        .position(x: x, y: y)
-        .opacity(opacity)
-    }
-
-    private func imageName(for index: Int) -> String {
-
-        let images = [
-            "RainbowShuttleNE",
-            "RainbowShuttleNW",
-            "RainbowShuttleSE",
-            "RainbowShuttleSW"
-        ]
-
-        return images[index % images.count]
-    }
-    private func rainbowColor(_ index: Int) -> Color {
-        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink]
-        return colors[index % colors.count]
-    }
-
     private func play() {
         progress = 0
         opacity = 1
@@ -3414,63 +3062,6 @@ private struct RainbowShuttleCelebrationOverlay: View {
     }
 }
 
-
-private struct EnhancedReelStopFlashOverlay: View {
-    let opacity: Double
-    let scale: CGFloat
-    let color: Color
-    let rotation: Double
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(
-                cornerRadius: 34,
-                style: .continuous
-            )
-            .fill(
-                RadialGradient(
-                    colors: [
-                        Color.white.opacity(0.96),
-                        color.opacity(0.76),
-                        color.opacity(0.24),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: 255
-                )
-            )
-            .blendMode(.screen)
-
-            ForEach(0..<12, id: \.self) { index in
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.94),
-                                color.opacity(0.76),
-                                Color.clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 185, height: 4)
-                    .offset(x: 86)
-                    .rotationEffect(
-                        .degrees(
-                            Double(index) * 30
-                            + rotation
-                        )
-                    )
-                    .blendMode(.screen)
-            }
-        }
-        .scaleEffect(scale)
-        .opacity(opacity)
-        .compositingGroup()
-    }
-}
 
 private enum SlotResultCelebrationKind {
     case redSeven

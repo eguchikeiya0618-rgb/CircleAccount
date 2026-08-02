@@ -1,7 +1,7 @@
 import AVFoundation
 import AudioToolbox
 
-final class SlotSoundManager {
+final class SlotSoundManager: NSObject {
     static let shared = SlotSoundManager()
 
     private let engine = AVAudioEngine()
@@ -12,13 +12,17 @@ final class SlotSoundManager {
     private var nextTypewriterPlayerIndex = 0
     private var typewriterImpactPlayer: AVAudioPlayer?
     private var pushAppearPlayer: AVAudioPlayer?
+    private var pushPressPlayer: AVAudioPlayer?
     private var firstStopPlayer: AVAudioPlayer?
     private var gekiatsuPlayer: AVAudioPlayer?
+    private var vmovieStartPlayer: AVAudioPlayer?
+    private var vmovieFollowPlayer: AVPlayer?
+    private var vmovieFollowWorkItem: DispatchWorkItem?
+    private var blackoutChargePlayer: AVAudioPlayer?
+    private var leverPlayer: AVAudioPlayer?
 
-    private var spinStartBuffer: AVAudioPCMBuffer?
     private var spinBuffer: AVAudioPCMBuffer?
     private var intenseSpinBuffer: AVAudioPCMBuffer?
-    private var leverBuffer: AVAudioPCMBuffer?
     private var stopBuffer: AVAudioPCMBuffer?
     private var finalStopBuffer: AVAudioPCMBuffer?
     private var pushBuffer: AVAudioPCMBuffer?
@@ -33,12 +37,20 @@ final class SlotSoundManager {
     private var isPrepared = false
     private var isSoundEnabled = true
     private var isDefaultJackpotSoundEnabled = true
-    private var shouldSuppressNextSpinStartSound = false
     private var shouldSuppressNextFirstReelStopSound = false
+    private var shouldSuppressNextPushSound = false
     private var masterVolume: Float = 0.80
     private var currentSpinBaseVolume: Float = 0.34
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
+
+    // MARK: - Movie Audio
+
+    func shouldMuteEmbeddedAudio(for movieName: String) -> Bool {
+        movieName == "VMovie"
+    }
 
     // MARK: - Prepare
 
@@ -60,6 +72,22 @@ final class SlotSoundManager {
 
             if gekiatsuPlayer == nil {
                 prepareGekiatsuPlayer()
+            }
+
+            if vmovieStartPlayer == nil {
+                prepareVMovieStartPlayer()
+            }
+
+            if vmovieFollowPlayer == nil {
+                prepareVMovieFollowPlayer()
+            }
+
+            if blackoutChargePlayer == nil {
+                prepareBlackoutChargePlayer()
+            }
+
+            if leverPlayer == nil {
+                prepareLeverPlayer()
             }
         } catch {
             print(
@@ -89,27 +117,23 @@ final class SlotSoundManager {
         guard isSoundEnabled else { return }
 
         prepareIfNeeded()
-        playOneShot(
-            buffer: leverBuffer,
-            volume: 0.82
-        )
+
+        if leverPlayer == nil {
+            prepareLeverPlayer()
+        }
+
+        guard let leverPlayer else { return }
+
+        leverPlayer.currentTime = 0
+        leverPlayer.numberOfLoops = 0
+        leverPlayer.volume = adjustedVolume(0.82)
+        leverPlayer.play()
     }
 
     func startSpin() {
         guard isSoundEnabled else { return }
 
         prepareIfNeeded()
-
-        // 実機風の「始動音」を先に鳴らしてから、
-        // モーターとリールの回転ループへつなげる。
-        if shouldSuppressNextSpinStartSound {
-            shouldSuppressNextSpinStartSound = false
-        } else {
-            playOneShot(
-                buffer: spinStartBuffer,
-                volume: 0.78
-            )
-        }
 
         spinPlayer.stop()
 
@@ -191,13 +215,32 @@ final class SlotSoundManager {
     }
 
     func playPush() {
+        if shouldSuppressNextPushSound {
+            shouldSuppressNextPushSound = false
+            return
+        }
+
+        playPushPress()
+    }
+
+    func playPushPress() {
         guard isSoundEnabled else { return }
 
         prepareIfNeeded()
-        playOneShot(
-            buffer: pushBuffer,
-            volume: 0.88
-        )
+
+        if pushPressPlayer == nil {
+            preparePushPressPlayer()
+        }
+
+        guard let pushPressPlayer else { return }
+
+        pushPressPlayer.currentTime = 0
+        pushPressPlayer.volume = adjustedVolume(0.88)
+        pushPressPlayer.play()
+    }
+
+    func suppressNextPushSound() {
+        shouldSuppressNextPushSound = true
     }
 
     func playPushAppear() {
@@ -232,6 +275,82 @@ final class SlotSoundManager {
         gekiatsuPlayer.play()
     }
 
+    func playVMovieSequenceSounds() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if vmovieStartPlayer == nil {
+            prepareVMovieStartPlayer()
+        }
+
+        guard let vmovieStartPlayer else { return }
+
+        if vmovieFollowPlayer == nil {
+            prepareVMovieFollowPlayer()
+        }
+
+        if let vmovieFollowPlayer {
+            vmovieFollowPlayer.pause()
+            vmovieFollowPlayer.seek(to: .zero)
+            vmovieFollowPlayer.volume = adjustedVolume(0.92)
+            vmovieFollowPlayer.preroll(atRate: 1.0) { _ in }
+        }
+
+        vmovieFollowWorkItem?.cancel()
+        vmovieFollowWorkItem = nil
+
+        vmovieStartPlayer.currentTime = 0
+        vmovieStartPlayer.numberOfLoops = 0
+        vmovieStartPlayer.volume = adjustedVolume(0.92)
+        vmovieStartPlayer.play()
+
+        let followWorkItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.isSoundEnabled else {
+                return
+            }
+
+            self.playVMovieFollow()
+            self.vmovieFollowWorkItem = nil
+        }
+
+        // 開始音末尾の無音を避け、現在より1.75秒早く接続する。
+        let followLeadTime = 1.75
+        let followDelay = max(
+            0,
+            vmovieStartPlayer.duration - followLeadTime
+        )
+
+        vmovieFollowWorkItem = followWorkItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + followDelay,
+            execute: followWorkItem
+        )
+    }
+
+    func playBlackoutCharge() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if blackoutChargePlayer == nil {
+            prepareBlackoutChargePlayer()
+        }
+
+        guard let blackoutChargePlayer else { return }
+
+        blackoutChargePlayer.currentTime = 0
+        blackoutChargePlayer.numberOfLoops = 0
+        blackoutChargePlayer.volume = adjustedVolume(0.92)
+        blackoutChargePlayer.play()
+    }
+
+    func stopBlackoutCharge() {
+        blackoutChargePlayer?.stop()
+        blackoutChargePlayer?.currentTime = 0
+    }
+
     func playFirstStop() {
         guard isSoundEnabled else { return }
 
@@ -249,9 +368,7 @@ final class SlotSoundManager {
         firstStopPlayer.play()
     }
 
-    func suppressNextSpinStartSound() {
-        shouldSuppressNextSpinStartSound = true
-    }
+    func suppressNextSpinStartSound() {}
 
     func playTypewriter() {
         guard isSoundEnabled else { return }
@@ -378,10 +495,17 @@ final class SlotSoundManager {
         typewriterPlayers.forEach { $0.stop() }
         typewriterImpactPlayer?.stop()
         pushAppearPlayer?.stop()
+        pushPressPlayer?.stop()
         firstStopPlayer?.stop()
         gekiatsuPlayer?.stop()
-        shouldSuppressNextSpinStartSound = false
+        vmovieFollowWorkItem?.cancel()
+        vmovieFollowWorkItem = nil
+        vmovieStartPlayer?.stop()
+        vmovieFollowPlayer?.pause()
+        blackoutChargePlayer?.stop()
+        leverPlayer?.stop()
         shouldSuppressNextFirstReelStopSound = false
+        shouldSuppressNextPushSound = false
 
         if engine.isRunning {
             engine.pause()
@@ -476,6 +600,27 @@ final class SlotSoundManager {
         }
     }
 
+    private func preparePushPressPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "push_press",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: push_press.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            pushPressPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager push press error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
     private func prepareFirstStopPlayer() {
         guard let url = Bundle.main.url(
             forResource: "first_stop",
@@ -513,6 +658,99 @@ final class SlotSoundManager {
         } catch {
             print(
                 "SlotSoundManager gekiatsu error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareVMovieStartPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "vmovie_start",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: vmovie_start.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.numberOfLoops = 0
+            player.prepareToPlay()
+            vmovieStartPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager VMovie start error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareVMovieFollowPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "vmovie_follow",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: vmovie_follow.mp3 not found")
+            return
+        }
+
+        let player = AVPlayer(url: url)
+        player.automaticallyWaitsToMinimizeStalling = false
+        vmovieFollowPlayer = player
+    }
+
+    private func playVMovieFollow() {
+        guard isSoundEnabled else { return }
+
+        if vmovieFollowPlayer == nil {
+            prepareVMovieFollowPlayer()
+        }
+
+        guard let vmovieFollowPlayer else { return }
+
+        vmovieFollowPlayer.volume = adjustedVolume(0.92)
+        vmovieFollowPlayer.play()
+    }
+
+    private func prepareBlackoutChargePlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "blackout_charge",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: blackout_charge.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.numberOfLoops = 0
+            player.prepareToPlay()
+            blackoutChargePlayer = player
+        } catch {
+            print(
+                "SlotSoundManager blackout charge error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareLeverPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "lever",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: lever.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.numberOfLoops = 0
+            player.prepareToPlay()
+            leverPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager lever error: "
                 + error.localizedDescription
             )
         }
@@ -562,10 +800,6 @@ final class SlotSoundManager {
             format: format
         )
 
-        spinStartBuffer = makeSpinStartSound(
-            format: format
-        )
-
         spinBuffer = makeSpinLoop(
             format: format,
             intense: false
@@ -574,10 +808,6 @@ final class SlotSoundManager {
         intenseSpinBuffer = makeSpinLoop(
             format: format,
             intense: true
-        )
-
-        leverBuffer = makeLeverSound(
-            format: format
         )
 
         stopBuffer = makeStopSound(
@@ -732,80 +962,7 @@ final class SlotSoundManager {
         }
     }
 
-    // MARK: - Spin Start / Loop
-
-    private func makeSpinStartSound(
-        format: AVAudioFormat
-    ) -> AVAudioPCMBuffer? {
-        renderBuffer(
-            format: format,
-            duration: 0.48
-        ) { t in
-            let progress = min(1.0, t / 0.48)
-
-            // モーターが一気に立ち上がる低音。
-            let motorFrequency =
-                54.0
-                + 118.0
-                * pow(progress, 0.72)
-
-            let motorEnvelope =
-                min(1.0, t * 20.0)
-                * exp(-max(0.0, t - 0.30) * 7.0)
-
-            let motor =
-                sin(
-                    2.0
-                    * .pi
-                    * motorFrequency
-                    * t
-                )
-                * motorEnvelope
-                * 0.42
-
-            // ベルト・ギアが噛み合う機械的な成分。
-            let gearFrequency =
-                620.0
-                + 1_450.0
-                * pow(progress, 1.20)
-
-            let gear =
-                sin(
-                    2.0
-                    * .pi
-                    * gearFrequency
-                    * t
-                )
-                * exp(-t * 4.8)
-                * 0.13
-
-            let clutch =
-                sin(
-                    2.0
-                    * .pi
-                    * 118.0
-                    * t
-                )
-                * exp(-t * 18.0)
-                * 0.34
-
-            let highWhirr =
-                sin(
-                    2.0
-                    * .pi
-                    * (
-                        1_100.0
-                        + 2_400.0 * progress
-                    )
-                    * t
-                )
-                * min(1.0, t * 9.0)
-                * exp(-t * 3.1)
-                * 0.055
-
-            return motor + gear + clutch + highWhirr
-        }
-    }
+    // MARK: - Spin Loop
 
     private func makeSpinLoop(
         format: AVAudioFormat,
@@ -957,67 +1114,6 @@ final class SlotSoundManager {
         }
 
         return buffer
-    }
-
-    // MARK: - Lever
-
-    private func makeLeverSound(
-        format: AVAudioFormat
-    ) -> AVAudioPCMBuffer? {
-        renderBuffer(
-            format: format,
-            duration: 0.38
-        ) { t in
-            let mainKnock =
-                sin(
-                    2.0
-                    * .pi
-                    * 86.0
-                    * t
-                )
-                * exp(-t * 18.0)
-                * 0.82
-
-            let lockBody =
-                sin(
-                    2.0
-                    * .pi
-                    * 154.0
-                    * t
-                )
-                * exp(-t * 23.0)
-                * 0.42
-
-            let metal =
-                sin(
-                    2.0
-                    * .pi
-                    * 760.0
-                    * t
-                )
-                * exp(-t * 31.0)
-                * 0.18
-
-            let latchTime = t - 0.105
-
-            let latch =
-                latchTime >= 0
-                ? sin(
-                    2.0
-                    * .pi
-                    * 1_680.0
-                    * latchTime
-                )
-                * exp(-latchTime * 58.0)
-                * 0.20
-                : 0.0
-
-            return
-                mainKnock
-                + lockBody
-                + metal
-                + latch
-        }
     }
 
     // MARK: - Reel Stop

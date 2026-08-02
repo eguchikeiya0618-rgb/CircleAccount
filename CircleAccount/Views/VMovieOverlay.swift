@@ -66,8 +66,9 @@ struct BundleMovieOverlay: View {
         let newPlayer = AVPlayer(playerItem: item)
 
         newPlayer.actionAtItemEnd = .pause
-        newPlayer.isMuted = false
-        newPlayer.volume = 1
+        newPlayer.isMuted = SlotSoundManager.shared
+            .shouldMuteEmbeddedAudio(for: movieName)
+        newPlayer.volume = newPlayer.isMuted ? 0 : 1
         player = newPlayer
 
         endObserver = NotificationCenter.default.addObserver(
