@@ -11,6 +11,9 @@ final class SlotSoundManager {
     private var typewriterPlayers: [AVAudioPlayer] = []
     private var nextTypewriterPlayerIndex = 0
     private var typewriterImpactPlayer: AVAudioPlayer?
+    private var pushAppearPlayer: AVAudioPlayer?
+    private var firstStopPlayer: AVAudioPlayer?
+    private var gekiatsuPlayer: AVAudioPlayer?
 
     private var spinStartBuffer: AVAudioPCMBuffer?
     private var spinBuffer: AVAudioPCMBuffer?
@@ -29,6 +32,9 @@ final class SlotSoundManager {
 
     private var isPrepared = false
     private var isSoundEnabled = true
+    private var isDefaultJackpotSoundEnabled = true
+    private var shouldSuppressNextSpinStartSound = false
+    private var shouldSuppressNextFirstReelStopSound = false
     private var masterVolume: Float = 0.80
     private var currentSpinBaseVolume: Float = 0.34
 
@@ -50,6 +56,10 @@ final class SlotSoundManager {
 
             if !engine.isRunning {
                 try engine.start()
+            }
+
+            if gekiatsuPlayer == nil {
+                prepareGekiatsuPlayer()
             }
         } catch {
             print(
@@ -92,10 +102,14 @@ final class SlotSoundManager {
 
         // 実機風の「始動音」を先に鳴らしてから、
         // モーターとリールの回転ループへつなげる。
-        playOneShot(
-            buffer: spinStartBuffer,
-            volume: 0.78
-        )
+        if shouldSuppressNextSpinStartSound {
+            shouldSuppressNextSpinStartSound = false
+        } else {
+            playOneShot(
+                buffer: spinStartBuffer,
+                volume: 0.78
+            )
+        }
 
         spinPlayer.stop()
 
@@ -145,16 +159,21 @@ final class SlotSoundManager {
 
         prepareIfNeeded()
 
-        let selectedBuffer =
-            isFinal ? finalStopBuffer : stopBuffer
+        if index == 0,
+           shouldSuppressNextFirstReelStopSound {
+            shouldSuppressNextFirstReelStopSound = false
+            return
+        }
 
-        let selectedVolume: Float =
-            isFinal ? 0.92 : 0.72
+        if firstStopPlayer == nil {
+            prepareFirstStopPlayer()
+        }
 
-        playOneShot(
-            buffer: selectedBuffer,
-            volume: selectedVolume
-        )
+        if let firstStopPlayer {
+            firstStopPlayer.currentTime = 0
+            firstStopPlayer.volume = adjustedVolume(0.88)
+            firstStopPlayer.play()
+        }
 
         if isFinal || index >= 2 {
             stopSpin()
@@ -181,6 +200,59 @@ final class SlotSoundManager {
         )
     }
 
+    func playPushAppear() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if pushAppearPlayer == nil {
+            preparePushAppearPlayer()
+        }
+
+        guard let pushAppearPlayer else { return }
+
+        pushAppearPlayer.currentTime = 0
+        pushAppearPlayer.volume = adjustedVolume(0.88)
+        pushAppearPlayer.play()
+    }
+
+    func playGekiatsu() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if gekiatsuPlayer == nil {
+            prepareGekiatsuPlayer()
+        }
+
+        guard let gekiatsuPlayer else { return }
+
+        gekiatsuPlayer.currentTime = 0
+        gekiatsuPlayer.volume = adjustedVolume(0.92)
+        gekiatsuPlayer.play()
+    }
+
+    func playFirstStop() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if firstStopPlayer == nil {
+            prepareFirstStopPlayer()
+        }
+
+        guard let firstStopPlayer else { return }
+
+        shouldSuppressNextFirstReelStopSound = true
+        firstStopPlayer.currentTime = 0
+        firstStopPlayer.volume = adjustedVolume(0.88)
+        firstStopPlayer.play()
+    }
+
+    func suppressNextSpinStartSound() {
+        shouldSuppressNextSpinStartSound = true
+    }
+
     func playTypewriter() {
         guard isSoundEnabled else { return }
 
@@ -192,20 +264,11 @@ final class SlotSoundManager {
 
         guard !typewriterPlayers.isEmpty else { return }
 
-        let playerIndex: Int
+        let player = typewriterPlayers[nextTypewriterPlayerIndex]
+        nextTypewriterPlayerIndex =
+            (nextTypewriterPlayerIndex + 1)
+            % typewriterPlayers.count
 
-        if let availableIndex = typewriterPlayers.firstIndex(
-            where: { !$0.isPlaying }
-        ) {
-            playerIndex = availableIndex
-        } else {
-            playerIndex = nextTypewriterPlayerIndex
-            nextTypewriterPlayerIndex =
-                (nextTypewriterPlayerIndex + 1)
-                % typewriterPlayers.count
-        }
-
-        let player = typewriterPlayers[playerIndex]
         player.currentTime = 0
         player.volume = adjustedVolume(0.86)
         player.play()
@@ -228,7 +291,8 @@ final class SlotSoundManager {
     }
 
     func playJackpot() {
-        guard isSoundEnabled else { return }
+        guard isSoundEnabled,
+              isDefaultJackpotSoundEnabled else { return }
 
         prepareIfNeeded()
         stopSpin()
@@ -237,6 +301,10 @@ final class SlotSoundManager {
             buffer: jackpotBuffer,
             volume: 0.86
         )
+    }
+
+    func setDefaultJackpotSoundEnabled(_ enabled: Bool) {
+        isDefaultJackpotSoundEnabled = enabled
     }
 
     func playBell() {
@@ -309,6 +377,11 @@ final class SlotSoundManager {
         resultPlayer.stop()
         typewriterPlayers.forEach { $0.stop() }
         typewriterImpactPlayer?.stop()
+        pushAppearPlayer?.stop()
+        firstStopPlayer?.stop()
+        gekiatsuPlayer?.stop()
+        shouldSuppressNextSpinStartSound = false
+        shouldSuppressNextFirstReelStopSound = false
 
         if engine.isRunning {
             engine.pause()
@@ -344,7 +417,7 @@ final class SlotSoundManager {
             return
         }
 
-        typewriterPlayers = (0..<4).compactMap { _ in
+        typewriterPlayers = (0..<8).compactMap { _ in
             do {
                 let player = try AVAudioPlayer(contentsOf: url)
                 player.prepareToPlay()
@@ -377,6 +450,69 @@ final class SlotSoundManager {
         } catch {
             print(
                 "SlotSoundManager typewriter impact error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func preparePushAppearPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "push_appear",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: push_appear.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            pushAppearPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager push appear error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareFirstStopPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "first_stop",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: first_stop.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            firstStopPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager first stop error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareGekiatsuPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "gekiatsu",
+            withExtension: "mp3"
+        ) else {
+            print("SlotSoundManager: gekiatsu.mp3 not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            gekiatsuPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager gekiatsu error: "
                 + error.localizedDescription
             )
         }

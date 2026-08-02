@@ -158,7 +158,7 @@ struct PremiumSlotMachineView: View {
         ZStack(alignment: .trailing) {
             machineBody
                 .padding(.trailing, 46)
-
+            
             if heatLevel == .premium {
                 ContinuousRainbowShuttleOverlay(
                     isActive: isSpinning || stoppedReelCount > 0,
@@ -168,17 +168,17 @@ struct PremiumSlotMachineView: View {
                 .allowsHitTesting(false)
                 .zIndex(20)
             }
-
+            
             MachineFlashOverlay(
                 opacity: machineFlashOpacity,
                 glowColor: machineGlow
             )
             .allowsHitTesting(false)
             .zIndex(50)
-
+            
             authenticCabinetOverlay
                 .zIndex(51)
-
+            
             EnhancedReelStopFlashOverlay(
                 opacity: enhancedStopFlashOpacity,
                 scale: enhancedStopFlashScale,
@@ -188,27 +188,27 @@ struct PremiumSlotMachineView: View {
             .padding(.trailing, 46)
             .allowsHitTesting(false)
             .zIndex(55)
-
+            
             JackpotWhiteoutOverlay(
                 opacity: jackpotWhiteoutOpacity
             )
             .allowsHitTesting(false)
             .zIndex(60)
-
+            
             CustomSlotLCDOverlayView(
                 trigger: lcdTrigger,
                 presentation: lcdPresentation
             )
             .padding(.trailing, 46)
             .allowsHitTesting(false)
-
+            
             .zIndex(
                 lcdPresentation == .superHot
-                    ? 999
-                    : 61
+                ? 999
+                : 61
             )
-
-           
+            
+            
             
             SlotBlackoutOverlay(
                 trigger: blackoutTrigger
@@ -216,7 +216,6 @@ struct PremiumSlotMachineView: View {
             .padding(.trailing, 46)
             .allowsHitTesting(false)
             .zIndex(63)
-
             PremiumCinematicPachislotOverlay(
                 phase: cinematicPhase,
                 trigger: cinematicTrigger,
@@ -260,6 +259,7 @@ struct PremiumSlotMachineView: View {
                     guard isPremiumTypewriterVisible else { return }
 
                     isPremiumTypewriterVisible = false
+                    SlotSoundManager.shared.suppressNextSpinStartSound()
                     hasPremiumTypewriterFinished = true
                 }
                 .zIndex(1999)
@@ -620,6 +620,7 @@ struct PremiumSlotMachineView: View {
             )
         }
         .onDisappear {
+            SlotSoundManager.shared.setDefaultJackpotSoundEnabled(true)
             SlotSoundManager.shared.stopAll()
         }
         .onChange(of: slotSoundEnabled) { _, enabled in
@@ -635,6 +636,9 @@ struct PremiumSlotMachineView: View {
         }
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
+                SlotSoundManager.shared.setDefaultJackpotSoundEnabled(
+                    !isRainbowJackpot
+                )
                 hasActivePremiumSpin = true
                 isPremiumTypewriterVisible = false
                 isVMovieVisible = false
@@ -656,6 +660,14 @@ struct PremiumSlotMachineView: View {
                 effectSequenceToken += 1
             }
         }
+        .onChange(of: blackoutTrigger) { _, newTrigger in
+            guard newTrigger > 0 else { return }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+                guard blackoutTrigger == newTrigger else { return }
+                SlotSoundManager.shared.playGekiatsu()
+            }
+        }
         .onChange(of: heatLevel) { _, newValue in
             pulseMachine()
 
@@ -666,6 +678,7 @@ struct PremiumSlotMachineView: View {
         .onChange(of: isPushVisible) { _, visible in
             if visible {
                 pushPressed = false
+                SlotSoundManager.shared.playPushAppear()
                 pushChanceTrigger += 1
                 startPushEmphasis()
             } else {
@@ -998,7 +1011,9 @@ struct PremiumSlotMachineView: View {
     private var firstReelStopButton: some View {
         Button {
             guard isFirstReelStopEnabled else { return }
-
+            
+            SlotSoundManager.shared.playFirstStop()
+            
             let impact = UIImpactFeedbackGenerator(style: .heavy)
             impact.prepare()
             impact.impactOccurred(intensity: 1.0)
@@ -1238,10 +1253,13 @@ struct PremiumSlotMachineView: View {
     private func showLCD(
         _ presentation: SlotLCDPresentation
     ) {
-        lcdPresentation = presentation
-        lcdTrigger += 1
+        
+        
+                lcdPresentation = presentation
+                lcdTrigger += 1
+        
     }
-
+    
     private func prepareDisplaySymbols() {
         var candidates = reelPool.shuffled()
 
@@ -1575,6 +1593,8 @@ struct PremiumSlotMachineView: View {
         stopPushEmphasis()
         pushPressTrigger += 1
 
+        
+        
         let impact = UIImpactFeedbackGenerator(style: .heavy)
         impact.prepare()
         impact.impactOccurred(intensity: 1.0)
