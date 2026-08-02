@@ -146,7 +146,7 @@ final class SlotAnimationController: ObservableObject {
     func stopFirstReel() {
         guard
             isSpinning,
-            stoppedReelCount == 0,
+            stoppedReelCount < 3,
             canStopFirstReel
         else {
             return
@@ -694,7 +694,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "STOP READY"
         subStatusText = "PRESS LEFT STOP"
         canStopFirstReel = true
-        await waitForFirstReelStopOrTimeout(seconds: 10.0)
+        await waitForReelTap()
 
         guard !Task.isCancelled else { sound.stopSpin(); return }
         canStopFirstReel = false
@@ -707,6 +707,14 @@ final class SlotAnimationController: ObservableObject {
         await sleep(1.20)
 
         guard !Task.isCancelled else { sound.stopSpin(); return }
+
+        statusText = "STOP READY"
+        subStatusText = "TAP REELS FOR MIDDLE STOP"
+        canStopFirstReel = true
+        await waitForReelTap()
+
+        guard !Task.isCancelled else { sound.stopSpin(); return }
+        canStopFirstReel = false
         await performSlipIfNeeded(index: 1)
         guard !Task.isCancelled else { sound.stopSpin(); return }
 
@@ -828,8 +836,13 @@ final class SlotAnimationController: ObservableObject {
             sound.playJackpot()
             await sleep(2.10)
         } else {
-            await sleep(intervals[2])
+            statusText = "STOP READY"
+            subStatusText = "TAP REELS FOR RIGHT STOP"
+            canStopFirstReel = true
+            await waitForReelTap()
+
             guard !Task.isCancelled else { sound.stopSpin(); return }
+            canStopFirstReel = false
             await performSlipIfNeeded(index: 2)
             stopReel(index: 2)
             isSpinning = false
@@ -932,34 +945,9 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 
-    private func waitForFirstReelStopOrTimeout(
-        seconds: Double
-    ) async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { [weak self] in
-                await withCheckedContinuation { continuation in
-                    Task { @MainActor [weak self] in
-                        self?.firstReelStopContinuation = continuation
-                    }
-                }
-            }
-
-            group.addTask {
-                try? await Task.sleep(
-                    nanoseconds: UInt64(
-                        seconds * 1_000_000_000
-                    )
-                )
-            }
-
-            await group.next()
-            group.cancelAll()
-
-            await MainActor.run {
-                self.firstReelStopContinuation?.resume()
-                self.firstReelStopContinuation = nil
-                self.canStopFirstReel = false
-            }
+    private func waitForReelTap() async {
+        await withCheckedContinuation { continuation in
+            firstReelStopContinuation = continuation
         }
     }
 

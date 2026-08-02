@@ -412,6 +412,59 @@ struct PremiumSlotMachineView: View {
                         }
 
                         ZStack {
+                            RoundedRectangle(cornerRadius: 34, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.28),
+                                            Color(red: 0.13, green: 0.11, blue: 0.16),
+                                            Color.black,
+                                            Color.purple.opacity(0.42)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 190, height: 126)
+                                .offset(y: 35)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 34, style: .continuous)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.90),
+                                                    Color.gray,
+                                                    Color.black,
+                                                    Color.purple.opacity(0.80)
+                                                ],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            ),
+                                            lineWidth: 4
+                                        )
+                                        .frame(width: 190, height: 126)
+                                        .offset(y: 35)
+                                }
+                                .shadow(color: Color.black.opacity(0.90), radius: 12, y: 10)
+
+                            Ellipse()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white,
+                                            Color.gray,
+                                            Color.black,
+                                            Color.purple
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 8
+                                )
+                                .frame(width: 170, height: 78)
+                                .offset(y: 38)
+                                .shadow(color: Color.purple.opacity(0.62), radius: 10)
+
                             // 台座は完全固定。実機らしい「筐体の重さ」を残す。
                             Image("PremiumPushBase")
                                 .resizable()
@@ -867,6 +920,95 @@ struct PremiumSlotMachineView: View {
         }
     }
 
+    private var premiumMetalCabinetBackground: some View {
+        RoundedRectangle(cornerRadius: 34, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.18, green: 0.16, blue: 0.22),
+                        Color(red: 0.055, green: 0.050, blue: 0.072),
+                        Color(red: 0.012, green: 0.012, blue: 0.018),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.purple.opacity(0.30),
+                                Color.indigo.opacity(0.10),
+                                Color.clear
+                            ],
+                            center: .topTrailing,
+                            startRadius: 0,
+                            endRadius: 330
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.72),
+                                Color(red: 0.38, green: 0.33, blue: 0.46),
+                                Color.purple.opacity(0.88),
+                                Color.black,
+                                Color.white.opacity(0.34)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .padding(2)
+            }
+    }
+
+    private var premiumCabinetGlassReflection: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.20),
+                    Color.white.opacity(0.025),
+                    Color.clear,
+                    Color.purple.opacity(0.055),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .mask {
+                RoundedRectangle(cornerRadius: 31, style: .continuous)
+                    .padding(5)
+            }
+
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.clear,
+                            Color.white.opacity(0.42),
+                            Color.purple.opacity(0.22),
+                            Color.clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 250, height: 5)
+                .rotationEffect(.degrees(-24))
+                .offset(x: -48, y: -178)
+                .blur(radius: 1.4)
+        }
+        .blendMode(.screen)
+        .allowsHitTesting(false)
+    }
+
     private var machineBody: some View {
         ZStack {
             MachineOuterGlow(
@@ -874,18 +1016,7 @@ struct PremiumSlotMachineView: View {
                 isPulsing: lampPulse
             )
 
-            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.10, green: 0.11, blue: 0.15),
-                            Color(red: 0.025, green: 0.027, blue: 0.038),
-                            Color.black
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            premiumMetalCabinetBackground
 
             MachineAnimatedBorder(
                 heatLevel: heatLevel,
@@ -939,12 +1070,23 @@ struct PremiumSlotMachineView: View {
                 }
                 .frame(height: 78)
                 reelHousing
-                firstReelStopButton
-                controlPanel
+                    .scaleEffect(x: 1.0, y: 1.48)
+                    .frame(height: 250)
+                    .contentShape(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    )
+                    .onTapGesture {
+                        handleReelAreaTap()
+                    }
+                    .accessibilityLabel("リール停止エリア")
+                    .accessibilityHint("タップするたびに左、中、右の順で停止します")
+
                 brandFooter
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 18)
+
+            premiumCabinetGlassReflection
         }
         .frame(maxWidth: 370)
         .shadow(color: Color.black.opacity(0.72), radius: 22, y: 15)
@@ -986,6 +1128,46 @@ struct PremiumSlotMachineView: View {
             reelSlipIndex: reelSlipIndex,
             reelSlipIntensity: reelSlipIntensity
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.95),
+                            Color(red: 0.33, green: 0.34, blue: 0.40),
+                            Color.black,
+                            Color.purple.opacity(0.88),
+                            Color.white.opacity(0.72)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 7
+                )
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                .stroke(Color.purple.opacity(lampPulse ? 0.82 : 0.42), lineWidth: 2)
+                .padding(6)
+                .shadow(color: Color.purple.opacity(0.78), radius: 9)
+                .allowsHitTesting(false)
+        }
+        .shadow(color: Color.black.opacity(0.90), radius: 10, y: 8)
+        .shadow(color: Color.purple.opacity(0.28), radius: 16)
+    }
+
+    private func handleReelAreaTap() {
+        guard isSpinning,
+              isFirstReelStopEnabled else {
+            return
+        }
+
+        if stoppedReelCount == 0 {
+            SlotSoundManager.shared.playFirstStop()
+        }
+
+        onFirstReelStop()
     }
 
     private var firstReelStopButton: some View {
@@ -1104,6 +1286,38 @@ struct PremiumSlotMachineView: View {
                 }
             }
         )
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.12),
+                            Color(red: 0.075, green: 0.065, blue: 0.10),
+                            Color.black.opacity(0.92)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .shadow(color: Color.black.opacity(0.85), radius: 9, y: 7)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.72),
+                            Color.purple.opacity(0.70),
+                            Color.black,
+                            Color.white.opacity(0.24)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
+                .allowsHitTesting(false)
+        }
     }
 
     private var brandFooter: some View {
