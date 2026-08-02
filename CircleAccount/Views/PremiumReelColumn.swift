@@ -38,8 +38,14 @@ struct PremiumReelColumn: View {
     private let visibleRows = 7
     private let rowHeight: CGFloat = 50
 
+    // PremiumCabinetの1リール窓に合わせた固定表示領域。
+    private let reelWindowWidth: CGFloat = 78
+    private let reelWindowHeight: CGFloat = 162
+    private let reelWindowOffsetX: CGFloat = 0
+    private let reelWindowOffsetY: CGFloat = -2
+
     var body: some View {
-        GeometryReader { proxy in
+        GeometryReader { _ in
             TimelineView(
                 .animation(
                     minimumInterval: 1.0 / 60.0,
@@ -77,27 +83,32 @@ struct PremiumReelColumn: View {
                     reelShade
                 }
                 .frame(
-                    width: proxy.size.width,
-                    height: proxy.size.height
+                    width: reelWindowWidth,
+                    height: reelWindowHeight
                 )
+                // 停止時の圧縮アニメーションだけは既存仕様を維持する。
                 .scaleEffect(
                     x: 1,
                     y: reelCompression,
                     anchor: .center
                 )
                 .offset(
-                    x: horizontalShake,
-                    y: lockKickOffset
+                    x: horizontalShake + reelWindowOffsetX,
+                    y: lockKickOffset + reelWindowOffsetY
                 )
-                .clipped()
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: 11,
-                        style: .continuous
-                    )
-                )
+                .mask {
+                    Rectangle()
+                        .frame(
+                            width: reelWindowWidth,
+                            height: reelWindowHeight
+                        )
+                }
             }
         }
+        .frame(
+            width: reelWindowWidth,
+            height: reelWindowHeight
+        )
         .onAppear {
             prepareRollingPool()
         }
@@ -229,40 +240,24 @@ struct PremiumReelColumn: View {
     private var stoppedReel: some View {
         let visibleSymbol = visibleStoppedSymbol
 
-        return VStack(spacing: 0) {
-            reelSymbolView(
-                symbol: previousSymbol(for: visibleSymbol),
-                size: 25
-            )
-            .frame(height: rowHeight)
-            .frame(maxWidth: .infinity)
-            .opacity(0.16)
-
-            reelSymbolView(
-                symbol: visibleSymbol,
-                size: 54
-            )
-            .frame(height: rowHeight)
-            .frame(maxWidth: .infinity)
-            .scaleEffect(
-                (stopBounce ? 1.17 : 1.0) * stopGlowScale
-            )
-            .shadow(
-                color:
-                    isStopped
-                        ? glowColor.opacity(0.68)
-                        : Color.clear,
-                radius: 9
-            )
-
-            reelSymbolView(
-                symbol: nextSymbol(for: visibleSymbol),
-                size: 30
-            )
-            .frame(height: rowHeight)
-            .frame(maxWidth: .infinity)
-            .opacity(0.16)
-        }
+        return reelSymbolView(
+            symbol: visibleSymbol,
+            size: 54
+        )
+        .frame(
+            width: reelWindowWidth,
+            height: reelWindowHeight
+        )
+        .scaleEffect(
+            (stopBounce ? 1.17 : 1.0) * stopGlowScale
+        )
+        .shadow(
+            color:
+                isStopped
+                    ? glowColor.opacity(0.68)
+                    : Color.clear,
+            radius: 9
+        )
         .offset(y: settlingOffset)
     }
     private var slipTrail: some View {
@@ -316,15 +311,17 @@ struct PremiumReelColumn: View {
         size: CGFloat
     ) -> some View {
         if let assetName = imageAssetName(for: symbol) {
+            let displaySize = size * 1.05
+
             Image(assetName)
                 .resizable()
                 .scaledToFit()
                 .frame(
                     maxWidth: imageMaximumWidth(
                         for: symbol,
-                        baseSize: size
+                        baseSize: displaySize
                     ),
-                    maxHeight: size
+                    maxHeight: displaySize
                 )
         } else {
             Text(symbol)

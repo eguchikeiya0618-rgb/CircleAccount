@@ -357,7 +357,7 @@ struct PremiumSlotMachineView: View {
                     onLeverReleased()
                 }
             )
-            .offset(x: 2, y: 82)
+            .offset(x: -48, y: -11)
 
             // 最終右リール停止専用PUSH。
             // 最前面に独立したButtonを置き、装飾Overlayにタップを奪われないようにする。
@@ -608,7 +608,7 @@ struct PremiumSlotMachineView: View {
                 .disabled(!isPushEnabled || pushPressed)
                 .allowsHitTesting(isPushEnabled && !pushPressed)
                 .accessibilityLabel("最後の右リールを止めるPUSHボタン")
-                .offset(x: -34, y: 166)
+                .offset(x: -18, y: 180)
                 .zIndex(250)
             }
         }
@@ -920,177 +920,80 @@ struct PremiumSlotMachineView: View {
         }
     }
 
-    private var premiumMetalCabinetBackground: some View {
-        RoundedRectangle(cornerRadius: 34, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.18, green: 0.16, blue: 0.22),
-                        Color(red: 0.055, green: 0.050, blue: 0.072),
-                        Color(red: 0.012, green: 0.012, blue: 0.018),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.purple.opacity(0.30),
-                                Color.indigo.opacity(0.10),
-                                Color.clear
-                            ],
-                            center: .topTrailing,
-                            startRadius: 0,
-                            endRadius: 330
-                        )
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.72),
-                                Color(red: 0.38, green: 0.33, blue: 0.46),
-                                Color.purple.opacity(0.88),
-                                Color.black,
-                                Color.white.opacity(0.34)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
-                    )
-                    .padding(2)
-            }
+    private var premiumStatusTextOnly: some View {
+        VStack(spacing: 4) {
+            Text(statusText)
+                .font(.system(size: 17, weight: .black, design: .monospaced))
+                .tracking(1.3)
+                .foregroundStyle(heatLevel.displayColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .shadow(color: machineGlow, radius: 6)
+
+            Text(subStatusText)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(Color.white.opacity(0.58))
+                .lineLimit(1)
+                .minimumScaleFactor(0.70)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 52)
     }
 
-    private var premiumCabinetGlassReflection: some View {
+    private var machineBody: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.20),
-                    Color.white.opacity(0.025),
-                    Color.clear,
-                    Color.purple.opacity(0.055),
-                    Color.clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .mask {
-                RoundedRectangle(cornerRadius: 31, style: .continuous)
-                    .padding(5)
-            }
+            Image("PremiumCabinet")
+                .resizable()
+                .frame(width: 384, height: 576)
+                .scaleEffect(1.0)
+                .offset(x: -2, y: 22)
+                .allowsHitTesting(false)
 
-            Capsule()
+            // 背景画像側のレバー球とシャフトだけを隠し、
+            // 土台の上に既存のSwiftUIレバーを重ねる。
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.clear,
-                            Color.white.opacity(0.42),
-                            Color.purple.opacity(0.22),
-                            Color.clear
+                            Color(red: 0.025, green: 0.018, blue: 0.040),
+                            Color.black,
+                            Color(red: 0.055, green: 0.018, blue: 0.075)
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(width: 250, height: 5)
-                .rotationEffect(.degrees(-24))
-                .offset(x: -48, y: -178)
-                .blur(radius: 1.4)
-        }
-        .blendMode(.screen)
-        .allowsHitTesting(false)
-    }
+                .frame(width: 58, height: 128)
+                .offset(x: 151, y: -31)
+                .allowsHitTesting(false)
 
-    private var machineBody: some View {
-        ZStack {
-            MachineOuterGlow(
-                glowColor: machineGlow,
-                isPulsing: lampPulse
+            premiumStatusTextOnly
+                .frame(width: 300)
+                .offset(y: -101)
+
+            SlotLuckyLampView(
+                mode: luckyLampMode,
+                trigger: luckyLampTrigger
             )
+            .scaleEffect(x: 0.84, y: 0.60)
+            .offset(x: -113, y: -58)
 
-            premiumMetalCabinetBackground
-
-            MachineAnimatedBorder(
-                heatLevel: heatLevel,
-                glowColor: machineGlow,
-                rotation: borderRotation
-            )
-
-            // MovingMetalHighlight(
-            //     sweepOffset: frameSweepOffset
-            // )
-            // .allowsHitTesting(false)
-
-            RisingCabinetLight(
-                glowColor: machineGlow,
-                lightOffset: risingLightOffset
-            )
-            .allowsHitTesting(false)
-
-            SideLEDView(
-                heatLevel: heatLevel,
-                machineGlow: machineGlow,
-                isSpinning: isSpinning
-            )
-
-            PremiumCabinetLEDRails(
-                expectationLevel: expectationLevel,
-                isSpinning: isSpinning,
-                cinematicPhase: cinematicPhase,
-                glowColor: machineGlow
-            )
-            .allowsHitTesting(false)
-            VStack(spacing: 15) {
-                MarqueeHeaderView(
-                    heatLevel: heatLevel,
-                    machineGlow: machineGlow
+            reelHousing
+                .frame(width: 280, height: 154)
+                .scaleEffect(x: 1.0, y: 0.88)
+                .offset(x: -21, y: 62)
+                .contentShape(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
-
-                SlotStatusPanelView(
-                    statusText: statusText,
-                    subStatusText: subStatusText,
-                    heatLevel: heatLevel,
-                    machineGlow: machineGlow
-                )
-                HStack {
-                    SlotLuckyLampView(
-                        mode: luckyLampMode,
-                        trigger: luckyLampTrigger
-                    )
-
-                    Spacer()
+                .onTapGesture {
+                    handleReelAreaTap()
                 }
-                .frame(height: 78)
-                reelHousing
-                    .scaleEffect(x: 1.0, y: 1.48)
-                    .frame(height: 250)
-                    .contentShape(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    )
-                    .onTapGesture {
-                        handleReelAreaTap()
-                    }
-                    .accessibilityLabel("リール停止エリア")
-                    .accessibilityHint("タップするたびに左、中、右の順で停止します")
-
-                brandFooter
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 18)
-
-            premiumCabinetGlassReflection
+                .accessibilityLabel("リール停止エリア")
+                .accessibilityHint("タップするたびに左、中、右の順で停止します")
         }
-        .frame(maxWidth: 370)
+        .frame(width: 370, height: 520)
         .shadow(color: Color.black.opacity(0.72), radius: 22, y: 15)
-        .shadow(color: machineGlow.opacity(0.32), radius: 26)
     }
 
     private func playPushStandbyCabinetShake() {
@@ -1126,35 +1029,9 @@ struct PremiumSlotMachineView: View {
             reachOverlayScale: reachOverlayScale,
             reelSlipTrigger: reelSlipTrigger,
             reelSlipIndex: reelSlipIndex,
-            reelSlipIntensity: reelSlipIntensity
+            reelSlipIntensity: reelSlipIntensity,
+            showsHousingDecoration: false
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.95),
-                            Color(red: 0.33, green: 0.34, blue: 0.40),
-                            Color.black,
-                            Color.purple.opacity(0.88),
-                            Color.white.opacity(0.72)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 7
-                )
-                .allowsHitTesting(false)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 19, style: .continuous)
-                .stroke(Color.purple.opacity(lampPulse ? 0.82 : 0.42), lineWidth: 2)
-                .padding(6)
-                .shadow(color: Color.purple.opacity(0.78), radius: 9)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: Color.black.opacity(0.90), radius: 10, y: 8)
-        .shadow(color: Color.purple.opacity(0.28), radius: 16)
     }
 
     private func handleReelAreaTap() {

@@ -24,6 +24,7 @@ struct ReelHousingView: View {
     let reelSlipTrigger: Int
     let reelSlipIndex: Int
     let reelSlipIntensity: CGFloat
+    var showsHousingDecoration = true
 
     @State private var stoppedFlashIndex: Int? = nil
     @State private var stoppedFlashOpacity: Double = 0
@@ -47,22 +48,24 @@ struct ReelHousingView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.34, green: 0.35, blue: 0.39),
-                            Color(red: 0.07, green: 0.075, blue: 0.095),
-                            Color.black
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+            if showsHousingDecoration {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.34, green: 0.35, blue: 0.39),
+                                Color(red: 0.07, green: 0.075, blue: 0.095),
+                                Color.black
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
 
-            RoundedRectangle(cornerRadius: 17, style: .continuous)
-                .fill(Color.black)
-                .padding(8)
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .fill(Color.black)
+                    .padding(8)
+            }
 
             HStack(spacing: 7) {
                 ForEach(0..<3, id: \.self) { index in
@@ -181,19 +184,21 @@ struct ReelHousingView: View {
         }
         .frame(height: 154)
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.55),
-                            Color.gray.opacity(0.25),
-                            Color.black
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 3
-                )
+            if showsHousingDecoration {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.55),
+                                Color.gray.opacity(0.25),
+                                Color.black
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 3
+                    )
+            }
         }
         .onChange(of: stoppedReelCount) { oldValue, newValue in
             guard newValue > oldValue else {
