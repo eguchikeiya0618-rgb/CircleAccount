@@ -17,10 +17,6 @@ struct ReelHousingView: View {
     let glassSweepOffset: CGFloat
     let sparkBurstProgress: CGFloat
     let sparkBurstOpacity: Double
-    let premiumBacklightPhase: Double
-    let reachPulse: Bool
-    let reachOverlayOpacity: Double
-    let reachOverlayScale: CGFloat
     let reelSlipTrigger: Int
     let reelSlipIndex: Int
     let reelSlipIntensity: CGFloat
@@ -76,90 +72,11 @@ struct ReelHousingView: View {
                         isSpinning: isSpinning && stoppedReelCount <= index,
                         isStopped: stoppedReelCount > index,
                         reelIndex: index,
-                        glowColor: machineGlow
                     )
                 }
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 15)
-
-            ReelSlipEnergyOverlay(
-                trigger: reelSlipTrigger,
-                reelIndex: reelSlipIndex,
-                intensity: reelSlipIntensity,
-                glowColor: machineGlow
-            )
-            .padding(.horizontal, 13)
-            .padding(.vertical, 15)
-            .allowsHitTesting(false)
-
-            GeometryReader { proxy in
-                ZStack {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.clear,
-                                    Color.red.opacity(0.30),
-                                    Color.white.opacity(0.92),
-                                    Color.red.opacity(0.30),
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(
-                            width: max(proxy.size.width - 42, 0),
-                            height: 2
-                        )
-                        .opacity(0)
-
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.clear,
-                                    machineGlow.opacity(0.46),
-                                    Color.white,
-                                    machineGlow.opacity(0.46),
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(
-                            width: max(proxy.size.width - 42, 0),
-                            height: stopLineFlashOpacity > 0 ? 3 : 1
-                        )
-                        .opacity(stopLineFlashOpacity)
-                        .shadow(
-                            color: machineGlow.opacity(0.95),
-                            radius: 10
-                        )
-                }
-                .frame(
-                    width: proxy.size.width,
-                    height: proxy.size.height
-                )
-            }
-            .padding(8)
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: 17,
-                    style: .continuous
-                )
-            )
-            .allowsHitTesting(false)
-
-            RoundedRectangle(cornerRadius: 17, style: .continuous)
-                .stroke(
-                    Color.white.opacity(stopLineFlashOpacity * 0.85),
-                    lineWidth: 3
-                )
-                .padding(8)
-                .allowsHitTesting(false)
 
             reelGlassDepth
                 .allowsHitTesting(false)
@@ -167,20 +84,6 @@ struct ReelHousingView: View {
             reelGlassReflection
                 .allowsHitTesting(false)
 
-            reelStopStrobe
-                .allowsHitTesting(false)
-
-            stopSparkOverlay
-                .allowsHitTesting(false)
-
-            premiumReelBacklight
-                .allowsHitTesting(false)
-
-            reelInteriorLighting
-                .allowsHitTesting(false)
-
-            reachOverlay
-                .allowsHitTesting(false)
         }
         .frame(height: 154)
         .overlay {
@@ -199,18 +102,6 @@ struct ReelHousingView: View {
                         lineWidth: 3
                     )
             }
-        }
-        .onChange(of: stoppedReelCount) { oldValue, newValue in
-            guard newValue > oldValue else {
-                if newValue == 0 {
-                    stoppedFlashIndex = nil
-                    stoppedFlashOpacity = 0
-                    wholeReelFlashOpacity = 0
-                }
-                return
-            }
-
-            playStopStrobe(for: min(newValue - 1, 2))
         }
     }
 
@@ -467,155 +358,6 @@ struct ReelHousingView: View {
                                     : heatLevel.lampColor.opacity(0.9),
                             radius: 5
                         )
-                }
-            }
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-        )
-        .padding(8)
-    }
-
-    private var premiumReelBacklight: some View {
-        GeometryReader { proxy in
-            HStack(spacing: 0) {
-                ForEach(0..<3, id: \.self) { index in
-                    let wave = sin(
-                        premiumBacklightPhase
-                            + Double(index) * 1.55
-                    )
-                    let strength = (wave + 1) / 2
-
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Color.red.opacity(0.18 + strength * 0.34),
-                            Color.yellow.opacity(0.16 + strength * 0.38),
-                            Color.green.opacity(0.14 + strength * 0.34),
-                            Color.cyan.opacity(0.16 + strength * 0.36),
-                            Color.purple.opacity(0.18 + strength * 0.36),
-                            Color.clear
-                        ],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
-                    .frame(width: proxy.size.width / 3)
-                    .blur(radius: 14)
-                    .opacity(
-                        heatLevel == .premium
-                            ? 0.55 + strength * 0.45
-                            : 0
-                    )
-                }
-            }
-            .blendMode(.screen)
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-        )
-        .padding(8)
-    }
-
-    private var reachOverlay: some View {
-        ZStack {
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-            .stroke(
-                AngularGradient(
-                    colors: [
-                        Color.red,
-                        Color.orange,
-                        Color.yellow,
-                        Color.white,
-                        Color.red
-                    ],
-                    center: .center
-                ),
-                lineWidth: 5
-            )
-            .scaleEffect(reachOverlayScale)
-            .opacity(reachOverlayOpacity)
-            .shadow(
-                color: Color.red.opacity(0.85),
-                radius: 18
-            )
-
-            Text(
-                heatLevel == .premium
-                    ? "SUPER REACH"
-                    : "REACH"
-            )
-            .font(
-                .system(
-                    size: heatLevel == .premium ? 26 : 22,
-                    weight: .black,
-                    design: .rounded
-                )
-            )
-            .tracking(1.2)
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        Color.white,
-                        heatLevel == .premium
-                            ? Color.yellow
-                            : Color.red,
-                        Color.white
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .shadow(color: Color.black, radius: 2, y: 2)
-            .shadow(
-                color:
-                    heatLevel == .premium
-                        ? Color.yellow.opacity(0.95)
-                        : Color.red.opacity(0.90),
-                radius: reachPulse ? 16 : 8
-            )
-            .scaleEffect(reachPulse ? 1.08 : 0.96)
-            .opacity(reachOverlayOpacity)
-        }
-        .padding(8)
-    }
-
-
-    private var reelInteriorLighting: some View {
-        GeometryReader { proxy in
-            TimelineView(
-                .animation(
-                    minimumInterval: 1.0 / 30.0,
-                    paused: !isSpinning
-                )
-            ) { context in
-                let time =
-                    context.date
-                        .timeIntervalSinceReferenceDate
-
-                ZStack {
-                    reelFrameGlow(
-                        size: proxy.size,
-                        time: time
-                    )
-
-                    reelSeparatorLights(
-                        size: proxy.size,
-                        time: time
-                    )
-
-                    outerGlassGlow(
-                        size: proxy.size,
-                        time: time
-                    )
                 }
             }
         }

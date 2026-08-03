@@ -25,6 +25,7 @@ struct SlotEffectsView: View {
     let heatLevel: SlotHeatLevel
     let resultTitle: String
     let resultSubtitle: String
+    var showsParticles = true
 
     @State private var flashOpacity: CGFloat = 0
     @State private var titleScale: CGFloat = 0.62
@@ -252,7 +253,7 @@ struct SlotEffectsView: View {
 
     @ViewBuilder
     private var particleLayer: some View {
-        if stage == .jackpot || stage == .cardReveal {
+        if showsParticles && (stage == .jackpot || stage == .cardReveal) {
             GeometryReader { proxy in
                 ForEach(0..<44, id: \.self) { index in
                     let width = proxy.size.width

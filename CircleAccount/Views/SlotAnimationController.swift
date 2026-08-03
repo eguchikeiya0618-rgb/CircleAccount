@@ -141,12 +141,13 @@ final class SlotAnimationController: ObservableObject {
         }
     }
 
-    // MARK: - First Reel Stop
+    // MARK: - Reel Stop Input
 
-    func stopFirstReel() {
+    func requestReelStop(index: Int) {
         guard
             isSpinning,
             stoppedReelCount < 3,
+            index == stoppedReelCount,
             canStopFirstReel
         else {
             return
@@ -156,6 +157,12 @@ final class SlotAnimationController: ObservableObject {
 
         firstReelStopContinuation?.resume()
         firstReelStopContinuation = nil
+    }
+
+    // 既存の呼び出し元との互換性を保ち、
+    // 画面タップとSTOPボタンを同じ停止要求へ集約する。
+    func stopFirstReel() {
+        requestReelStop(index: stoppedReelCount)
     }
 
     // MARK: - Push
@@ -702,7 +709,7 @@ final class SlotAnimationController: ObservableObject {
         guard !Task.isCancelled else { sound.stopSpin(); return }
 
         stopReel(index: 0)
-        statusText = "LEFT REEL STOP"
+        statusText = ""
         subStatusText = "..."
         await sleep(1.20)
 
@@ -719,8 +726,8 @@ final class SlotAnimationController: ObservableObject {
         guard !Task.isCancelled else { sound.stopSpin(); return }
 
         stopReel(index: 1)
-        statusText = "MIDDLE REEL STOP"
-        subStatusText = "LAST REEL SPINNING"
+        statusText = ""
+        subStatusText = ""
         await sleep(1.55)
 
         guard !Task.isCancelled else { sound.stopSpin(); return }
@@ -777,7 +784,7 @@ final class SlotAnimationController: ObservableObject {
             sound.startSpin()
             sound.intensifySpin()
 
-            statusText = "LAST REEL"
+            statusText = ""
             subStatusText = "PUSH TO STOP"
 
             // 復帰演出を見せる
@@ -937,10 +944,10 @@ final class SlotAnimationController: ObservableObject {
             statusText = "RESULT LOCKED"
             subStatusText = "FINAL JUDGEMENT"
         } else if index == 0 {
-            statusText = "LEFT REEL STOP"
+            statusText = ""
             subStatusText = "MIDDLE REEL AUTO"
         } else {
-            statusText = "MIDDLE REEL STOP"
+            statusText = ""
             subStatusText = "FINAL REEL AUTO"
         }
     }

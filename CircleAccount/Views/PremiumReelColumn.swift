@@ -12,11 +12,9 @@ struct PremiumReelColumn: View {
     let isSpinning: Bool
     let isStopped: Bool
     let reelIndex: Int
-    let glowColor: Color
 
     @State private var stopBounce = false
     @State private var settlingOffset: CGFloat = 0
-    @State private var flashOpacity = 0.0
     @State private var slipOpacity = 0.0
     @State private var slipOffset: CGFloat = -34
     @State private var reelCompression: CGFloat = 1.0
@@ -40,7 +38,7 @@ struct PremiumReelColumn: View {
 
     // PremiumCabinetの1リール窓に合わせた固定表示領域。
     private let reelWindowWidth: CGFloat = 78
-    private let reelWindowHeight: CGFloat = 162
+    private let reelWindowHeight: CGFloat = 184
     private let reelWindowOffsetX: CGFloat = 0
     private let reelWindowOffsetY: CGFloat = -2
 
@@ -76,10 +74,6 @@ struct PremiumReelColumn: View {
                         slipTrail
                     }
 
-                    Rectangle()
-                        .fill(glowColor.opacity(flashOpacity))
-                        .blendMode(.screen)
-
                     reelShade
                 }
                 .frame(
@@ -109,6 +103,8 @@ struct PremiumReelColumn: View {
             width: reelWindowWidth,
             height: reelWindowHeight
         )
+        // 下端位置を維持し、高さ増加分を上方向だけへ広げる。
+        .offset(y: 0)
         .onAppear {
             prepareRollingPool()
         }
@@ -250,13 +246,6 @@ struct PremiumReelColumn: View {
         )
         .scaleEffect(
             (stopBounce ? 1.17 : 1.0) * stopGlowScale
-        )
-        .shadow(
-            color:
-                isStopped
-                    ? glowColor.opacity(0.68)
-                    : Color.clear,
-            radius: 9
         )
         .offset(y: settlingOffset)
     }
@@ -745,7 +734,6 @@ struct PremiumReelColumn: View {
         settlingOffset = drop
         slipOffset = drop - 20
         slipOpacity = 0.86
-        flashOpacity = reelIndex == 2 ? 0.92 : 0.58
 
         reelCompression = compressStart
         horizontalShake = firstShake
@@ -817,9 +805,6 @@ struct PremiumReelColumn: View {
                 stopBounce = false
             }
 
-            withAnimation(.easeOut(duration: 0.24)) {
-                flashOpacity = 0
-            }
         }
     }
 
@@ -829,7 +814,6 @@ struct PremiumReelColumn: View {
         settlingOffset = 0
         slipOpacity = 0
         slipOffset = -34
-        flashOpacity = 0
         reelCompression = 1
         horizontalShake = 0
         lockKickOffset = 0

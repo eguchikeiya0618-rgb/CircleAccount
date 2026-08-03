@@ -7,11 +7,65 @@
 
 import SwiftUI
 import AVKit
+import UIKit
+
+
+private final class BundleMoviePlayerUIView: UIView {
+    override class var layerClass: AnyClass {
+        AVPlayerLayer.self
+    }
+
+    private var playerLayer: AVPlayerLayer {
+        layer as! AVPlayerLayer
+    }
+
+    func configure(
+        player: AVPlayer,
+        videoGravity: AVLayerVideoGravity
+    ) {
+        playerLayer.player = player
+        playerLayer.videoGravity = videoGravity
+        playerLayer.masksToBounds = true
+        playerLayer.backgroundColor = UIColor.clear.cgColor
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer.frame = bounds
+    }
+}
+
+private struct BundleMoviePlayerLayer: UIViewRepresentable {
+    let player: AVPlayer
+    let videoGravity: AVLayerVideoGravity
+
+    func makeUIView(context: Context) -> BundleMoviePlayerUIView {
+        let view = BundleMoviePlayerUIView()
+        view.backgroundColor = .clear
+        view.configure(
+            player: player,
+            videoGravity: videoGravity
+        )
+        return view
+    }
+
+    func updateUIView(
+        _ uiView: BundleMoviePlayerUIView,
+        context: Context
+    ) {
+        uiView.configure(
+            player: player,
+            videoGravity: videoGravity
+        )
+    }
+}
 
 struct BundleMovieOverlay: View {
     let movieName: String
     var fileExtension = "mp4"
     var fadeDuration = 0.35
+    var contentMode: ContentMode = .fit
+    var isOpaquePresentation = false
     var endLeadTime: Double?
     var onApproachingEnd: (() -> Void)?
     let onFinished: () -> Void
@@ -25,20 +79,31 @@ struct BundleMovieOverlay: View {
     @State private var timeObserver: Any?
 
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(Color.black)
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
 
-            if let player {
-                VideoPlayer(player: player)
-                    .ignoresSafeArea()
-                    .background(Color.black)
+                if let player {
+                    BundleMoviePlayerLayer(
+                        player: player,
+                        videoGravity: .resizeAspectFill
+                    )
+                    .frame(
+                        width: geometry.size.width,
+                        height: geometry.size.height
+                    )
+                    .clipped()
                     .allowsHitTesting(false)
+                }
             }
+            .frame(
+                width: geometry.size.width,
+                height: geometry.size.height
+            )
+            .clipped()
         }
-        .opacity(overlayOpacity)
-        .background(Color.black.ignoresSafeArea())
+        .opacity(isOpaquePresentation ? 1 : overlayOpacity)
+        .background(Color.black)
         .onAppear {
             startPlayback()
         }
@@ -169,17 +234,6 @@ struct VMovieOverlay: View {
     var body: some View {
         BundleMovieOverlay(
             movieName: "VMovie",
-            onFinished: onFinished
-        )
-    }
-}
-
-struct BonusMovieOverlay: View {
-    let onFinished: () -> Void
-
-    var body: some View {
-        BundleMovieOverlay(
-            movieName: "BonusMovie",
             onFinished: onFinished
         )
     }
