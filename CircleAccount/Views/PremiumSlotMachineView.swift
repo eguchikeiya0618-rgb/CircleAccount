@@ -809,23 +809,8 @@ struct PremiumSlotMachineView: View {
         }
         .offset(y: 20)
     }
-    
     private var premiumEffectArea: some View {
         GeometryReader { geometry in
-            let lcdHorizontalInset: CGFloat = 6
-            let lcdVerticalInset: CGFloat = 6
-            let bottomMaskAdjustment: CGFloat = 0
-            let lcdWidth = max(
-                0,
-                geometry.size.width - lcdHorizontalInset * 2
-            )
-            let lcdHeight = max(
-                0,
-                geometry.size.height
-                - lcdVerticalInset * 2
-                - bottomMaskAdjustment
-            )
-            
             ZStack {
                 Color.black
                 
@@ -846,10 +831,6 @@ struct PremiumSlotMachineView: View {
                         SlotSoundManager.shared.suppressNextSpinStartSound()
                         hasPremiumTypewriterFinished = true
                     }
-                    .frame(
-                        width: geometry.size.width,
-                        height: geometry.size.height
-                    )
                 }
                 
                 if isVMovieVisible {
@@ -870,18 +851,30 @@ struct PremiumSlotMachineView: View {
                 height: geometry.size.height
             )
             .mask {
-                premiumLCDDisplayMask(in: geometry)
+                if isPremiumTypewriterVisible {
+                    RoundedRectangle(cornerRadius: 8)
+                } else {
+                    premiumLCDDisplayMask(in: geometry)
+                }
             }
         }
-        .frame(width: 370, height: 326)
-        .offset(y: 20)
+        .frame(
+            width: isPremiumTypewriterVisible ? 348 : 370,
+            height: isPremiumTypewriterVisible ? 286 : 326
+        )
+        .offset(
+            x: isPremiumTypewriterVisible ? -16 : 0,
+            y: isPremiumTypewriterVisible ? -6 : 20
+        )
     }
+    
     
     private func premiumLCDDisplayMask(
         in geometry: GeometryProxy
     ) -> some View {
         let videoRightMaskAdjustment: CGFloat = 10
-        let videoBottomMaskAdjustment: CGFloat = (premiumTicketVisible || isPremiumTypewriterVisible) ? 12 : 24
+        let videoBottomMaskAdjustment: CGFloat = 12
+        let videoTopMaskAdjustment: CGFloat = 12
         
         return RoundedRectangle(cornerRadius: 8)
             .frame(
@@ -893,10 +886,11 @@ struct PremiumSlotMachineView: View {
                     geometry.size.height
                 - 12
                 - videoBottomMaskAdjustment
+                                + videoTopMaskAdjustment
             )
             .offset(
                 x: -videoRightMaskAdjustment / 2,
-                y: -videoBottomMaskAdjustment / 2
+                y: -(videoBottomMaskAdjustment + videoTopMaskAdjustment) / 2
             )
     }
     
