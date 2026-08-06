@@ -162,30 +162,11 @@ struct PremiumSlotMachineView: View {
                 .allowsHitTesting(false)
                 .zIndex(4000)
             
-            if isGekiAtsuVisible || isPremiumTypewriterVisible || isVMovieVisible || premiumTicketVisible {
+            if isGekiAtsuVisible || isPremiumTypewriterVisible || isVMovieVisible || premiumTicketVisible || isBonusLogoVisible {
                 premiumEffectArea
                     .padding(.trailing, 46)
                     .allowsHitTesting(false)
                     .zIndex(5000)
-            }
-            
-            if isBonusLogoVisible {
-                PremiumBonusConfirmedOverlay {
-                    guard isBonusLogoVisible else { return }
-                    
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        isBonusLogoVisible = false
-                    }
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        guard premiumTicketVisible else { return }
-                        onPremiumSequenceFinished()
-                    }
-                }
-                .onAppear {
-                    premiumTicketVisible = true
-                }
-                .zIndex(2003)
             }
             
             
@@ -804,13 +785,16 @@ struct PremiumSlotMachineView: View {
         .frame(width: 370, height: 326)
         .mask {
             RoundedRectangle(cornerRadius: 8)
-                .frame(width: 348, height: 314)
+                .frame(width: 348, height: 320)
                 .offset(x: -5, y: 0)
         }
         .offset(y: 20)
     }
     private var premiumEffectArea: some View {
         GeometryReader { geometry in
+            let displaySize = premiumLCDDisplaySize(in: geometry)
+            let displayOffset = premiumLCDDisplayOffset
+
             ZStack {
                 Color.black
                 
@@ -826,45 +810,65 @@ struct PremiumSlotMachineView: View {
                 if isPremiumTypewriterVisible {
                     PremiumTypewriterOverlay {
                         guard isPremiumTypewriterVisible else { return }
-                        
+
                         isPremiumTypewriterVisible = false
                         SlotSoundManager.shared.suppressNextSpinStartSound()
                         hasPremiumTypewriterFinished = true
                     }
+                    .frame(
+                           width: displaySize.width,
+                           height: displaySize.height
+                       )
                 }
                 
                 if isVMovieVisible {
                     premiumCabinetMovieOverlay
-                        .frame(
-                            width: geometry.size.width,
-                            height: geometry.size.height
-                        )
                 }
                 
                 if premiumTicketVisible {
                     premiumTicketContent(in: geometry)
                         .transition(.opacity)
                 }
+
+                if isBonusLogoVisible {
+                    PremiumBonusConfirmedOverlay {
+                        guard isBonusLogoVisible else { return }
+
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            isBonusLogoVisible = false
+                        }
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            guard premiumTicketVisible else { return }
+                            onPremiumSequenceFinished()
+                        }
+                    }
+                    .onAppear {
+                        premiumTicketVisible = true
+                    }
+                }
             }
+            .frame(
+                width: displaySize.width,
+                height: displaySize.height
+            )
+            .mask {
+                premiumLCDDisplayMask(in: geometry)
+            }
+            .clipped()
+            .offset(displayOffset)
             .frame(
                 width: geometry.size.width,
                 height: geometry.size.height
             )
-            .mask {
-                if isPremiumTypewriterVisible {
-                    RoundedRectangle(cornerRadius: 8)
-                } else {
-                    premiumLCDDisplayMask(in: geometry)
-                }
-            }
         }
         .frame(
-            width: isPremiumTypewriterVisible ? 348 : 370,
-            height: isPremiumTypewriterVisible ? 286 : 326
+            width: 370,
+            height: 326
         )
         .offset(
-            x: isPremiumTypewriterVisible ? -16 : 0,
-            y: isPremiumTypewriterVisible ? -6 : 20
+            x: 0,
+            y: 11
         )
     }
     
@@ -872,26 +876,38 @@ struct PremiumSlotMachineView: View {
     private func premiumLCDDisplayMask(
         in geometry: GeometryProxy
     ) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .frame(
+                width: premiumLCDDisplaySize(in: geometry).width,
+                height: premiumLCDDisplaySize(in: geometry).height
+            )
+    }
+
+    private func premiumLCDDisplaySize(
+        in geometry: GeometryProxy
+    ) -> CGSize {
         let videoRightMaskAdjustment: CGFloat = 10
         let videoBottomMaskAdjustment: CGFloat = 12
         let videoTopMaskAdjustment: CGFloat = 12
-        
-        return RoundedRectangle(cornerRadius: 8)
-            .frame(
-                width:
-                    geometry.size.width
-                - 12
-                - videoRightMaskAdjustment,
-                height:
-                    geometry.size.height
+
+        return CGSize(
+            width: geometry.size.width - 12 - videoRightMaskAdjustment,
+            height: geometry.size.height
                 - 12
                 - videoBottomMaskAdjustment
-                                + videoTopMaskAdjustment
-            )
-            .offset(
-                x: -videoRightMaskAdjustment / 2,
-                y: -(videoBottomMaskAdjustment + videoTopMaskAdjustment) / 2
-            )
+                + videoTopMaskAdjustment
+        )
+    }
+
+    private var premiumLCDDisplayOffset: CGSize {
+        let videoRightMaskAdjustment: CGFloat = 10
+        let videoBottomMaskAdjustment: CGFloat = 12
+        let videoTopMaskAdjustment: CGFloat = 12
+
+        return CGSize(
+            width: -videoRightMaskAdjustment / 2,
+            height: -(videoBottomMaskAdjustment + videoTopMaskAdjustment) / 2
+        )
     }
     
     private func premiumTicketContent(
@@ -2724,7 +2740,7 @@ private struct PremiumCRTBlackoutOverlay: View {
                     )
                     .frame(
                         width: geometry.size.width,
-                        height: geometry.size.height
+                        height: geometry.size.height + 30
                     )
                     .scaleEffect(
                         x: screenScaleX,

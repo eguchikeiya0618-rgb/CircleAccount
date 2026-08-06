@@ -35,7 +35,7 @@ struct PremiumTypewriterOverlay: View {
     var body: some View {
         ZStack {
             Color.black
-            
+                .offset(y: 11)
             
             if !isFullImageVisible,
                let visibleCharacterIndex {
@@ -48,6 +48,7 @@ struct PremiumTypewriterOverlay: View {
                         maxHeight: 240
                     )
                     .padding(.horizontal, 24)
+                    .offset(y: 11)
                     .id(visibleCharacterIndex)
                     .transition(
                         .opacity.combined(
@@ -61,8 +62,11 @@ struct PremiumTypewriterOverlay: View {
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
-                    .frame(maxWidth: 560)
-                    .padding(.horizontal, 20)
+                    .frame(
+                            width: 348,
+                            height: 314
+                        )
+                        .offset(y: 11)
                     .transition(
                         .opacity.combined(
                             with: .scale(scale: 0.95)
@@ -79,7 +83,10 @@ struct PremiumTypewriterOverlay: View {
         
         
         .allowsHitTesting(false)
-        .frame(width: 348, height: 286)
+        .frame(
+            width: 348,
+            height: 286
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .task(id: sequenceID) {
             await playSequence()
