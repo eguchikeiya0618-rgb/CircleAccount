@@ -59,7 +59,6 @@ struct SlotLuckyLampView: View {
             chromeFrame
             glassBase
             illuminatedCore
-            starDecorations
             textLayer
             glassReflection
             revealFlash
@@ -161,6 +160,20 @@ struct SlotLuckyLampView: View {
                 .padding(4)
         }
         .shadow(color: .black.opacity(0.85), radius: 10, y: 7)
+        .overlay {
+
+            Ellipse()
+                .stroke(
+                    mainColor.opacity(
+                        mode.isLit
+                            ? (pulse ? 0.65 : 0.22)
+                            : 0
+                    ),
+                    lineWidth: 2
+                )
+                .blur(radius: 3)
+
+        }
     }
 
     private var glassBase: some View {
@@ -238,10 +251,10 @@ struct SlotLuckyLampView: View {
 
     private var starDecorations: some View {
         ZStack {
-            star("★", size: 15, x: -46, y: -17)
-            star("★", size: 12, x: 47, y: -15)
-            star("✦", size: 10, x: -50, y: 17)
-            star("✦", size: 9, x: 49, y: 18)
+            star("", size: 15, x: -46, y: -17)
+            star("", size: 12, x: 47, y: -15)
+            star("", size: 10, x: -50, y: 17)
+            star("", size: 9, x: 49, y: 18)
         }
     }
 
@@ -267,24 +280,48 @@ struct SlotLuckyLampView: View {
     }
 
     private var textLayer: some View {
-        VStack(spacing: -3) {
+        VStack(spacing: 1) {
             Text("SiRiUS")
-                .font(.system(size: 10, weight: .black, design: .rounded))
-                .tracking(2.4)
+                .font(.system(size: 9, weight: .black, design: .rounded))
+                .tracking(3)
 
-            Text("LUCKY")
-                .font(.system(size: 25, weight: .black, design: .rounded))
+            Text("PREMIUM")
+                .font(.system(size: 22,
+                              weight: .heavy))
                 .italic()
-                .tracking(0.8)
+                .tracking(0.5
+                )
 
-            Text("CHANCE!")
-                .font(.system(size: 10, weight: .black, design: .rounded))
-                .tracking(2.1)
+            Text("CHANCE")
+                .font(.system(size: 12, weight: .black, design: .rounded))
+                .tracking(3.5)
         }
         .foregroundStyle(textStyle)
         .shadow(
-            color: mode.isLit ? mainColor.opacity(0.98) : .black,
-            radius: mode.isLit ? (pulse ? 10 : 5) : 1
+            color: .white.opacity(
+                mode.isLit
+                    ? (pulse ? 0.95 : 0.45)
+                    : 0
+            ),
+            radius: pulse ? 2 : 1
+        )
+
+        .shadow(
+            color: Color.yellow.opacity(
+                mode.isLit
+                    ? (pulse ? 1.0 : 0.7)
+                    : 0
+            ),
+            radius: pulse ? 14 : 7
+        )
+
+        .shadow(
+            color: Color.orange.opacity(
+                mode.isLit
+                    ? (pulse ? 0.9 : 0.5)
+                    : 0
+            ),
+            radius: pulse ? 32 : 18
         )
         .opacity(mode.isLit ? 1.0 : 0.12)
     }
@@ -316,11 +353,7 @@ struct SlotLuckyLampView: View {
             )
         case .gold:
             return AnyShapeStyle(
-                LinearGradient(
-                    colors: [.white, .yellow, .orange],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                Color.white
             )
         case .rainbow:
             return AnyShapeStyle(

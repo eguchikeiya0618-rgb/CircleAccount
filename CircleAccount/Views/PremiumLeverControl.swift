@@ -41,7 +41,7 @@ struct PremiumLeverControl: View {
                     .padding(.top, 8)
 
                 leverKnob
-                    .offset(y: clampedProgress * 82)
+                    .offset(y: clampedProgress * 110)
             }
             .frame(width: 60, height: 150)
 

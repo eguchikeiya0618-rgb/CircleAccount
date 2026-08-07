@@ -433,7 +433,7 @@ struct GachaView: View {
             return
         }
 
-        guard animation.leverProgress >= 0.72 else {
+        guard animation.leverProgress >= 0.98 else {
             animation.returnLever()
             return
         }
