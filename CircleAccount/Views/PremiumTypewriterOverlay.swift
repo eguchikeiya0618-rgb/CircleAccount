@@ -87,7 +87,10 @@ struct PremiumTypewriterOverlay: View {
             width: 348,
             height: 286
         )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(
+            RoundedRectangle(cornerRadius: 8)
+                .offset(y: 11)
+        )
         .task(id: sequenceID) {
             await playSequence()
         }

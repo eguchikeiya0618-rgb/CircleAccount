@@ -782,13 +782,13 @@ struct PremiumSlotMachineView: View {
             trigger: cinematicTrigger,
             glowColor: machineGlow
         )
-        .frame(width: 370, height: 326)
+        .frame(width: 370, height: 320)
         .mask {
             RoundedRectangle(cornerRadius: 8)
-                .frame(width: 348, height: 320)
-                .offset(x: -5, y: 0)
+                .frame(width: 348, height: 300)
+                .offset(x: -5, y: 10)
         }
-        .offset(y: 20)
+        .offset(y: -5)
     }
     private var premiumEffectArea: some View {
         GeometryReader { geometry in
@@ -816,9 +816,17 @@ struct PremiumSlotMachineView: View {
                         hasPremiumTypewriterFinished = true
                     }
                     .frame(
-                           width: displaySize.width,
-                           height: displaySize.height
-                       )
+                        width: displaySize.width,
+                        height: displaySize.height
+                    )
+                    .mask {
+                        RoundedRectangle(cornerRadius: 8)
+                            .frame(
+                                width: displaySize.width,
+                                height: displaySize.height - 20
+                            )
+                            .offset(y: 20)
+                    }
                 }
                 
                 if isVMovieVisible {
@@ -881,6 +889,7 @@ struct PremiumSlotMachineView: View {
                 width: premiumLCDDisplaySize(in: geometry).width,
                 height: premiumLCDDisplaySize(in: geometry).height
             )
+            .offset(y: 10)
     }
 
     private func premiumLCDDisplaySize(
@@ -2740,8 +2749,9 @@ private struct PremiumCRTBlackoutOverlay: View {
                     )
                     .frame(
                         width: geometry.size.width,
-                        height: geometry.size.height + 30
+                        height: geometry.size.height + 20
                     )
+                    .offset(y: 20)
                     .scaleEffect(
                         x: screenScaleX,
                         y: screenScaleY,
@@ -2884,7 +2894,7 @@ private struct PremiumCRTBlackoutOverlay: View {
         }
 
         withAnimation(.easeOut(duration: 0.62).delay(0.36)) {
-            screenScaleY = 1
+            screenScaleY = 1.08
             screenOpacity = 0.90
             blackOpacity = 0
         }
