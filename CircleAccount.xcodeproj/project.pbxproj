@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5C6659DC2FF258680098D6E8 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659DB2FF258680098D6E8 /* FirebaseCore */; };
+		5C6659E22FF2608F0098D6E8 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */; };
+		5C665A002FF3B5A40098D6E8 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */; };
+		5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C665A462FF61B000098D6E8 /* PointProgressCard.swift */; };
+		5C6EF6E43008BB4A00B834AB /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E33008BB4A00B834AB /* SoundManager.swift */; };
+		5C6EF6E530098BF600B834AB /* ラッパのファンファーレ.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */; };
 		7E0000010000000000000001 /* SiriUSV2ReelDrumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000001 /* SiriUSV2ReelDrumView.swift */; };
 		7E0000010000000000000002 /* ReelEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000002 /* ReelEngine.swift */; };
 		7E0000010000000000000003 /* ReelFrameClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000003 /* ReelFrameClock.swift */; };
@@ -15,15 +21,13 @@
 		7E0000010000000000000006 /* ReelRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000006 /* ReelRenderer.swift */; };
 		7E0000010000000000000007 /* ReelSymbolLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000007 /* ReelSymbolLayer.swift */; };
 		7E0000010000000000000008 /* ReelSymbolPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000008 /* ReelSymbolPool.swift */; };
-		5C6659DC2FF258680098D6E8 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659DB2FF258680098D6E8 /* FirebaseCore */; };
-		5C6659E22FF2608F0098D6E8 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */; };
-		5C665A002FF3B5A40098D6E8 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */; };
-		5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C665A462FF61B000098D6E8 /* PointProgressCard.swift */; };
-		5C6EF6E43008BB4A00B834AB /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E33008BB4A00B834AB /* SoundManager.swift */; };
-		5C6EF6E530098BF600B834AB /* ラッパのファンファーレ.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5C12CE0B2FEF9187007BB317 /* CircleAccount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CircleAccount.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C665A462FF61B000098D6E8 /* PointProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointProgressCard.swift; sourceTree = "<group>"; };
+		5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "ラッパのファンファーレ.mp3"; sourceTree = "<group>"; };
+		5C6EF6E33008BB4A00B834AB /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 		7F0000010000000000000001 /* SiriUSV2ReelDrumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiriUSV2ReelDrumView.swift; sourceTree = "<group>"; };
 		7F0000010000000000000002 /* ReelEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelEngine.swift; sourceTree = "<group>"; };
 		7F0000010000000000000003 /* ReelFrameClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFrameClock.swift; sourceTree = "<group>"; };
@@ -32,39 +36,35 @@
 		7F0000010000000000000006 /* ReelRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelRenderer.swift; sourceTree = "<group>"; };
 		7F0000010000000000000007 /* ReelSymbolLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelSymbolLayer.swift; sourceTree = "<group>"; };
 		7F0000010000000000000008 /* ReelSymbolPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelSymbolPool.swift; sourceTree = "<group>"; };
-		5C12CE0B2FEF9187007BB317 /* CircleAccount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CircleAccount.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		5C665A462FF61B000098D6E8 /* PointProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointProgressCard.swift; sourceTree = "<group>"; };
-		5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "ラッパのファンファーレ.mp3"; sourceTree = "<group>"; };
-		5C6EF6E33008BB4A00B834AB /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7D0000010000000000000001 /* Exceptions for "CircleAccount" folder in "CircleAccount" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Views/SiriUSReelEngineV2/ReelEngine.swift,
+				Views/SiriUSReelEngineV2/ReelFrameClock.swift,
+				Views/SiriUSReelEngineV2/ReelPhysics.swift,
+				Views/SiriUSReelEngineV2/ReelRenderer.swift,
+				Views/SiriUSReelEngineV2/ReelSymbolLayer.swift,
+				Views/SiriUSReelEngineV2/ReelSymbolPool.swift,
+				Views/SiriUSReelEngineV2/SiriUSV2ReelDrumView.swift,
+				Views/SiriUSReelEngineV2/SiriUSV2ReelInputs.swift,
+			);
+			target = 5C12CE0A2FEF9187007BB317 /* CircleAccount */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5C12CE0D2FEF9187007BB317 /* CircleAccount */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				7D0000010000000000000001 /* Exceptions for CircleAccount folder in CircleAccount target */,
+				7D0000010000000000000001 /* Exceptions for "CircleAccount" folder in "CircleAccount" target */,
 			);
 			path = CircleAccount;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		7D0000010000000000000001 /* Exceptions for CircleAccount folder in CircleAccount target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Views/SiriUSReelEngineV2/SiriUSV2ReelDrumView.swift,
-				Views/SiriUSReelEngineV2/ReelEngine.swift,
-				Views/SiriUSReelEngineV2/ReelFrameClock.swift,
-				Views/SiriUSReelEngineV2/SiriUSV2ReelInputs.swift,
-				Views/SiriUSReelEngineV2/ReelPhysics.swift,
-				Views/SiriUSReelEngineV2/ReelRenderer.swift,
-				Views/SiriUSReelEngineV2/ReelSymbolLayer.swift,
-				Views/SiriUSReelEngineV2/ReelSymbolPool.swift,
-			);
-			target = 5C12CE0A2FEF9187007BB317 /* CircleAccount */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		5C12CE082FEF9187007BB317 /* Frameworks */ = {

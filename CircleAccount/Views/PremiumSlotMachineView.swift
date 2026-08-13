@@ -76,6 +76,8 @@ struct PremiumSlotMachineView: View {
     
     @State private var cabinetStrobeTrigger = 0
     @State private var cabinetStrobeColor = Color.cyan
+    @State private var cabinetLightingEnabled = true
+    @State private var cabinetLightingGeneration = 0
     
     @State private var luckyLampMode: SlotLuckyLampMode = .off
     @State private var luckyLampTrigger = 0
@@ -110,7 +112,11 @@ struct PremiumSlotMachineView: View {
     @State private var pushRevealBlackoutOpacity = 0.0
     @State private var pushLaunchFlashOpacity = 0.0
     @State private var pushEjectProgress: CGFloat = 0
+    @State private var pushEjectScale: CGFloat = 1
+    @State private var pushEjectOffsetY: CGFloat = 0
+    @State private var pushIdlePulse = false
     @State private var pushLaunchReady = false
+    @State private var pushLaunchToken = 0
     
     @State private var resultPauseOpacity = 0.0
     @State private var resultPauseTextOpacity = 0.0
@@ -159,8 +165,10 @@ struct PremiumSlotMachineView: View {
         ZStack(alignment: .center) {
             machineBody
             
-            authenticCabinetOverlay
-                .zIndex(51)
+            if cabinetLightingEnabled {
+                authenticCabinetOverlay
+                    .zIndex(51)
+            }
             
             premiumCRTBlackoutOverlay
                 .allowsHitTesting(false)
@@ -220,7 +228,7 @@ struct PremiumSlotMachineView: View {
                 maxHeight: .infinity,
                 alignment: .trailing
             )
-            .offset(x: -7, y: -11)
+            .offset(x: -10, y: -11)
             
             // 最終右リール停止専用PUSH。
             // 最前面に独立したButtonを置き、装飾Overlayにタップを奪われないようにする。
@@ -458,6 +466,7 @@ struct PremiumSlotMachineView: View {
             )
         }
         .onDisappear {
+            resetLightingEffects(resumeForSpin: false)
             SlotHapticManager.shared.endPushHold()
             SlotHapticManager.shared.endMoviePulse()
             SlotSoundManager.shared.setDefaultJackpotSoundEnabled(true)
@@ -476,6 +485,7 @@ struct PremiumSlotMachineView: View {
         }
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
+                resetLightingEffects(resumeForSpin: true)
                 SlotSoundManager.shared.setDefaultJackpotSoundEnabled(
                     !isRainbowJackpot
                 )
@@ -494,10 +504,9 @@ struct PremiumSlotMachineView: View {
                 prepareDisplaySymbols()
                 machineDropY = 0
                 machineTiltDegrees = 0
-                cabinetStrobeColor = machineGlow
-                cabinetStrobeTrigger += 1
             } else if stoppedReelCount == 0 {
                 effectSequenceToken += 1
+                resetLightingEffects(resumeForSpin: false)
             }
         }
         .onChange(of: blackoutTrigger) { _, newTrigger in
@@ -640,8 +649,10 @@ struct PremiumSlotMachineView: View {
             trigger: cabinetStrobeTrigger,
             glowColor: cabinetStrobeColor,
             isSpinning: isSpinning,
-            stoppedReelCount: stoppedReelCount
+            stoppedReelCount: stoppedReelCount,
+            lightingEnabled: cabinetLightingEnabled
         )
+        .id(cabinetLightingGeneration)
         .allowsHitTesting(false)
     }
     
@@ -1115,9 +1126,9 @@ struct PremiumSlotMachineView: View {
     // 筐体画像に元から描かれている紫PUSH専用の透明Hit Area。
     // 通常時は完全透明で、別ボタンの外観は一切描画しない。
     private var cabinetPushHitArea: some View {
-        let bonusPushReady = isPushVisible && isPushEnabled && pushLaunchReady
+        let bonusPushPresented = isPushVisible && isPushEnabled
+        let bonusPushReady = bonusPushPresented && pushLaunchReady
         let regularPushReady = isStopInputEnabled(index: stoppedReelCount)
-
         return Circle()
             .fill(Color.clear)
             .frame(width: 94, height: 64)
@@ -1125,13 +1136,39 @@ struct PremiumSlotMachineView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .overlay {
-                Image("PremiumPushButtonCore")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 94, height: 64)
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    )
+                ZStack {
+                    Image("push_button_premium")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 76, height: 62)
+                        .clipped()
+                        .offset(x: 17, y: 4)
+                        .opacity(
+                            bonusPushPresented
+                                ? Double(1 - pushEjectProgress)
+                                : 1
+                        )
+
+                    Image("PremiumPushButtonCore")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 94, height: 64)
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        )
+                        .offset(
+                            x: 17,
+                            y: 4 + (bonusPushPresented
+                                ? (1 - pushEjectProgress) * 14
+                                : 14)
+                        )
+                        .opacity(
+                            bonusPushPresented && pushEjectProgress > 0
+                                ? 1
+                                : 0
+                        )
+                        .zIndex(1)
+                }
                     .brightness(cabinetPushPressed ? -0.13 : 0)
                     .contrast(1.0)
                     .shadow(
@@ -1140,33 +1177,31 @@ struct PremiumSlotMachineView: View {
                         y: 3
                     )
                     .shadow(
-                        color: bonusPushReady
-                            ? Color.white.opacity(0.16)
+                        color: bonusPushPresented
+                            ? Color.white.opacity(
+                                pushLaunchReady
+                                    ? (pushIdlePulse ? 0.22 : 0.14)
+                                    : 0.18 * sin(Double(pushEjectProgress) * .pi)
+                            )
                             : .clear,
-                        radius: 2
+                        radius: pushLaunchReady
+                            ? (pushIdlePulse ? 8 : 5)
+                            : 2 + CGFloat(
+                                5 * sin(Double(pushEjectProgress) * .pi)
+                            )
                     )
-                    .opacity(bonusPushReady ? 1 : 0)
+                    .opacity(1)
                     .allowsHitTesting(false)
             }
             .scaleEffect(
                 cabinetPushPressed
                     ? 0.90
-                    : (bonusPushReady ? 1.18 : 1.0)
+                    : 1.0
             )
             .offset(
                 x: 101,
                 y: 178
                     + (cabinetPushPressed ? 2 : 0)
-                    - (bonusPushReady ? pushEjectProgress * 18 : 0)
-            )
-            .rotation3DEffect(
-                .degrees(
-                    bonusPushReady
-                        ? Double((1 - pushEjectProgress) * 24)
-                        : 0
-                ),
-                axis: (x: 1, y: 0, z: 0),
-                perspective: 0.68
             )
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -1774,6 +1809,9 @@ struct PremiumSlotMachineView: View {
     }
 
     private func startPushEmphasis() {
+        pushLaunchToken += 1
+        let launchToken = pushLaunchToken
+
         pushEmphasisPulse = false
         pushTextPulse = false
         pushRingPulse = false
@@ -1792,8 +1830,32 @@ struct PremiumSlotMachineView: View {
         pushFlameBurstOpacity = 0
         pushRevealBlackoutOpacity = 0
         pushLaunchFlashOpacity = 0
-        pushEjectProgress = 1
-        pushLaunchReady = true
+        pushEjectProgress = 0
+        pushEjectScale = 1
+        pushEjectOffsetY = 0
+        pushIdlePulse = false
+        pushLaunchReady = false
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.80) {
+            guard launchToken == pushLaunchToken,
+                  isPushVisible,
+                  isPushEnabled else {
+                return
+            }
+
+            withAnimation(.easeOut(duration: 0.36)) {
+                pushEjectProgress = 1
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+                guard launchToken == pushLaunchToken,
+                      isPushVisible,
+                      isPushEnabled else {
+                    return
+                }
+                pushLaunchReady = true
+            }
+        }
 
         let notification = UINotificationFeedbackGenerator()
         notification.prepare()
@@ -1855,6 +1917,7 @@ struct PremiumSlotMachineView: View {
     }
 
     private func stopPushEmphasis() {
+        pushLaunchToken += 1
         withAnimation(.easeOut(duration: 0.16)) {
             pushEmphasisPulse = false
             pushTextPulse = false
@@ -1875,7 +1938,58 @@ struct PremiumSlotMachineView: View {
             pushRevealBlackoutOpacity = 0
             pushLaunchFlashOpacity = 0
             pushEjectProgress = 0
+            pushEjectScale = 1
+            pushEjectOffsetY = 0
+            pushIdlePulse = false
             pushLaunchReady = false
+        }
+    }
+
+    private func resetLightingEffects(resumeForSpin: Bool) {
+        cabinetLightingGeneration += 1
+        let lightingGeneration = cabinetLightingGeneration
+        cabinetLightingEnabled = false
+        effectSequenceToken += 1
+        finalResultSequenceToken += 1
+        pushLaunchToken += 1
+        confettiResetToken += 1
+
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            lampPulse = false
+            borderRotation = 0
+            luckyLampMode = .off
+            premiumFlashOpacity = 0
+            sparkBurstProgress = 0
+            sparkBurstOpacity = 0
+            glassSweepOffset = -1.2
+            machineFlashOpacity = 0
+            jackpotWhiteoutOpacity = 0
+            stopLineFlashOpacity = 0
+            flashingStopIndex = nil
+            frameSweepOffset = -1.4
+            risingLightOffset = 1.2
+            premiumBacklightPhase = 0
+            pushImpactFlashOpacity = 0
+            pushImpactRingOpacity = 0
+            pushFlameBurstOpacity = 0
+            pushRevealBlackoutOpacity = 0
+            pushLaunchFlashOpacity = 0
+            isConfettiVisible = false
+            cabinetPushPressed = false
+            cabinetPushTracking = false
+        }
+        stopPushEmphasis()
+
+        guard resumeForSpin else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+            guard lightingGeneration == cabinetLightingGeneration,
+                  isSpinning else {
+                return
+            }
+            cabinetLightingEnabled = true
+            startContinuousAnimations()
         }
     }
 
@@ -2305,7 +2419,7 @@ private struct PremiumPushEmphasisOverlay: View {
             // Assets側の余白を考慮し、横幅・高さを独立して調整。
             let arrowWidth = promptWidth * 0.31
             let arrowHeight = promptHeight * 0.28
-            let arrowOffsetX = proxy.size.width * 0.25
+            let arrowOffsetX = proxy.size.width * 0.29
             let arrowOffsetY = proxy.size.height * 0.20
 
             ZStack {
@@ -2565,6 +2679,7 @@ private struct AuthenticPachislotCabinetOverlay: View {
     let glowColor: Color
     let isSpinning: Bool
     let stoppedReelCount: Int
+    let lightingEnabled: Bool
 
     @State private var flashOpacity = 0.0
     @State private var lampScale: CGFloat = 0.86
@@ -2579,13 +2694,13 @@ private struct AuthenticPachislotCabinetOverlay: View {
                     ForEach(0..<7, id: \.self) { index in
                         Capsule()
                             .fill(
-                                index <= stoppedReelCount
+                                lightingEnabled && index <= stoppedReelCount
                                     ? glowColor
-                                    : Color.white.opacity(0.14)
+                                    : Color.clear
                             )
                             .frame(width: 24, height: 6)
                             .shadow(
-                                color: index <= stoppedReelCount
+                                color: lightingEnabled && index <= stoppedReelCount
                                     ? glowColor
                                     : .clear,
                                 radius: 9
@@ -2600,16 +2715,16 @@ private struct AuthenticPachislotCabinetOverlay: View {
 
             // ブレーキ停止時の瞬間ストロボ
             RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .stroke(glowColor.opacity(flashOpacity), lineWidth: 7)
-                .shadow(color: glowColor, radius: 24)
-                .opacity(flashOpacity)
+                .stroke(glowColor.opacity(lightingEnabled ? flashOpacity : 0), lineWidth: 7)
+                .shadow(color: lightingEnabled ? glowColor : .clear, radius: 24)
+                .opacity(lightingEnabled ? flashOpacity : 0)
 
             RoundedRectangle(cornerRadius: 34, style: .continuous)
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.white.opacity(flashOpacity * 0.72),
-                            glowColor.opacity(flashOpacity * 0.34),
+                            Color.white.opacity(lightingEnabled ? flashOpacity * 0.72 : 0),
+                            glowColor.opacity(lightingEnabled ? flashOpacity * 0.34 : 0),
                             .clear
                         ],
                         center: .center,
@@ -2624,7 +2739,13 @@ private struct AuthenticPachislotCabinetOverlay: View {
                 VStack(spacing: 5) {
                     ForEach(0..<70, id: \.self) { _ in
                         Rectangle()
-                            .fill(Color.white.opacity(isSpinning ? 0.035 : 0.018))
+                            .fill(
+                                Color.white.opacity(
+                                    lightingEnabled
+                                        ? (isSpinning ? 0.035 : 0.018)
+                                        : 0
+                                )
+                            )
                             .frame(height: 1)
                     }
                 }
@@ -2640,8 +2761,15 @@ private struct AuthenticPachislotCabinetOverlay: View {
             startContinuousScan()
         }
         .onChange(of: trigger) { _, newValue in
-            guard newValue > 0 else { return }
+            guard lightingEnabled, newValue > 0 else { return }
             playStrobe()
+        }
+        .onChange(of: lightingEnabled) { _, enabled in
+            guard !enabled else { return }
+            flashOpacity = 0
+            lampScale = 0.86
+            vibrationOffset = 0
+            scanOffset = -1.2
         }
         .onChange(of: isSpinning) { _, spinning in
             if spinning {
