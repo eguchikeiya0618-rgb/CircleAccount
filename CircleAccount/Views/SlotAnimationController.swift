@@ -281,7 +281,17 @@ final class SlotAnimationController: ObservableObject {
         }
 
         SlotSoundManager.shared.playLever()
-        await sleep(0.34)
+
+        // レバーONと同じフレームで筐体を維持したままリールだけ始動する。
+        cinematicPhase = .idle
+        stage = .idle
+        statusText = "START"
+        subStatusText = "REEL MOTOR ONLINE"
+        isSpinning = true
+        stoppedReelCount = 0
+        sound.startSpin()
+
+        await sleep(0.18)
 
         guard !Task.isCancelled else {
             finishCancelledSequence()
@@ -338,19 +348,9 @@ final class SlotAnimationController: ObservableObject {
         } else {
             cinematicPhase = .idle
             stage = .idle
-            await sleep(0.10)
         }
 
-        statusText = "START"
-        subStatusText = "REEL MOTOR ONLINE"
-
-        isSpinning = true
-        stoppedReelCount = 0
-
-        // 始動SEなしでリール回転ループのみ開始
-        sound.startSpin()
-
-        await sleep(1.10)
+        await sleep(0.55)
 
         guard !Task.isCancelled else {
             finishCancelledSequence()

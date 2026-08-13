@@ -70,7 +70,6 @@ struct SlotLuckyLampView: View {
             illuminatedCore
             lensVignette
             textLayer
-            glassReflection
             revealFlash
             Color.black
                 .clipShape(Ellipse())
@@ -83,7 +82,10 @@ struct SlotLuckyLampView: View {
         .accessibilityLabel("SiRiUS LUCKY CHANCEランプ")
         .accessibilityValue(mode.isLit ? "点灯中" : "消灯中")
         .onAppear {
-            startAnimations()
+            if mode.isLit { startAnimations() } else { resetAnimations() }
+        }
+        .onChange(of: mode) { _, newMode in
+            if newMode.isLit { startAnimations() } else { resetAnimations() }
         }
         .onChange(of: trigger) { _, newValue in
             guard newValue > 0 else { return }
@@ -189,8 +191,8 @@ struct SlotLuckyLampView: View {
                     : AnyShapeStyle(
                         LinearGradient(
                             colors: [
-                                mainColor.opacity(mode.isLit ? 0.92 : 0.08),
-                                secondaryColor.opacity(mode.isLit ? 0.65 : 0.04)
+                                mainColor.opacity(mode.isLit ? 0.92 : 0),
+                                secondaryColor.opacity(mode.isLit ? 0.65 : 0)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -346,9 +348,9 @@ struct SlotLuckyLampView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.white.opacity(mode.isLit ? 1.00 : 0.02),
-                            mainColor.opacity(mode.isLit ? 0.95 : 0.03),
-                            secondaryColor.opacity(mode.isLit ? 0.72 : 0.02),
+                            Color.white.opacity(mode.isLit ? 1.00 : 0),
+                            mainColor.opacity(mode.isLit ? 0.95 : 0),
+                            secondaryColor.opacity(mode.isLit ? 0.72 : 0),
                             Color.clear
                         ],
                         center: .center,
@@ -357,7 +359,7 @@ struct SlotLuckyLampView: View {
                     )
                 )
                 .padding(9)
-                .opacity(mode.isLit ? (pulse ? 1.0 : 0.80) : 1)
+                .opacity(mode.isLit ? (pulse ? 1.0 : 0.80) : 0)
                 .blendMode(.screen)
         }
     }
@@ -369,8 +371,8 @@ struct SlotLuckyLampView: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color(red: 1.0, green: 0.88, blue: 0.50).opacity(mode.isLit ? 0.88 : 0.08),
-                                Color.orange.opacity(mode.isLit ? 0.74 : 0.03),
+                                Color(red: 1.0, green: 0.88, blue: 0.50).opacity(mode.isLit ? 0.88 : 0),
+                                Color.orange.opacity(mode.isLit ? 0.74 : 0),
                                 Color.clear
                             ],
                             center: .center,
@@ -383,7 +385,7 @@ struct SlotLuckyLampView: View {
                         color: mode.isLit ? mainColor.opacity(0.95) : .clear,
                         radius: 7
                     )
-                    .opacity(mode.isLit ? (index == 4 ? 0.88 : 0.34 + Double(index % 2) * 0.10) : 0.075)
+                    .opacity(mode.isLit ? (index == 4 ? 0.88 : 0.34 + Double(index % 2) * 0.10) : 0)
             }
         }
         .scaleEffect(innerBreath)
@@ -442,23 +444,24 @@ struct SlotLuckyLampView: View {
     }
 
     private var textLayer: some View {
-        VStack(spacing: 1) {
-            Text("SiRiUS")
-                .font(.system(size: 9, weight: .black, design: .rounded))
-                .tracking(3)
+        ZStack {
+            if mode.isLit {
+                lampText
+                    .foregroundStyle(Color.purple.opacity(pulse ? 0.82 : 0.46))
+                    .blur(radius: pulse ? 8 : 5)
 
-            Text("PREMIUM")
-                .font(.system(size: 22,
-                              weight: .heavy))
-                .italic()
-                .tracking(0.5
-                )
+                lampText
+                    .foregroundStyle(Color(red: 1.0, green: 0.68, blue: 0.14))
+                    .blur(radius: pulse ? 4.8 : 2.8)
 
-            Text("CHANCE")
-                .font(.system(size: 12, weight: .black, design: .rounded))
-                .tracking(3.5)
+                lampText
+                    .foregroundStyle(Color.white.opacity(pulse ? 0.86 : 0.58))
+                    .blur(radius: pulse ? 1.8 : 1.0)
+            }
+
+            lampText
+                .foregroundStyle(textStyle)
         }
-        .foregroundStyle(textStyle)
         .shadow(
             color: Color.black.opacity(0.82),
             radius: 1,
@@ -492,6 +495,23 @@ struct SlotLuckyLampView: View {
             .allowsHitTesting(false)
         }
         .opacity(mode.isLit ? 1.0 : 0.12)
+    }
+
+    private var lampText: some View {
+        VStack(spacing: 1) {
+            Text("SiRiUS")
+                .font(.system(size: 9, weight: .black, design: .rounded))
+                .tracking(3)
+
+            Text("PREMIUM")
+                .font(.system(size: 22, weight: .heavy))
+                .italic()
+                .tracking(0.5)
+
+            Text("CHANCE")
+                .font(.system(size: 12, weight: .black, design: .rounded))
+                .tracking(3.5)
+        }
     }
 
     private var textStyle: AnyShapeStyle {
@@ -551,35 +571,6 @@ struct SlotLuckyLampView: View {
         }
     }
 
-    private var glassReflection: some View {
-        GeometryReader { proxy in
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Color.white.opacity(0.30),
-                            Color.white.opacity(0.05),
-                            Color.clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 5, height: proxy.size.height * 0.58)
-                .rotationEffect(.degrees(18))
-                .offset(
-                    x: sweepOffset * proxy.size.width,
-                    y: -4
-                )
-                .blur(radius: 0.45)
-                .blendMode(.screen)
-        }
-        .clipShape(Ellipse())
-        .padding(8)
-        .allowsHitTesting(false)
-    }
-
     private var revealFlash: some View {
         Circle()
             .fill(
@@ -606,6 +597,8 @@ struct SlotLuckyLampView: View {
     }
 
     private func startAnimations() {
+        resetAnimations()
+
         withAnimation(
             .easeInOut(duration: 0.74)
                 .repeatForever(autoreverses: true)
@@ -629,11 +622,21 @@ struct SlotLuckyLampView: View {
             rainbowRotation = 360
         }
 
-        withAnimation(
-            .linear(duration: 3.0)
-                .repeatForever(autoreverses: false)
-        ) {
-            sweepOffset = 1.55
+    }
+
+    private func resetAnimations() {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            pulse = false
+            revealScale = 1
+            flashOpacity = 0
+            sweepOffset = -1.4
+            rainbowRotation = 0
+            starPulse = false
+            blackoutOpacity = 0
+            innerBreath = 0.84
+            leakOpacity = 0
         }
     }
 

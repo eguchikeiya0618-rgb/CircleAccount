@@ -982,7 +982,9 @@ struct PremiumSlotMachineView: View {
                 .offset(y: -101)
 
             SlotLuckyLampView(
-                mode: luckyLampMode,
+                mode: isSpinning && stoppedReelCount == 0
+                    ? .off
+                    : luckyLampMode,
                 trigger: luckyLampTrigger
             )
             .scaleEffect(x: 0.78, y: 0.56)
@@ -1159,7 +1161,7 @@ struct PremiumSlotMachineView: View {
                         .offset(
                             x: 17,
                             y: 4 + (bonusPushPresented
-                                ? (1 - pushEjectProgress) * 14
+                                ? (1 - pushEjectProgress) * 14 - 12
                                 : 14)
                         )
                         .opacity(
