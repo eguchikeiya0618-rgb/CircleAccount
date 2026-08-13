@@ -197,8 +197,13 @@ struct MyPageView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding()
-                        .background(Color(.systemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .foregroundStyle(.white)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                        }
                     }
                     .buttonStyle(.plain)
                     achievementGrid
@@ -224,8 +229,20 @@ struct MyPageView: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("マイページ")
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color.indigo.opacity(0.94),
+                        Color.purple.opacity(0.72)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationTitle("My Page")
+            .toolbarBackground(.hidden, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedAchievement) { achievement in
 
@@ -299,7 +316,7 @@ struct MyPageView: View {
                 Text(rankIcon)
                     .font(.title2)
                     .frame(width: 36, height: 36)
-                    .background(Color(.systemBackground))
+                    .background(.ultraThinMaterial)
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.12), radius: 5)
             }
@@ -332,7 +349,8 @@ struct MyPageView: View {
                     .clipShape(Capsule())
             }
             Text(name.isEmpty ? "メンバー" : name)
-                .font(.system(size: 34, weight: .black))
+                .font(.system(size: 34, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
 
             Text("Lv.\(memberLevel)")
                 .font(.headline)
@@ -373,11 +391,11 @@ struct MyPageView: View {
 
             Text("Member No. \(String(format: "%06d", memberNo))")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.58))
 
             Text("\(gender) ・ \(level)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.58))
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Label("獲得バッジ", systemImage: "medal.fill")
@@ -459,9 +477,13 @@ struct MyPageView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
         .padding(.horizontal)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-        .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 5)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 8)
         .sheet(isPresented: $showProfileEditor) {
             ProfileEditView()
         }
@@ -472,6 +494,7 @@ struct MyPageView: View {
             Text("ポイント")
                 .font(.title2)
                 .bold()
+                .foregroundStyle(.white)
 
             HStack {
                 profileStatBox(icon: "star.fill", title: "累計", value: "\(totalPoint)pt", color: .yellow)
@@ -517,7 +540,7 @@ struct MyPageView: View {
                     Text("🏆 実績")
                         .font(.title2)
                         .bold()
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
 
                     Spacer()
 
@@ -562,6 +585,7 @@ struct MyPageView: View {
             Text("管理メニュー")
                 .font(.title2)
                 .bold()
+                .foregroundStyle(.white)
 
             NavigationLink { MembersView() } label: {
                 menuRow(icon: "person.3.fill", title: "メンバー管理", color: .blue)
@@ -606,7 +630,7 @@ struct MyPageView: View {
                 Spacer()
             }
             .padding()
-            .background(Color.red.opacity(0.14))
+            .background(Color.red.opacity(0.22))
             .clipShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
@@ -1367,9 +1391,13 @@ extension View {
     func mypageCard() -> some View {
         self
             .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 26))
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
     }
 }
 struct Achievement: Identifiable {

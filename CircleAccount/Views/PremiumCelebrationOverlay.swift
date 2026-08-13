@@ -10,7 +10,9 @@ struct PremiumCelebrationOverlay: View {
 
     @State private var auraPulse = false
     @State private var rainbowRotation = 0.0
-    @State private var particlePhase = 0.0
+    @State private var shuttleTravel = false
+
+    private let shuttleCount = 8
 
     var body: some View {
         GeometryReader { proxy in
@@ -20,7 +22,7 @@ struct PremiumCelebrationOverlay: View {
                         AngularGradient(
                             colors: [
                                 .red, .orange, .yellow, .green,
-                                .cyan, .blue, .purple, .red
+                                .cyan, .blue, .purple, .pink, .red
                             ],
                             center: .center,
                             angle: .degrees(rainbowRotation)
@@ -31,14 +33,15 @@ struct PremiumCelebrationOverlay: View {
                     .opacity(auraPulse ? 0.95 : 0.55)
                     .scaleEffect(auraPulse ? 1.025 : 1.0)
 
-                ForEach(0..<22, id: \.self) { index in
-                    premiumParticle(index: index, size: proxy.size)
+                ForEach(0..<shuttleCount, id: \.self) { index in
+                    flyingShuttle(index: index, size: proxy.size)
                 }
 
                 RoundedRectangle(cornerRadius: 34, style: .continuous)
                     .fill(Color.white.opacity(flashOpacity))
                     .blendMode(.screen)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .frame(maxWidth: 370)
         .onAppear {
@@ -46,58 +49,98 @@ struct PremiumCelebrationOverlay: View {
         }
     }
 
-    private func premiumParticle(
+    private func flyingShuttle(
         index: Int,
         size: CGSize
     ) -> some View {
-        let angle = Double(index) * 0.93 + particlePhase
-        let horizontalRadius = max(size.width * 0.43, 1)
-        let verticalRadius = max(size.height * 0.45, 1)
-        let x = size.width / 2 + CGFloat(cos(angle)) * horizontalRadius
-        let y = size.height / 2 + CGFloat(sin(angle * 1.27)) * verticalRadius
-        let particleSize = CGFloat(5 + index % 5)
-        let sparkle = index.isMultiple(of: 3)
+        let direction = index % 4
+        let start = startPoint(direction: direction, size: size)
+        let end = endPoint(direction: direction, size: size)
 
-        return Group {
-            if sparkle {
-                Image(systemName: "sparkle")
-                    .font(.system(size: particleSize + 4, weight: .bold))
-                    .foregroundStyle(
-                        AngularGradient(
-                            colors: [.yellow, .white, .cyan, .pink, .yellow],
-                            center: .center,
-                            angle: .degrees(
-                                rainbowRotation + Double(index) * 18
-                            )
-                        )
-                    )
-            } else {
-                Circle()
-                    .fill(
-                        AngularGradient(
-                            colors: [
-                                .red, .yellow, .green, .cyan,
-                                .blue, .purple, .red
-                            ],
-                            center: .center,
-                            angle: .degrees(
-                                rainbowRotation + Double(index) * 14
-                            )
-                        )
-                    )
-                    .frame(
-                        width: particleSize,
-                        height: particleSize
-                    )
-            }
+        let progress: CGFloat = shuttleTravel ? 1 : 0
+        let x = start.x + (end.x - start.x) * progress
+        let y = start.y + (end.y - start.y) * progress
+
+        let width = CGFloat(66 + (index % 3) * 16)
+        let duration = 2.8 + Double(index % 4) * 0.38
+        let delay = Double(index) * 0.34
+
+        return Image(shuttleImageName(for: direction))
+            .resizable()
+            .scaledToFit()
+            .frame(width: width, height: width)
+            .shadow(color: rainbowColor(index).opacity(0.90), radius: 13)
+            .shadow(color: Color.white.opacity(0.72), radius: 4)
+            .position(x: x, y: y)
+            .opacity(auraPulse ? 0.96 : 0.66)
+            .animation(
+                .linear(duration: duration)
+                    .repeatForever(autoreverses: false)
+                    .delay(delay),
+                value: shuttleTravel
+            )
+    }
+
+    private func startPoint(
+        direction: Int,
+        size: CGSize
+    ) -> CGPoint {
+        switch direction {
+        case 0:
+            return CGPoint(x: -85, y: size.height + 85)
+        case 1:
+            return CGPoint(x: size.width + 85, y: size.height + 85)
+        case 2:
+            return CGPoint(x: -85, y: -85)
+        default:
+            return CGPoint(x: size.width + 85, y: -85)
         }
-        .position(x: x, y: y)
-        .opacity(auraPulse ? 1.0 : 0.48)
-        .scaleEffect(auraPulse ? 1.18 : 0.82)
-        .shadow(color: Color.white.opacity(0.75), radius: 5)
+    }
+
+    private func endPoint(
+        direction: Int,
+        size: CGSize
+    ) -> CGPoint {
+        switch direction {
+        case 0:
+            return CGPoint(x: size.width + 85, y: -85)
+        case 1:
+            return CGPoint(x: -85, y: -85)
+        case 2:
+            return CGPoint(x: size.width + 85, y: size.height + 85)
+        default:
+            return CGPoint(x: -85, y: size.height + 85)
+        }
+    }
+
+    private func shuttleImageName(for direction: Int) -> String {
+        let images = [
+            "RainbowShuttleNE",
+            "RainbowShuttleNW",
+            "RainbowShuttleSE",
+            "RainbowShuttleSW"
+        ]
+
+        return images[direction % images.count]
+    }
+
+    private func rainbowColor(_ index: Int) -> Color {
+        let colors: [Color] = [
+            .red, .orange, .yellow, .green,
+            .cyan, .blue, .purple, .pink
+        ]
+
+        return colors[index % colors.count]
     }
 
     private func startContinuousAnimations() {
+        shuttleTravel = false
+        auraPulse = false
+
+        DispatchQueue.main.async {
+            shuttleTravel = true
+        }
+
         withAnimation(
             .easeInOut(duration: 0.58)
                 .repeatForever(autoreverses: true)
@@ -112,12 +155,6 @@ struct PremiumCelebrationOverlay: View {
             rainbowRotation = 360
         }
 
-        withAnimation(
-            .linear(duration: 5.2)
-                .repeatForever(autoreverses: false)
-        ) {
-            particlePhase = .pi * 2
-        }
     }
 }
 

@@ -5,6 +5,7 @@ struct MarqueeHeaderView: View {
     let machineGlow: Color
 
     @State private var lampPulse = false
+    @State private var chaseOffset: CGFloat = -1.2
 
     var body: some View {
         VStack(spacing: 8) {
@@ -72,18 +73,43 @@ struct MarqueeHeaderView: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.62))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(machineGlow.opacity(0.58), lineWidth: 1.5)
+                .fill(
+                    LinearGradient(
+                        colors:[Color.black,Color(red:0.08,green:0.08,blue:0.11)],
+                        startPoint:.top,
+                        endPoint:.bottom
+                    )
+                )
+                .overlay{
+                    RoundedRectangle(cornerRadius:18,style:.continuous)
+                        .stroke(machineGlow.opacity(0.55),lineWidth:1.5)
+
+                    GeometryReader{proxy in
+                        LinearGradient(
+                            colors:[
+                                .clear,
+                                .white.opacity(0.15),
+                                .white.opacity(0.65),
+                                .white.opacity(0.15),
+                                .clear
+                            ],
+                            startPoint:.top,
+                            endPoint:.bottom
+                        )
+                        .frame(width:32,height:proxy.size.height*1.5)
+                        .rotationEffect(.degrees(18))
+                        .offset(x:proxy.size.width*chaseOffset)
+                        .blendMode(.screen)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius:18))
                 }
         )
         .onAppear {
-            withAnimation(
-                .easeInOut(duration: 0.62)
-                    .repeatForever(autoreverses: true)
-            ) {
-                lampPulse = true
+            withAnimation(.easeInOut(duration:0.62).repeatForever(autoreverses:true)){
+                lampPulse=true
+            }
+            withAnimation(.linear(duration:3).repeatForever(autoreverses:false)){
+                chaseOffset=1.2
             }
         }
     }

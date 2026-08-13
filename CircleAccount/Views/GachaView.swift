@@ -4,6 +4,8 @@ import UIKit
 
 struct GachaView: View {
     private let db = Firestore.firestore()
+      private let forceSSRTestMode = true
+      private let forceRainbowSSR = true
 
     @AppStorage("currentUserId")
     private var currentUserId = ""
@@ -33,8 +35,41 @@ struct GachaView: View {
     }
 
     private var reelSymbols: [String] {
-        let icon = pendingPrize?.icon ?? "7"
-        return [icon, icon, icon]
+        // SSR演出確認モード中は、抽選結果に関係なく777を表示する
+        if forceSSRTestMode {
+            if forceRainbowSSR {
+                return ["🌈7", "🌈7", "🌈7"]
+            } else {
+                return ["7", "7", "7"]
+            }
+        }
+
+        guard let prize = pendingPrize else {
+            return ["BAR", "🔔", "🍇"]
+        }
+
+        switch prize.title {
+        case "ガット張り工賃無料券":
+            return ["7", "7", "7"]
+
+        case "参加費無料券":
+            return ["🌈7", "🌈7", "🌈7"]
+
+        case "参加費半額券":
+            return ["7", "7", "BAR"]
+
+        case "参加費500円券":
+            return ["BAR", "BAR", "BAR"]
+
+        case "対戦指名券":
+            return ["🔔", "🔔", "🔔"]
+
+        case "優先ゲーム券":
+            return ["🍇", "🍇", "🍇"]
+
+        default:
+            return ["BAR", "🔔", "🍇"]
+        }
     }
 
     var body: some View {
@@ -48,6 +83,8 @@ struct GachaView: View {
 
                         PremiumSlotMachineView(
                             symbols: reelSymbols,
+                            resultTitle: animation.resultTitle,
+                            resultSubtitle: animation.resultSubtitle,
                             isSpinning: animation.isSpinning,
                             stoppedReelCount: animation.stoppedReelCount,
                             heatLevel: animation.heatLevel,
@@ -56,8 +93,21 @@ struct GachaView: View {
                             isPushVisible: animation.isPushVisible,
                             isPushEnabled: animation.isPushEnabled,
                             leverProgress: animation.leverProgress,
+                            isFirstReelStopEnabled: animation.canStopFirstReel,
+                            cinematicPhase: animation.cinematicPhase,
+                            cinematicTrigger: animation.cinematicTrigger,
+                            expectationLevel: animation.expectationLevel,
+                            reelSlipTrigger: animation.reelSlipTrigger,
+                            reelSlipIndex: animation.reelSlipIndex,
+                            reelSlipIntensity: animation.reelSlipIntensity,
+                            onFirstReelStop: {
+                                animation.stopFirstReel()
+                            },
                             onPush: {
                                 animation.pressPush()
+                            },
+                            onPremiumSequenceFinished: {
+                                animation.finishPremiumSequence()
                             },
                             onLeverChanged: { progress in
                                 guard canRunGacha else { return }
@@ -69,7 +119,6 @@ struct GachaView: View {
                         )
                         .id("slotMachine")
 
-                        soundToggle
                         pointCard
                         prizeList
                         startButton(proxy: proxy)
@@ -384,7 +433,7 @@ struct GachaView: View {
             return
         }
 
-        guard animation.leverProgress >= 0.72 else {
+        guard animation.leverProgress >= 0.98 else {
             animation.returnLever()
             return
         }
@@ -415,15 +464,23 @@ struct GachaView: View {
 
                 switch gachaResult {
                 case .success(let prize):
-                    pendingPrize = prize
                     availablePoint = max(availablePoint - 100, 0)
 
+                    // 先に回転を開始する。
+                    // この時点では pendingPrize を更新しないため、
+                    // 当たり絵柄が回転開始前に一瞬表示されることを防げる。
                     animation.start(
                         soundEnabled: gachaSoundEnabled,
                         resultTitle: prize.title,
                         resultSubtitle: resultSubtitle(for: prize),
                         route: animationRoute(for: prize)
                     )
+
+                    // 回転状態が画面へ反映された次の更新で、
+                    // 停止時に使用する本当の絵柄を渡す。
+                    DispatchQueue.main.async {
+                        pendingPrize = prize
+                    }
 
                     heavyHaptic()
 
@@ -436,6 +493,11 @@ struct GachaView: View {
     }
 
     private func animationRoute(for prize: GachaPrize) -> SlotAnimationRoute {
+        // SSR演出確認モード中は、必ずPremiumルートを使う
+        if forceSSRTestMode {
+            return .premium
+        }
+
         switch prize.rarity {
         case 5...:
             let premiumRoll = Int.random(in: 0..<100)
@@ -464,7 +526,6 @@ struct GachaView: View {
                 : .normal
         }
     }
-
     private func resultSubtitle(for prize: GachaPrize) -> String {
         switch prize.rarity {
         case 5...:
@@ -730,4 +791,3 @@ struct UltimateGachaResultView: View {
         GachaView()
     }
 }
-

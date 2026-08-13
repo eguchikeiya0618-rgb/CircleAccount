@@ -140,21 +140,8 @@ struct HomeRankingCard: View {
             .overlay {
                 cardBorder
             }
-            .overlay {
-                shimmerLayer
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: 28)
-                    )
-                    .allowsHitTesting(false)
-            }
-            .shadow(
-                color: rankAccentColor.opacity(
-                    glowAnimation ? 0.28 : 0.12
-                ),
-                radius: glowAnimation ? 22 : 13,
-                x: 0,
-                y: 9
-            )
+           
+            
         }
         .buttonStyle(.plain)
         .onAppear {
@@ -663,21 +650,7 @@ struct HomeRankingCard: View {
                     )
                 )
 
-            Circle()
-                .fill(
-                    rankAccentColor.opacity(
-                        glowAnimation ? 0.20 : 0.08
-                    )
-                )
-                .frame(
-                    width: 220,
-                    height: 220
-                )
-                .blur(radius: 23)
-                .offset(
-                    x: 155,
-                    y: -130
-                )
+            
 
             Circle()
                 .fill(

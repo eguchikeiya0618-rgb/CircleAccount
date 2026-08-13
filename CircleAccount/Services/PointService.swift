@@ -353,6 +353,7 @@ final class PointService {
         let number = Int.random(in: 1...100)
 
         switch number {
+
         case 1:
             return GachaPrize(
                 icon: "🎾",
@@ -361,7 +362,7 @@ final class PointService {
                 rarity: 5
             )
 
-        case 2...4:
+        case 2:
             return GachaPrize(
                 icon: "🎁",
                 title: "参加費無料券",
@@ -369,7 +370,7 @@ final class PointService {
                 rarity: 5
             )
 
-        case 5...12:
+        case 3...5:
             return GachaPrize(
                 icon: "🏸",
                 title: "参加費半額券",
@@ -377,7 +378,7 @@ final class PointService {
                 rarity: 4
             )
 
-        case 13...30:
+        case 6...23:
             return GachaPrize(
                 icon: "💰",
                 title: "参加費500円券",
@@ -385,28 +386,20 @@ final class PointService {
                 rarity: 3
             )
 
-        case 31...50:
+        case 24...62:
             return GachaPrize(
-                icon: "⭐",
+                icon: "🔔",
                 title: "対戦指名券",
                 ticketField: "challengeTickets",
                 rarity: 3
             )
 
-        case 51...70:
+        default:
             return GachaPrize(
-                icon: "🚀",
+                icon: "🍇",
                 title: "優先ゲーム券",
                 ticketField: "priorityTickets",
                 rarity: 3
-            )
-
-        default:
-            return GachaPrize(
-                icon: "🧹",
-                title: "片付けパス",
-                ticketField: "cleanupTickets",
-                rarity: 2
             )
         }
     }

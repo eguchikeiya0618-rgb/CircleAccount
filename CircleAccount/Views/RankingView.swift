@@ -112,46 +112,81 @@ struct RankingView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                rankingHeader
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    Color.indigo.opacity(0.92),
+                    Color.purple.opacity(0.72)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-                rankingTypePicker
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    rankingHeader
+                    rankingTypePicker
 
-                if isLoading {
-                    ProgressView("ランキングを集計中...")
+                    if isLoading {
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.25)
+                                .tint(.white)
+
+                            Text("ランキングを集計中...")
+                                .font(.headline)
+                                .foregroundStyle(.white.opacity(0.82))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 64)
+
+                    } else if !errorMessage.isEmpty {
+                        VStack(spacing: 14) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.yellow)
+
+                            Text(errorMessage)
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 50)
+
+                    } else if sortedMembers.isEmpty {
+                        VStack(spacing: 14) {
+                            Image(systemName: "person.3.sequence.fill")
+                                .font(.system(size: 42))
+                                .foregroundStyle(.white.opacity(0.72))
+
+                            Text("ランキング対象のメンバーがいません")
+                                .foregroundStyle(.white.opacity(0.78))
+                        }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
 
-                } else if !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                    } else {
+                        if let myRank {
+                            myRankingCard(rank: myRank)
+                        }
 
-                } else if sortedMembers.isEmpty {
-                    Text("ランキング対象のメンバーがいません")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
+                        rankingList
 
-                } else {
-                    if let myRank {
-                        myRankingCard(rank: myRank)
-                    }
-
-                    rankingList
-                    if currentUserIsAdmin {
-                        hallOfFameSaveSection
+                        if currentUserIsAdmin {
+                            hallOfFameSaveSection
+                        }
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 40)
             }
-            .padding()
         }
-        .background(Color(.systemGroupedBackground))
         .navigationTitle("ランキング")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
             loadRanking()
         }
@@ -160,28 +195,69 @@ struct RankingView: View {
     // MARK: - ヘッダー
 
     private var rankingHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("PREMIUM RANKING")
+                        .font(.caption2)
+                        .fontWeight(.black)
+                        .tracking(2.2)
+                        .foregroundStyle(.yellow)
+
                     Text("月間ランキング")
-                        .font(.system(size: 34, weight: .black))
+                        .font(.system(size: 34, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
 
                     Text(currentMonthText())
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.74))
                 }
 
                 Spacer()
 
-                Text("🏆")
-                    .font(.system(size: 46))
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.yellow, .orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 64, height: 64)
+                        .shadow(color: .yellow.opacity(0.5), radius: 18)
+
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(.white)
+                }
             }
 
             Text(rankingDescription)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.76))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 28)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    .white.opacity(0.45),
+                                    .yellow.opacity(0.35),
+                                    .purple.opacity(0.4)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: .black.opacity(0.26), radius: 18, y: 10)
     }
 
     private var rankingDescription: String {
@@ -200,16 +276,52 @@ struct RankingView: View {
     // MARK: - 切り替えボタン
 
     private var rankingTypePicker: some View {
-        Picker(
-            "ランキング種類",
-            selection: $selectedRankingType
-        ) {
+        HStack(spacing: 8) {
             ForEach(RankingType.allCases) { type in
-                Text(type.rawValue)
-                    .tag(type)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        selectedRankingType = type
+                    }
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: type.icon)
+                            .font(.system(size: 17, weight: .bold))
+
+                        Text(type.rawValue)
+                            .font(.caption2.weight(.bold))
+                    }
+                    .foregroundStyle(
+                        selectedRankingType == type
+                            ? Color.black
+                            : Color.white.opacity(0.82)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        Group {
+                            if selectedRankingType == type {
+                                LinearGradient(
+                                    colors: [.yellow, .orange],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            } else {
+                                Color.white.opacity(0.10)
+                            }
+                        }
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
             }
         }
-        .pickerStyle(.segmented)
+        .padding(6)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
     // MARK: - 自分の順位
@@ -219,43 +331,66 @@ struct RankingView: View {
             $0.id == currentUserId
         }
 
-        return HStack(spacing: 14) {
-            Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(.blue)
+        return HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.cyan, .blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 58, height: 58)
+                    .shadow(color: .blue.opacity(0.5), radius: 14)
+
+                Image(systemName: "person.fill")
+                    .font(.system(size: 25, weight: .bold))
+                    .foregroundStyle(.white)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("あなたの現在順位")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("YOUR POSITION")
+                    .font(.caption2.weight(.black))
+                    .tracking(1.4)
+                    .foregroundStyle(.cyan)
 
-                Text("\(rank)位")
-                    .font(.title2)
-                    .bold()
-                    .foregroundStyle(.blue)
+                Text("現在 \(rank)位")
+                    .font(.title2.weight(.black))
+                    .foregroundStyle(.white)
             }
 
             Spacer()
 
             if let member {
                 Text(rankingValueText(member))
-                    .font(.title3)
-                    .bold()
+                    .font(.title3.weight(.black))
+                    .foregroundStyle(.white)
             }
         }
-        .padding()
-        .background(Color.blue.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.blue.opacity(0.18), lineWidth: 1)
-        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.cyan.opacity(0.8), .blue.opacity(0.55), .purple.opacity(0.7)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+        )
+        .shadow(color: .blue.opacity(0.22), radius: 16, y: 8)
     }
 
     // MARK: - ランキング一覧
 
     private var rankingList: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             ForEach(
                 Array(sortedMembers.enumerated()),
                 id: \.element.id
@@ -269,22 +404,8 @@ struct RankingView: View {
                     )
                 }
                 .buttonStyle(.plain)
-
-                if index < sortedMembers.count - 1 {
-                    Divider()
-                        .padding(.leading, 84)
-                }
             }
         }
-        .padding(.horizontal)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(
-            color: .black.opacity(0.05),
-            radius: 8,
-            x: 0,
-            y: 4
-        )
     }
 
     private func rankingRow(
@@ -293,85 +414,118 @@ struct RankingView: View {
     ) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                if rank == 1 {
-                    HStack(spacing: -4) {
-                        Text("🥇")
-                        Text("👑")
-                            .font(.system(size: 18))
-                            .offset(y: -12)
-                    }
-                    .font(.system(size: 32))
-                } else {
+                Circle()
+                    .fill(rankBadgeGradient(rank))
+                    .frame(width: 48, height: 48)
+                    .shadow(color: rankColor(rank).opacity(0.38), radius: 10)
+
+                if rank <= 3 {
                     Text(rankIcon(rank))
-                        .font(
-                            .system(
-                                size: rank <= 3 ? 34 : 21
-                            )
-                        )
-                        .bold()
+                        .font(.system(size: 27))
+                } else {
+                    Text("\(rank)")
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.white)
                 }
             }
-            .frame(width: 46)
 
             ProfileImageView(
                 imageBase64: member.profileImageBase64,
-                size: 52
+                size: 54
             )
+            .overlay {
+                Circle()
+                    .stroke(
+                        member.id == currentUserId
+                            ? Color.cyan
+                            : Color.white.opacity(0.28),
+                        lineWidth: 2
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Text(member.name)
-                        .font(.headline)
-                        .bold()
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
 
                     if member.id == currentUserId {
-                        Text("あなた")
-                            .font(.caption2)
-                            .bold()
+                        Text("YOU")
+                            .font(.caption2.weight(.black))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(Color.blue.opacity(0.12))
-                            .foregroundStyle(.blue)
+                            .background(Color.cyan)
+                            .foregroundStyle(.black)
                             .clipShape(Capsule())
                     }
                 }
-                if rank == 1 {
-                    Text("👑 王者")
-                        .font(.caption2)
-                        .bold()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                }
+
                 Text(rankingSubText(member))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.62))
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(rankingValueText(member))
-                    .font(.title3)
-                    .bold()
+                    .font(.title3.weight(.black))
                     .foregroundStyle(rankColor(rank))
 
                 Text("\(rank)位")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.58))
             }
         }
-        .padding(.vertical, 17)
-        .padding(.horizontal, 8)
-        .background(rowBackground(rank: rank, member: member))
+        .padding(.vertical, 15)
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(
+                    member.id == currentUserId
+                        ? Color.blue.opacity(0.24)
+                        : Color.white.opacity(rank <= 3 ? 0.15 : 0.09)
+                )
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(
+                    member.id == currentUserId
+                        ? Color.cyan.opacity(0.7)
+                        : rankColor(rank).opacity(rank <= 3 ? 0.42 : 0.14),
+                    lineWidth: member.id == currentUserId ? 1.4 : 1
+                )
+        }
+        .shadow(
+            color: rank <= 3
+                ? rankColor(rank).opacity(0.16)
+                : .black.opacity(0.12),
+            radius: 12,
+            y: 7
+        )
+    }
+
+    private func rankBadgeGradient(_ rank: Int) -> LinearGradient {
+        let colors: [Color]
+
+        switch rank {
+        case 1:
+            colors = [.yellow, .orange]
+        case 2:
+            colors = [.white, .gray]
+        case 3:
+            colors = [.orange, .brown]
+        default:
+            colors = [.indigo, .purple]
+        }
+
+        return LinearGradient(
+            colors: colors,
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     private func rankingValue(
@@ -456,23 +610,21 @@ struct RankingView: View {
         member: RankingMember
     ) -> Color {
         if member.id == currentUserId {
-            return Color.blue.opacity(0.08)
+            return Color.blue.opacity(0.18)
         }
 
         switch rank {
         case 1:
-            return Color.orange.opacity(0.15)
-
+            return Color.orange.opacity(0.16)
         case 2:
-            return Color.gray.opacity(0.07)
-
+            return Color.gray.opacity(0.10)
         case 3:
-            return Color.brown.opacity(0.07)
-
+            return Color.brown.opacity(0.10)
         default:
             return Color.clear
         }
     }
+
     // MARK: - 月間表彰保存
 
     private var hallOfFameSaveSection: some View {
@@ -521,7 +673,7 @@ struct RankingView: View {
 
             Text("同じ月は一度だけ保存できます")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.62))
         }
         .padding(.top, 4)
         .alert(
@@ -931,6 +1083,7 @@ struct RankingMemberProfileView: View {
                 Text(member.name)
                     .font(.largeTitle)
                     .bold()
+                    .foregroundStyle(.white)
 
                 if currentUserIsAdmin {
                     Text(member.level.rawValue)
@@ -944,7 +1097,18 @@ struct RankingMemberProfileView: View {
             }
             .padding()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    Color.indigo.opacity(0.88),
+                    Color.purple.opacity(0.58)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
         .navigationTitle(member.name)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1006,8 +1170,12 @@ struct RankingMemberProfileView: View {
             )
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        }
     }
 
     private var badmintonProfileCard: some View {
@@ -1113,8 +1281,12 @@ struct RankingMemberProfileView: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        }
     }
 
     private func profileRow(

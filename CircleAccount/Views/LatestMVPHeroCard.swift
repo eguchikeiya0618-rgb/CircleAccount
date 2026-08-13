@@ -67,27 +67,11 @@ struct LatestMVPHeroCard: View {
         .clipShape(
             RoundedRectangle(cornerRadius: 27)
         )
-        .overlay {
-            overallGlowLayer
-        }
+       
         .overlay {
             cardBorder
         }
-        .overlay {
-            shimmerLayer
-                .clipShape(
-                    RoundedRectangle(cornerRadius: 27)
-                )
-                .allowsHitTesting(false)
-        }
-        .shadow(
-            color: Color.yellow.opacity(
-                glowAnimation ? 0.34 : 0.15
-            ),
-            radius: glowAnimation ? 20 : 11,
-            x: 0,
-            y: 8
-        )
+        
         .onAppear {
             startAnimations()
         }
@@ -340,10 +324,12 @@ struct LatestMVPHeroCard: View {
         ZStack {
             RoundedRectangle(cornerRadius: 27)
                 .fill(
-                    Color.yellow.opacity(glowAnimation ? 0.12 : 0.03)
+                    Color.yellow.opacity(
+                        glowAnimation ? 0.08 : 0.02
+                    )
                 )
-                .blur(radius: glowAnimation ? 45 : 18)
-                .scaleEffect(glowAnimation ? 1.08 : 0.94)
+                .blur(radius: 18)
+                .scaleEffect(1.02)
             RoundedRectangle(cornerRadius: 27)
                 .fill(
                     LinearGradient(
@@ -373,23 +359,14 @@ struct LatestMVPHeroCard: View {
                         endPoint: .bottomTrailing
                     )
                 )
-
             Circle()
                 .fill(
                     Color.yellow.opacity(
-                        glowAnimation ? 0.20 : 0.08
+                        glowAnimation ? 0.12 : 0.04
                     )
                 )
-                .frame(
-                    width: 180,
-                    height: 180
-                )
-                .blur(radius: 18)
-                .offset(
-                    x: 140,
-                    y: -90
-                )
-
+                .frame(width: 320, height: 320)
+                .blur(radius: 80)
             Circle()
                 .fill(
                     Color.orange.opacity(0.11)
@@ -426,24 +403,22 @@ struct LatestMVPHeroCard: View {
     }
     private var overallGlowLayer: some View {
         RoundedRectangle(cornerRadius: 27)
-            .fill(
+            .stroke(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.18),
-                        Color.yellow.opacity(0.14),
-                        Color.orange.opacity(0.10),
-                        Color.clear
+                        Color.white.opacity(glowAnimation ? 0.55 : 0.18),
+                        Color.yellow.opacity(glowAnimation ? 0.45 : 0.12),
+                        Color.orange.opacity(glowAnimation ? 0.28 : 0.08),
+                        .clear
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
-                )
+                ),
+                lineWidth: glowAnimation ? 2.2 : 1.3
             )
-            .scaleEffect(glowAnimation ? 1.18 : 0.92)
-            .blur(radius: glowAnimation ? 55 : 18)
-            .opacity(glowAnimation ? 0.9 : 0.22)
-            .blendMode(.screen)
+            .blur(radius: 5)
+            .opacity(0.9)
     }
-
     private var shimmerLayer: some View {
         ZStack {
 
@@ -458,7 +433,7 @@ struct LatestMVPHeroCard: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: 700)      // ←ここ超重要
+            .frame(width: 360)      // ←ここ超重要
             .blur(radius: 26)
 
             LinearGradient(
@@ -473,13 +448,13 @@ struct LatestMVPHeroCard: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: 520)      // ←ここも大きく
+            .frame(width: 240)      // ←ここも大きく
             .blur(radius: 6)
         }
         .rotationEffect(.degrees(-18))
-        .offset(x: shimmerOffset * 650)
+        .offset(x: shimmerOffset * 430)
         .blendMode(.screen)
-        .opacity(0.95)
+        .opacity(0.35)
     }
     // MARK: - アニメーション
 

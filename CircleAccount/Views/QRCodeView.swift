@@ -7,85 +7,81 @@ struct QRCodeView: View {
     private let context = CIContext()
     private let filter = CIFilter.qrCodeGenerator()
 
-    var qrText: String {
+    private var qrText: String {
         "SIRIUS_ACTIVITY:\(activity.id)"
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Text("SiRiUS")
-                    .font(.system(size: 42, weight: .black, design: .serif))
+            ZStack {
+                LinearGradient(
+                    colors:[
+                        .black,
+                        Color(red:0.03,green:0.05,blue:0.16),
+                        Color(red:0.12,green:0.04,blue:0.22)
+                    ],
+                    startPoint:.topLeading,
+                    endPoint:.bottomTrailing
+                )
+                .ignoresSafeArea()
 
-                VStack(spacing: 6) {
-                    Text("活動受付QR")
-                        .font(.title3)
-                        .bold()
+                VStack(spacing:24){
 
-                    Text(activity.title)
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                    VStack(spacing:8){
+                        Text("SiRiUS")
+                            .font(.system(size:42,weight:.black,design:.rounded))
+                            .foregroundStyle(.white)
+
+                        Text("ACTIVITY CHECK-IN")
+                            .font(.caption)
+                            .tracking(2)
+                            .foregroundStyle(.cyan)
+
+                        Text(activity.title)
+                            .font(.headline)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+
+                    VStack(spacing:18){
+                        Image(uiImage: generateQRCode(from: qrText))
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width:260,height:260)
+                            .padding(18)
+                            .background(.white)
+                            .clipShape(RoundedRectangle(cornerRadius:24))
+
+                        Text("このQRコードを読み取ると参加登録できます")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.65))
+
+                        Text("活動ID：\(activity.id)")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    .padding(24)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius:30))
                 }
-
-                Image(uiImage: generateQRCode(from: qrText))
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 260, height: 260)
-                    .padding()
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                    .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 5)
-
-                VStack(spacing: 6) {
-                    Text("このQRコードを読み取ると参加登録できます")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("活動ID：\(activity.id)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-
-                Spacer()
+                .padding()
             }
-            .padding()
-            .navigationTitle("QRコード")
+            .navigationTitle("QR CODE")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for:.navigationBar)
+            .toolbarColorScheme(.dark, for:.navigationBar)
         }
     }
 
-    func generateQRCode(from string: String) -> UIImage {
-        filter.message = Data(string.utf8)
-
-        if let outputImage = filter.outputImage,
-           let cgImage = context.createCGImage(outputImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10)), from: outputImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10)).extent) {
-            return UIImage(cgImage: cgImage)
+    func generateQRCode(from string:String)->UIImage{
+        filter.message=Data(string.utf8)
+        guard let output=filter.outputImage else{
+            return UIImage(systemName:"xmark.circle") ?? UIImage()
         }
-
-        return UIImage(systemName: "xmark.circle") ?? UIImage()
+        let transformed=output.transformed(by:CGAffineTransform(scaleX:10,y:10))
+        guard let cg=context.createCGImage(transformed, from: transformed.extent) else{
+            return UIImage(systemName:"xmark.circle") ?? UIImage()
+        }
+        return UIImage(cgImage:cg)
     }
-}
-
-#Preview {
-    QRCodeView(
-        activity: Activity(
-            id: "sampleActivityId",
-            title: "SiRiUS 練習",
-            date: Date(),
-            startTime: Date(),
-            endTime: Date(),
-            place: "三苫小学校",
-            fee: 600,
-            capacity: 20,
-            memo: "",
-            createdBy: "",
-            participants: [],
-            waitingList: [],
-            attendance: [],
-            paidMembers: []
-        )
-    )
 }

@@ -33,22 +33,22 @@ struct PremiumLeverControl: View {
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: 18, height: 128)
+                    .frame(width: 18, height: 146)
 
                 Capsule()
                     .fill(Color.black.opacity(0.55))
-                    .frame(width: 6, height: 112)
+                    .frame(width: 6, height: 130)
                     .padding(.top, 8)
 
                 leverKnob
-                    .offset(y: clampedProgress * 82)
+                    .offset(y: clampedProgress * 110)
             }
             .frame(width: 60, height: 150)
 
-            Text("LEVER")
-                .font(.system(size: 8, weight: .black, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(Color.white.opacity(0.55))
+            // LEVER文字だけを非表示にし、元のレイアウトを維持する。
+            Color.clear
+                .frame(width: 60, height: 10)
+                .accessibilityHidden(true)
         }
         .contentShape(Rectangle())
         .gesture(
@@ -80,6 +80,7 @@ struct PremiumLeverControl: View {
         .accessibilityHint("下に引いてガチャを開始します")
     }
 
+
     private var leverKnob: some View {
         ZStack {
             Circle()
@@ -95,11 +96,11 @@ struct PremiumLeverControl: View {
                         endRadius: 32
                     )
                 )
-                .frame(width: 52, height: 52)
+                .frame(width: 46, height: 46)
 
             Circle()
                 .stroke(Color.white.opacity(0.45), lineWidth: 2)
-                .frame(width: 52, height: 52)
+                .frame(width: 46, height: 46)
 
             Circle()
                 .fill(Color.white.opacity(0.35))
@@ -111,8 +112,8 @@ struct PremiumLeverControl: View {
         .shadow(color: glowColor.opacity(0.55), radius: 14)
         .opacity(enabled ? 1.0 : 0.58)
     }
-}
 
+}
 #Preview {
     ZStack {
         Color.black.ignoresSafeArea()

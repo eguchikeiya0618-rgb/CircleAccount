@@ -45,7 +45,8 @@ struct ActivitiesView: View {
                 }
                 .padding()
             }
-            .navigationTitle("活動日")
+            .background(LinearGradient(colors:[Color.black,Color.indigo.opacity(0.9),Color.purple.opacity(0.6)],startPoint:.topLeading,endPoint:.bottomTrailing).ignoresSafeArea())
+            .navigationTitle("Activities")
             .onAppear {
                 loadActivities()
             }
@@ -195,10 +196,11 @@ struct ActivitiesView: View {
                 addActivity()
             }
             .buttonStyle(.borderedProminent)
+            .tint(.purple)
             .disabled(!canAdd)
         }
         .padding()
-        .background(Color.gray.opacity(0.08))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -621,7 +623,7 @@ struct ActivityCard: View {
             .font(.headline)
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.08), radius: 10)
     }
