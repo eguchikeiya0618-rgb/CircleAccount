@@ -1,0 +1,21 @@
+{
+  "images" : [
+    {
+      "filename" : "Codex 画像 2026年8月3日 10_42_34.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
