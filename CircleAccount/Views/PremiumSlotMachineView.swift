@@ -85,6 +85,8 @@ struct PremiumSlotMachineView: View {
     @State private var pushPressTrigger = 0
     @State private var nextEpisodePreviewTrigger = 0
     @State private var pushPressed = false
+    @State private var cabinetPushPressed = false
+    @State private var cabinetPushTracking = false
     
     // SSR最終リールPUSH待機演出
     @State private var pushEmphasisPulse = false
@@ -105,6 +107,10 @@ struct PremiumSlotMachineView: View {
     @State private var pushImpactRingOpacity = 0.0
     @State private var pushFlameBurstScale: CGFloat = 1.0
     @State private var pushFlameBurstOpacity = 0.0
+    @State private var pushRevealBlackoutOpacity = 0.0
+    @State private var pushLaunchFlashOpacity = 0.0
+    @State private var pushEjectProgress: CGFloat = 0
+    @State private var pushLaunchReady = false
     
     @State private var resultPauseOpacity = 0.0
     @State private var resultPauseTextOpacity = 0.0
@@ -150,27 +156,24 @@ struct PremiumSlotMachineView: View {
     }
     
     var body: some View {
-        ZStack(alignment: .trailing) {
+        ZStack(alignment: .center) {
             machineBody
-                .padding(.trailing, 46)
             
             authenticCabinetOverlay
                 .zIndex(51)
             
             premiumCRTBlackoutOverlay
-                .padding(.trailing, 46)
                 .allowsHitTesting(false)
                 .zIndex(4000)
             
             if isGekiAtsuVisible || isPremiumTypewriterVisible || isVMovieVisible || premiumTicketVisible || isBonusLogoVisible {
                 premiumEffectArea
-                    .padding(.trailing, 46)
                     .allowsHitTesting(false)
                     .zIndex(5000)
             }
             
             
-            if isPushVisible && isPushEnabled && !pushPressed {
+            if isPushVisible && isPushEnabled && !pushPressed && pushLaunchReady {
                 PremiumPushEmphasisOverlay(
                     textPulse: pushTextPulse,
                     ringPulse: pushRingPulse,
@@ -178,12 +181,16 @@ struct PremiumSlotMachineView: View {
                     glowPulse: pushPromptGlow,
                     sweepProgress: pushPromptSweep
                 )
-                .padding(.trailing, 46)
                 .allowsHitTesting(false)
                 .transition(.opacity.combined(with: .scale(scale: 0.82)))
-                .zIndex(230)
+                .offset(x: 18)
+                .zIndex(6001)
             }
-            
+
+            // 既存のPUSHは一つだけ。暗転・演出より常に手前で描画する。
+            cabinetPushHitArea
+                .zIndex(6002)
+
             SlotSoundControlView(
                 isEnabled: $slotSoundEnabled,
                 volume: $slotSoundVolume,
@@ -194,7 +201,6 @@ struct PremiumSlotMachineView: View {
                 maxHeight: .infinity,
                 alignment: .topLeading
             )
-            .padding(.trailing, 46)
             .padding(.top, 12)
             .padding(.leading, 12)
             .zIndex(90)
@@ -209,11 +215,16 @@ struct PremiumSlotMachineView: View {
                     onLeverReleased()
                 }
             )
-            .offset(x: -54, y: -11)
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .trailing
+            )
+            .offset(x: -7, y: -11)
             
             // 最終右リール停止専用PUSH。
             // 最前面に独立したButtonを置き、装飾Overlayにタップを奪われないようにする。
-            if isPushVisible {
+            if false && isPushVisible {
                 Button(action: handlePremiumPush) {
                     ZStack {
                         Circle()
@@ -264,71 +275,6 @@ struct PremiumSlotMachineView: View {
                         }
                         
                         ZStack {
-                            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.28),
-                                            Color(red: 0.13, green: 0.11, blue: 0.16),
-                                            Color.black,
-                                            Color.purple.opacity(0.42)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 190, height: 126)
-                                .offset(y: 35)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 34, style: .continuous)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.90),
-                                                    Color.gray,
-                                                    Color.black,
-                                                    Color.purple.opacity(0.80)
-                                                ],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            ),
-                                            lineWidth: 4
-                                        )
-                                        .frame(width: 190, height: 126)
-                                        .offset(y: 35)
-                                }
-                                .shadow(color: Color.black.opacity(0.90), radius: 12, y: 10)
-                            
-                            Ellipse()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white,
-                                            Color.gray,
-                                            Color.black,
-                                            Color.purple
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 8
-                                )
-                                .frame(width: 170, height: 78)
-                                .offset(y: 38)
-                                .shadow(color: Color.purple.opacity(0.62), radius: 10)
-                            
-                            // 台座は完全固定。実機らしい「筐体の重さ」を残す。
-                            Image("PremiumPushBase")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 182, height: 182)
-                                .offset(y: 22)
-                                .brightness(pushPromptGlow ? 0.035 : 0)
-                                .shadow(
-                                    color: Color.pink.opacity(0.40),
-                                    radius: 10
-                                )
-                            
                             // 炎とボタン本体だけを独立して動かす。
                             ZStack {
                                 ZStack {
@@ -336,9 +282,7 @@ struct PremiumSlotMachineView: View {
                                         .resizable()
                                         .scaledToFit()
                                         .frame(width: 166, height: 166)
-                                        .rotationEffect(
-                                            .degrees(pushEnergyRotation)
-                                        )
+                                        .rotationEffect(.degrees(pushEnergyRotation))
                                         .scaleEffect(
                                             pushEmphasisPulse ? 1.045 : 0.985
                                         )
@@ -442,13 +386,24 @@ struct PremiumSlotMachineView: View {
                                         .offset(y: -4)
                                 )
                             }
-                            .scaleEffect(pushEmphasisPulse ? 1.035 : 0.985)
+                            .scaleEffect(0.54 + pushEjectProgress * 0.56)
+                            .offset(y: 46 - pushEjectProgress * 46)
+                            .rotation3DEffect(
+                                .degrees(Double((1 - pushEjectProgress) * 28)),
+                                axis: (x: 1, y: 0, z: 0),
+                                perspective: 0.72
+                            )
                         }
                         .frame(width: 196, height: 178)
                     }
-                    .shadow(color: Color.red.opacity(0.95), radius: 24)
-                    .shadow(color: Color.orange.opacity(0.72), radius: 10)
-                    .scaleEffect(1.0)
+                    .shadow(
+                        color: Color.black.opacity(0.92),
+                        radius: 12 + pushEjectProgress * 18,
+                        y: 8 + pushEjectProgress * 12
+                    )
+                    .shadow(color: Color.red.opacity(0.90), radius: 20)
+                    .shadow(color: Color.purple.opacity(0.72), radius: 12)
+                    .opacity(Double(pushEjectProgress))
                     .contentShape(
                         RoundedRectangle(
                             cornerRadius: 42,
@@ -457,9 +412,19 @@ struct PremiumSlotMachineView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(!isPushEnabled || pushPressed)
-                .allowsHitTesting(isPushEnabled && !pushPressed)
+                .disabled(!isPushEnabled || !pushLaunchReady || pushPressed)
+                .allowsHitTesting(isPushEnabled && pushLaunchReady && !pushPressed)
                 .accessibilityLabel("最後の右リールを止めるPUSHボタン")
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            guard isPushEnabled else { return }
+                            SlotHapticManager.shared.beginPushHold()
+                        }
+                        .onEnded { _ in
+                            SlotHapticManager.shared.endPushHold()
+                        }
+                )
                 .offset(x: -18, y: 180)
                 .zIndex(250)
             }
@@ -470,16 +435,16 @@ struct PremiumSlotMachineView: View {
             x:
                 machinePulse
             ? 1.012
-            : (pushCameraBreath && isPushVisible ? 1.014 : 1.0),
+            : 1.0,
             y:
                 machinePulse
             ? 0.992
-            : (pushCameraBreath && isPushVisible ? 1.008 : 1.0),
+            : 1.0,
             anchor: .center
         )
         .rotationEffect(.degrees(machineTiltDegrees))
         .offset(
-            x: machineShakeX + pushMicroVibration,
+            x: machineShakeX,
             y: machineDropY
         )
         .onAppear {
@@ -493,6 +458,8 @@ struct PremiumSlotMachineView: View {
             )
         }
         .onDisappear {
+            SlotHapticManager.shared.endPushHold()
+            SlotHapticManager.shared.endMoviePulse()
             SlotSoundManager.shared.setDefaultJackpotSoundEnabled(true)
             SlotSoundManager.shared.stopAll()
         }
@@ -574,7 +541,7 @@ struct PremiumSlotMachineView: View {
             switch phase {
             case .kyuiin:
                 if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-                    luckyLampMode = .rainbow
+                    luckyLampMode = .premium
                     luckyLampTrigger += 1
                     
                 } else {
@@ -609,9 +576,11 @@ struct PremiumSlotMachineView: View {
                 hasStartedVMovie = true
                 hideInitialEffectsForVMovie()
                 isVMovieVisible = true
+                SlotHapticManager.shared.beginMoviePulse()
                 SlotSoundManager.shared.playVMovieSequenceSounds()
                 
             case .idle:
+                SlotHapticManager.shared.endMoviePulse()
                 SlotSoundManager.shared.stopBlackoutCharge()
                 isGekiAtsuVisible = false
                 isPremiumTypewriterVisible = false
@@ -673,7 +642,6 @@ struct PremiumSlotMachineView: View {
             isSpinning: isSpinning,
             stoppedReelCount: stoppedReelCount
         )
-        .padding(.trailing, 46)
         .allowsHitTesting(false)
     }
     
@@ -967,6 +935,8 @@ struct PremiumSlotMachineView: View {
             contentMode: .fill,
             isOpaquePresentation: true,
             onFinished: {
+                SlotHapticManager.shared.endMoviePulse()
+                SlotHapticManager.shared.movieVCompletionImpact()
                 guard isVMovieVisible else { return }
                 isVMovieVisible = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -1004,12 +974,11 @@ struct PremiumSlotMachineView: View {
                 mode: luckyLampMode,
                 trigger: luckyLampTrigger
             )
-            .scaleEffect(x: 0.84, y: 0.60)
+            .scaleEffect(x: 0.78, y: 0.56)
             .offset(x: -113, y: -58)
 
             reelHousing
-                .frame(width: 280, height: 154)
-                .scaleEffect(x: 1.0, y: 0.88)
+                .frame(width: 280, height: 162)
                 .offset(x: -21, y: 62)
                 .contentShape(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1021,6 +990,7 @@ struct PremiumSlotMachineView: View {
                 .accessibilityHint("タップするたびに左、中、右の順で停止します")
 
             stopButtonInputOverlay
+
         }
         .frame(width: 370, height: 520)
         .shadow(color: Color.black.opacity(0.72), radius: 22, y: 15)
@@ -1140,6 +1110,104 @@ struct PremiumSlotMachineView: View {
 
     private func handleReelAreaTap() {
         handleStopInput(index: stoppedReelCount)
+    }
+
+    // 筐体画像に元から描かれている紫PUSH専用の透明Hit Area。
+    // 通常時は完全透明で、別ボタンの外観は一切描画しない。
+    private var cabinetPushHitArea: some View {
+        let bonusPushReady = isPushVisible && isPushEnabled && pushLaunchReady
+        let regularPushReady = isStopInputEnabled(index: stoppedReelCount)
+
+        return Circle()
+            .fill(Color.clear)
+            .frame(width: 94, height: 64)
+            .contentShape(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay {
+                Image("PremiumPushButtonCore")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 94, height: 64)
+                    .clipShape(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                    .brightness(cabinetPushPressed ? -0.13 : 0)
+                    .contrast(1.0)
+                    .shadow(
+                        color: Color.black.opacity(0.52),
+                        radius: 5,
+                        y: 3
+                    )
+                    .shadow(
+                        color: bonusPushReady
+                            ? Color.white.opacity(0.16)
+                            : .clear,
+                        radius: 2
+                    )
+                    .opacity(bonusPushReady ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
+            .scaleEffect(
+                cabinetPushPressed
+                    ? 0.90
+                    : (bonusPushReady ? 1.18 : 1.0)
+            )
+            .offset(
+                x: 101,
+                y: 178
+                    + (cabinetPushPressed ? 2 : 0)
+                    - (bonusPushReady ? pushEjectProgress * 18 : 0)
+            )
+            .rotation3DEffect(
+                .degrees(
+                    bonusPushReady
+                        ? Double((1 - pushEjectProgress) * 24)
+                        : 0
+                ),
+                axis: (x: 1, y: 0, z: 0),
+                perspective: 0.68
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard (regularPushReady || bonusPushReady),
+                              !cabinetPushTracking else {
+                            return
+                        }
+
+                        cabinetPushTracking = true
+                        withAnimation(.easeOut(duration: 0.055)) {
+                            cabinetPushPressed = true
+                        }
+                        if bonusPushReady {
+                            SlotHapticManager.shared.beginPushHold()
+                        } else {
+                            SlotHapticManager.shared.regularStopPushPress()
+                        }
+                    }
+                    .onEnded { _ in
+                        let shouldActivate = cabinetPushTracking
+                        SlotHapticManager.shared.endPushHold()
+
+                        cabinetPushTracking = false
+                        withAnimation(
+                            .spring(response: 0.20, dampingFraction: 0.62)
+                        ) {
+                            cabinetPushPressed = false
+                        }
+
+                        guard shouldActivate else { return }
+                        if bonusPushReady {
+                            handlePremiumPush()
+                        } else if regularPushReady {
+                            handleStopInput(index: stoppedReelCount)
+                        }
+                    }
+            )
+            .accessibilityElement()
+            .accessibilityLabel("紫PUSH リール停止")
+            .accessibilityAddTraits(.isButton)
     }
 
     private func handleStopInput(index: Int) {
@@ -1268,58 +1336,6 @@ struct PremiumSlotMachineView: View {
             .easeInOut(duration: 0.35),
             value: lampPulse
         )
-    }
-
-    private var controlPanel: some View {
-        MachineControlPanelView(
-            isSpinning: isSpinning,
-            stoppedReelCount: stoppedReelCount,
-            flashingStopIndex: flashingStopIndex,
-            heatLevel: heatLevel,
-            machineGlow: machineGlow,
-            // 独立した3レイヤーPUSHを前面表示するため、
-            // コントロールパネル内の旧PUSH表示は非表示にする。
-            isPushVisible: false,
-            isPushEnabled: false,
-            onPush: handlePremiumPush,
-            onImpact: { offset in
-                withAnimation(.easeOut(duration: 0.10)) {
-                    machineShakeX = offset
-                }
-            }
-        )
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.12),
-                            Color(red: 0.075, green: 0.065, blue: 0.10),
-                            Color.black.opacity(0.92)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .shadow(color: Color.black.opacity(0.85), radius: 9, y: 7)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.72),
-                            Color.purple.opacity(0.70),
-                            Color.black,
-                            Color.white.opacity(0.24)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 2
-                )
-                .allowsHitTesting(false)
-        }
     }
 
     private var brandFooter: some View {
@@ -1508,10 +1524,7 @@ struct PremiumSlotMachineView: View {
     private func playLeverLaunchImpact() {
         cabinetStrobeColor = heatLevel == .premium ? .purple : .cyan
         cabinetStrobeTrigger += 1
-
-        let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
-        heavyImpact.prepare()
-        heavyImpact.impactOccurred(intensity: 0.92)
+        SlotHapticManager.shared.leverLock()
 
         machineDropY = 0
         machineTiltDegrees = 0
@@ -1533,10 +1546,6 @@ struct PremiumSlotMachineView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            let rigidImpact = UIImpactFeedbackGenerator(style: .rigid)
-            rigidImpact.prepare()
-            rigidImpact.impactOccurred(intensity: 0.62)
-
             withAnimation(
                 .spring(
                     response: 0.24,
@@ -1681,6 +1690,7 @@ struct PremiumSlotMachineView: View {
 
         SlotSoundManager.shared.playPushPress()
         SlotSoundManager.shared.suppressNextPushSound()
+        SlotHapticManager.shared.premiumFinalPush()
 
         withAnimation(.easeIn(duration: 0.085)) {
             pushButtonDepth = 1
@@ -1723,10 +1733,6 @@ struct PremiumSlotMachineView: View {
 
         
         
-        let impact = UIImpactFeedbackGenerator(style: .heavy)
-        impact.prepare()
-        impact.impactOccurred(intensity: 1.0)
-
         withAnimation(.easeOut(duration: 0.045)) {
             machineShakeX = -16
             machineDropY = 7
@@ -1784,6 +1790,10 @@ struct PremiumSlotMachineView: View {
         pushImpactRingOpacity = 0
         pushFlameBurstScale = 1.0
         pushFlameBurstOpacity = 0
+        pushRevealBlackoutOpacity = 0
+        pushLaunchFlashOpacity = 0
+        pushEjectProgress = 1
+        pushLaunchReady = true
 
         let notification = UINotificationFeedbackGenerator()
         notification.prepare()
@@ -1810,12 +1820,7 @@ struct PremiumSlotMachineView: View {
             pushRingPulse = true
         }
 
-        withAnimation(
-            .spring(
-                response: 0.46,
-                dampingFraction: 0.54
-            )
-        ) {
+        withAnimation(.spring(response: 0.46, dampingFraction: 0.54)) {
             pushPromptEntrance = 1
         }
 
@@ -1833,38 +1838,16 @@ struct PremiumSlotMachineView: View {
             pushPromptSweep = 1.2
         }
 
-        withAnimation(
-            .linear(duration: 1.10)
-                .repeatForever(autoreverses: false)
-        ) {
+        withAnimation(.linear(duration: 1.10).repeatForever(autoreverses: false)) {
             pushButtonSweep = 1.2
         }
 
-        withAnimation(
-            .linear(duration: 2.20)
-                .repeatForever(autoreverses: false)
-        ) {
+        withAnimation(.linear(duration: 2.20).repeatForever(autoreverses: false)) {
             pushEnergyRotation = 360
         }
 
-        withAnimation(
-            .easeInOut(duration: 0.72)
-                .repeatForever(autoreverses: true)
-        ) {
+        withAnimation(.easeInOut(duration: 0.72).repeatForever(autoreverses: true)) {
             pushCameraBreath = true
-        }
-
-        let vibrationSteps: [CGFloat] = [
-            0.0, -0.7, 0.5, -0.35, 0.25, 0.0
-        ]
-
-        for (index, value) in vibrationSteps.enumerated() {
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + Double(index) * 0.045
-            ) {
-                guard isPushVisible, !pushPressed else { return }
-                pushMicroVibration = value
-            }
         }
 
         cabinetStrobeColor = .red
@@ -1889,6 +1872,10 @@ struct PremiumSlotMachineView: View {
             pushImpactRingOpacity = 0
             pushFlameBurstScale = 1.0
             pushFlameBurstOpacity = 0
+            pushRevealBlackoutOpacity = 0
+            pushLaunchFlashOpacity = 0
+            pushEjectProgress = 0
+            pushLaunchReady = false
         }
     }
 
@@ -1925,18 +1912,23 @@ struct PremiumSlotMachineView: View {
         // LUCKYランプは最初の左リールを止めた瞬間に点灯。
         switch safeSymbols {
         case ["🌈7", "🌈7", "🌈7"]:
-            luckyLampMode = .rainbow
+            luckyLampMode = .premium
             luckyLampTrigger += 1
+            SlotHapticManager.shared.lampIgnition(rank: .lr)
 
         case ["7", "7", "7"]:
-            luckyLampMode = .gold
+            luckyLampMode = expectationLevel == .premium ? .rainbow : .gold
             luckyLampTrigger += 1
+            SlotHapticManager.shared.lampIgnition(
+                rank: expectationLevel == .premium ? .ssr : .sr
+            )
 
         default:
             // プレミアムルートのその他図柄は金色。
             if expectationLevel == .premium {
-                luckyLampMode = .gold
+                luckyLampMode = .rainbow
                 luckyLampTrigger += 1
+                SlotHapticManager.shared.lampIgnition(rank: .ssr)
             } else {
                 luckyLampMode = .off
             }
@@ -1986,9 +1978,7 @@ struct PremiumSlotMachineView: View {
         ) {
             guard token == finalResultSequenceToken else { return }
 
-            let impact = UIImpactFeedbackGenerator(style: .heavy)
-            impact.prepare()
-            impact.impactOccurred(intensity: 1.0)
+            SlotHapticManager.shared.bonusLock(isLR: isRainbowJackpot)
 
             playResultSound()
             playJackpotWhiteout()
@@ -2313,22 +2303,24 @@ private struct PremiumPushEmphasisOverlay: View {
 
             // 矢印画像だけをPUSH文字より小さく表示する。
             // Assets側の余白を考慮し、横幅・高さを独立して調整。
-            let arrowWidth = promptWidth * 0.72
-            let arrowHeight = promptHeight * 0.66
-            let arrowOffsetY = promptHeight * 0.16
+            let arrowWidth = promptWidth * 0.31
+            let arrowHeight = promptHeight * 0.28
+            let arrowOffsetX = proxy.size.width * 0.25
+            let arrowOffsetY = proxy.size.height * 0.20
 
             ZStack {
-                Color.black.opacity(textPulse ? 0.22 : 0.12)
+                Color.black.opacity(textPulse ? 0.48 : 0.40)
 
                 RadialGradient(
                     colors: [
-                        Color.red.opacity(textPulse ? 0.44 : 0.24),
-                        Color.orange.opacity(0.12),
+                        Color.white.opacity(textPulse ? 0.13 : 0.06),
+                        Color(red: 0.80, green: 0.62, blue: 0.20)
+                            .opacity(0.07),
                         Color.clear
                     ],
-                    center: .center,
-                    startRadius: 8,
-                    endRadius: 250
+                    center: UnitPoint(x: 0.70, y: 0.76),
+                    startRadius: 2,
+                    endRadius: 170
                 )
                 .blendMode(.screen)
 
@@ -2336,7 +2328,12 @@ private struct PremiumPushEmphasisOverlay: View {
                     Circle()
                         .stroke(
                             LinearGradient(
-                                colors: [.white, .yellow, .orange, .red],
+                                colors: [
+                                    .white,
+                                    Color(red: 0.92, green: 0.76, blue: 0.34),
+                                    Color.white.opacity(0.20),
+                                    .clear
+                                ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -2352,7 +2349,6 @@ private struct PremiumPushEmphasisOverlay: View {
                                 ? 0
                                 : Double(0.90 - Double(index) * 0.20)
                         )
-                        .shadow(color: .red, radius: 18)
                 }
 
                 ZStack {
@@ -2365,10 +2361,7 @@ private struct PremiumPushEmphasisOverlay: View {
                             width: promptWidth,
                             height: promptHeight
                         )
-                        .shadow(
-                            color: Color.red.opacity(0.82),
-                            radius: glowPulse ? 25 : 14
-                        )
+                        .shadow(color: Color.black.opacity(0.46), radius: 8, y: 3)
 
                     // 矢印の常時点灯レイヤー。
                     Image("PremiumPushArrows")
@@ -2378,13 +2371,10 @@ private struct PremiumPushEmphasisOverlay: View {
                             width: arrowWidth,
                             height: arrowHeight
                         )
-                        .offset(y: arrowOffsetY)
+                        .offset(x: arrowOffsetX, y: arrowOffsetY)
                         .opacity(glowPulse ? 0.76 : 0.54)
                         .brightness(glowPulse ? 0.10 : 0.02)
-                        .shadow(
-                            color: Color.orange.opacity(0.88),
-                            radius: glowPulse ? 13 : 7
-                        )
+                        .shadow(color: Color.white.opacity(0.18), radius: 3)
                         .blendMode(.screen)
 
                     // 左→中央→右へLEDが走る実機風アニメーション。
@@ -2411,7 +2401,7 @@ private struct PremiumPushEmphasisOverlay: View {
                                 colors: [
                                     .clear,
                                     .white.opacity(0.98),
-                                    .yellow.opacity(0.92),
+                                    Color(red: 0.95, green: 0.78, blue: 0.36),
                                     .white.opacity(0.82),
                                     .clear
                                 ],
@@ -2438,7 +2428,7 @@ private struct PremiumPushEmphasisOverlay: View {
                         width: arrowWidth,
                         height: arrowHeight
                     )
-                    .offset(y: arrowOffsetY)
+                    .offset(x: arrowOffsetX, y: arrowOffsetY)
 
                     // 中央から下へ落ちる衝撃光。矢印がPUSHを促すように見せる。
                     Capsule()
@@ -2446,8 +2436,8 @@ private struct PremiumPushEmphasisOverlay: View {
                             LinearGradient(
                                 colors: [
                                     Color.white.opacity(0),
-                                    Color.yellow.opacity(textPulse ? 0.88 : 0.48),
-                                    Color.orange.opacity(textPulse ? 0.64 : 0.30),
+                                    Color.white.opacity(textPulse ? 0.88 : 0.48),
+                                    Color.white.opacity(textPulse ? 0.24 : 0.10),
                                     Color.clear
                                 ],
                                 startPoint: .top,
@@ -2455,7 +2445,10 @@ private struct PremiumPushEmphasisOverlay: View {
                             )
                         )
                         .frame(width: arrowWidth * 0.48, height: 34)
-                        .offset(y: arrowOffsetY + arrowHeight * 0.32)
+                        .offset(
+                            x: arrowOffsetX,
+                            y: arrowOffsetY + arrowHeight * 0.32
+                        )
                         .blur(radius: 8)
                         .opacity(textPulse ? 0.72 : 0.34)
                         .blendMode(.screen)
@@ -2468,12 +2461,9 @@ private struct PremiumPushEmphasisOverlay: View {
                 .opacity(Double(entranceProgress))
                 .brightness(glowPulse ? 0.05 : 0)
                 .shadow(
-                    color: .yellow.opacity(glowPulse ? 0.88 : 0.38),
+                    color: Color(red: 0.92, green: 0.76, blue: 0.34)
+                        .opacity(glowPulse ? 0.72 : 0.28),
                     radius: glowPulse ? 14 : 7
-                )
-                .shadow(
-                    color: .red.opacity(glowPulse ? 1.0 : 0.60),
-                    radius: glowPulse ? 31 : 16
                 )
                 .position(
                     x: proxy.size.width / 2,

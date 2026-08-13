@@ -10,6 +10,7 @@ enum SlotLuckyLampMode: Equatable {
     case blue
     case gold
     case rainbow
+    case premium
 
     var isLit: Bool {
         self != .off
@@ -26,6 +27,9 @@ struct SlotLuckyLampView: View {
     @State private var sweepOffset: CGFloat = -1.4
     @State private var rainbowRotation = 0.0
     @State private var starPulse = false
+    @State private var blackoutOpacity = 0.0
+    @State private var innerBreath: CGFloat = 0.84
+    @State private var leakOpacity = 0.0
 
     private var mainColor: Color {
         switch mode {
@@ -35,8 +39,8 @@ struct SlotLuckyLampView: View {
             return Color(red: 0.34, green: 0.77, blue: 1.00)
         case .gold:
             return Color(red: 1.00, green: 0.78, blue: 0.16)
-        case .rainbow:
-            return .white
+        case .rainbow, .premium:
+            return Color(red: 1.00, green: 0.62, blue: 0.12)
         }
     }
 
@@ -50,18 +54,28 @@ struct SlotLuckyLampView: View {
             return Color(red: 1.00, green: 0.28, blue: 0.04)
         case .rainbow:
             return .pink
+        case .premium:
+            return Color(red: 0.58, green: 0.22, blue: 1.0)
         }
     }
 
     var body: some View {
         ZStack {
             aura
+            cabinetLeak
             chromeFrame
             glassBase
+            internalReflector
+            internalLEDArray
             illuminatedCore
+            lensVignette
             textLayer
             glassReflection
             revealFlash
+            Color.black
+                .clipShape(Ellipse())
+                .padding(5)
+                .opacity(blackoutOpacity)
         }
         .frame(width: 132, height: 92)
         .scaleEffect(revealScale)
@@ -79,18 +93,23 @@ struct SlotLuckyLampView: View {
 
     private var aura: some View {
         Group {
-            if mode == .rainbow {
+            if mode == .rainbow || mode == .premium {
                 Ellipse()
                     .fill(
-                        AngularGradient(
-                            colors: rainbowColors,
+                        RadialGradient(
+                            colors: [
+                                Color.orange.opacity(0.32),
+                                Color(red: 1.0, green: 0.44, blue: 0.04).opacity(0.16),
+                                Color.clear
+                            ],
                             center: .center,
-                            angle: .degrees(rainbowRotation)
+                            startRadius: 18,
+                            endRadius: 76
                         )
                     )
                     .frame(width: 138, height: 98)
-                    .blur(radius: 20)
-                    .opacity(mode.isLit ? (pulse ? 0.86 : 0.50) : 0)
+                    .blur(radius: 15)
+                    .opacity(mode.isLit ? (pulse ? (mode == .premium ? 0.74 : 0.58) : 0.38) : 0)
                     .blendMode(.screen)
             } else {
                 Ellipse()
@@ -102,6 +121,28 @@ struct SlotLuckyLampView: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private var cabinetLeak: some View {
+        Ellipse()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color.orange.opacity(mode.isLit ? 0.28 : 0),
+                        Color(red: 0.92, green: 0.38, blue: 0.03).opacity(mode.isLit ? 0.20 : 0),
+                        Color.yellow.opacity(mode.isLit ? 0.08 : 0),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 2,
+                    endRadius: 84
+                )
+            )
+            .frame(width: 154, height: 112)
+            .blur(radius: 18)
+            .opacity(leakOpacity)
+            .blendMode(.screen)
+            .allowsHitTesting(false)
     }
 
     private var chromeFrame: some View {
@@ -138,7 +179,7 @@ struct SlotLuckyLampView: View {
 
             Ellipse()
                 .stroke(
-                    mode == .rainbow
+                    mode == .rainbow || mode == .premium
                     ? AnyShapeStyle(
                         AngularGradient(
                             colors: rainbowColors,
@@ -181,8 +222,8 @@ struct SlotLuckyLampView: View {
             .fill(
                 RadialGradient(
                     colors: [
-                        Color(red: 0.12, green: 0.08, blue: 0.22),
-                        Color(red: 0.04, green: 0.035, blue: 0.08),
+                        Color(red: 0.12, green: 0.055, blue: 0.025),
+                        Color(red: 0.035, green: 0.022, blue: 0.018),
                         Color.black
                     ],
                     center: .center,
@@ -208,26 +249,98 @@ struct SlotLuckyLampView: View {
             .padding(7)
     }
 
-    @ViewBuilder
-    private var illuminatedCore: some View {
-        if mode == .rainbow {
+    private var internalReflector: some View {
+        ZStack {
             Ellipse()
                 .fill(
-                    AngularGradient(
-                        colors: rainbowColors,
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.28, green: 0.10, blue: 0.025).opacity(mode.isLit ? 0.72 : 0.18),
+                            Color(red: 0.07, green: 0.028, blue: 0.018).opacity(0.92),
+                            Color.black.opacity(0.98)
+                        ],
                         center: .center,
-                        angle: .degrees(rainbowRotation)
+                        startRadius: 4,
+                        endRadius: 61
                     )
                 )
-                .padding(9)
-                .opacity(mode.isLit ? (pulse ? 0.80 : 0.60) : 0)
-                .blur(radius: 0.5)
+
+            ForEach(0..<3, id: \.self) { index in
+                Ellipse()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.70, blue: 0.20).opacity(mode.isLit ? 0.20 : 0.055),
+                                Color.purple.opacity(mode.isLit ? 0.12 : 0.035),
+                                Color.black.opacity(0.72)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.8
+                    )
+                    .padding(CGFloat(11 + index * 7))
+            }
+        }
+        .padding(8)
+        .clipShape(Ellipse())
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var illuminatedCore: some View {
+        if mode == .rainbow || mode == .premium {
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 1.0, green: 0.82, blue: 0.30).opacity(0.78),
+                            Color.orange.opacity(0.52),
+                            Color(red: 0.42, green: 0.08, blue: 0.12).opacity(0.26),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 2,
+                        endRadius: 61
+                    )
+                )
+                .padding(12)
+                .opacity(mode.isLit ? (pulse ? 0.86 : 0.68) : 0)
+                .blur(radius: 2.2)
                 .blendMode(.screen)
 
             Ellipse()
-                .fill(Color.white.opacity(mode.isLit ? 0.18 : 0.01))
-                .padding(14)
+                .stroke(
+                    AngularGradient(
+                        colors: rainbowColors.map { $0.opacity(0.48) },
+                        center: .center,
+                        angle: .degrees(rainbowRotation)
+                    ),
+                    lineWidth: 2
+                )
+                .padding(13)
                 .blendMode(.screen)
+
+            if mode == .premium {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.clear,
+                                Color.cyan.opacity(0.48),
+                                Color.purple.opacity(0.58),
+                                Color.orange.opacity(0.42),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 92, height: 7)
+                    .rotationEffect(.degrees(rainbowRotation * 0.08 - 12))
+                    .blur(radius: 1.4)
+                    .blendMode(.screen)
+            }
         } else {
             Ellipse()
                 .fill(
@@ -247,6 +360,55 @@ struct SlotLuckyLampView: View {
                 .opacity(mode.isLit ? (pulse ? 1.0 : 0.80) : 1)
                 .blendMode(.screen)
         }
+    }
+
+    private var internalLEDArray: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<9, id: \.self) { index in
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.88, blue: 0.50).opacity(mode.isLit ? 0.88 : 0.08),
+                                Color.orange.opacity(mode.isLit ? 0.74 : 0.03),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 7
+                        )
+                    )
+                    .frame(width: index == 4 ? 9 : 6, height: index == 4 ? 9 : 6)
+                    .shadow(
+                        color: mode.isLit ? mainColor.opacity(0.95) : .clear,
+                        radius: 7
+                    )
+                    .opacity(mode.isLit ? (index == 4 ? 0.88 : 0.34 + Double(index % 2) * 0.10) : 0.075)
+            }
+        }
+        .scaleEffect(innerBreath)
+        .blur(radius: mode.isLit ? 0.35 : 1.1)
+        .blendMode(.screen)
+        .allowsHitTesting(false)
+    }
+
+    private var lensVignette: some View {
+        Ellipse()
+            .strokeBorder(
+                RadialGradient(
+                    colors: [
+                        Color.clear,
+                        Color.black.opacity(0.10),
+                        Color.black.opacity(0.78)
+                    ],
+                    center: .center,
+                    startRadius: 22,
+                    endRadius: 65
+                ),
+                lineWidth: 10
+            )
+            .padding(8)
+            .allowsHitTesting(false)
     }
 
     private var starDecorations: some View {
@@ -298,31 +460,37 @@ struct SlotLuckyLampView: View {
         }
         .foregroundStyle(textStyle)
         .shadow(
-            color: .white.opacity(
-                mode.isLit
-                    ? (pulse ? 0.95 : 0.45)
-                    : 0
-            ),
-            radius: pulse ? 2 : 1
+            color: Color.black.opacity(0.82),
+            radius: 1,
+            y: 1
         )
-
         .shadow(
             color: Color.yellow.opacity(
                 mode.isLit
-                    ? (pulse ? 1.0 : 0.7)
+                    ? (pulse ? 0.58 : 0.36)
                     : 0
             ),
-            radius: pulse ? 14 : 7
+            radius: pulse ? 6 : 3
         )
-
         .shadow(
             color: Color.orange.opacity(
                 mode.isLit
-                    ? (pulse ? 0.9 : 0.5)
+                    ? (pulse ? 0.38 : 0.22)
                     : 0
             ),
-            radius: pulse ? 32 : 18
+            radius: pulse ? 13 : 8
         )
+        .overlay {
+            VStack(spacing: 1) {
+                Color.clear.frame(height: 10)
+                Capsule()
+                    .fill(Color(red: 1.0, green: 0.82, blue: 0.34).opacity(mode.isLit ? 0.28 : 0.04))
+                    .frame(width: 72, height: 1)
+                    .blur(radius: 0.25)
+                Spacer()
+            }
+            .allowsHitTesting(false)
+        }
         .opacity(mode.isLit ? 1.0 : 0.12)
     }
 
@@ -358,7 +526,24 @@ struct SlotLuckyLampView: View {
         case .rainbow:
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: rainbowColors,
+                    colors: [
+                        Color(red: 1.0, green: 0.94, blue: 0.72),
+                        Color(red: 1.0, green: 0.68, blue: 0.16),
+                        Color(red: 1.0, green: 0.88, blue: 0.50)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        case .premium:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color.white,
+                        Color(red: 1.0, green: 0.78, blue: 0.22),
+                        Color(red: 0.72, green: 0.48, blue: 1.0),
+                        Color.white
+                    ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -373,21 +558,21 @@ struct SlotLuckyLampView: View {
                     LinearGradient(
                         colors: [
                             Color.clear,
-                            Color.white.opacity(0.42),
-                            Color.white.opacity(0.08),
+                            Color.white.opacity(0.30),
+                            Color.white.opacity(0.05),
                             Color.clear
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(width: 20, height: proxy.size.height * 0.80)
+                .frame(width: 5, height: proxy.size.height * 0.58)
                 .rotationEffect(.degrees(18))
                 .offset(
                     x: sweepOffset * proxy.size.width,
                     y: -4
                 )
-                .blur(radius: 0.8)
+                .blur(radius: 0.45)
                 .blendMode(.screen)
         }
         .clipShape(Ellipse())
@@ -396,19 +581,21 @@ struct SlotLuckyLampView: View {
     }
 
     private var revealFlash: some View {
-        Ellipse()
+        Circle()
             .fill(
                 RadialGradient(
                     colors: [
-                        Color.white.opacity(0.98),
-                        mainColor.opacity(0.84),
+                        Color(red: 1.0, green: 0.90, blue: 0.58).opacity(0.82),
+                        Color.orange.opacity(0.44),
                         Color.clear
                     ],
                     center: .center,
                     startRadius: 0,
-                    endRadius: 82
+                    endRadius: 28
                 )
             )
+            .frame(width: 56, height: 56)
+            .blur(radius: 2)
             .opacity(flashOpacity)
             .blendMode(.screen)
             .allowsHitTesting(false)
@@ -424,6 +611,8 @@ struct SlotLuckyLampView: View {
                 .repeatForever(autoreverses: true)
         ) {
             pulse = true
+            innerBreath = 1.06
+            leakOpacity = 1
         }
 
         withAnimation(
@@ -449,8 +638,16 @@ struct SlotLuckyLampView: View {
     }
 
     private func playReveal() {
-        flashOpacity = 1
-        revealScale = 0.80
+        blackoutOpacity = 0.96
+        flashOpacity = 0
+        revealScale = mode == .premium ? 0.72 : 0.80
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + (mode == .premium ? 0.12 : 0.075)) {
+            flashOpacity = 1
+            withAnimation(.easeOut(duration: 0.15)) {
+                blackoutOpacity = 0
+            }
+        }
 
         withAnimation(
             .spring(response: 0.34, dampingFraction: 0.48)
@@ -458,7 +655,7 @@ struct SlotLuckyLampView: View {
             revealScale = 1.10
         }
 
-        withAnimation(.easeOut(duration: 0.34)) {
+        withAnimation(.easeOut(duration: 0.38).delay(0.075)) {
             flashOpacity = 0
         }
 
@@ -497,5 +694,12 @@ struct SlotLuckyLampView: View {
     ZStack {
         Color.black.ignoresSafeArea()
         SlotLuckyLampView(mode: .rainbow, trigger: 1)
+    }
+}
+
+#Preview("PREMIUM") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        SlotLuckyLampView(mode: .premium, trigger: 1)
     }
 }

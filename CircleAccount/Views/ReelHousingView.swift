@@ -5,6 +5,8 @@
 
 import SwiftUI
 
+/// Owns the physical reel window. The drums only render moving belt content;
+/// clipping, cylinder walls, glass and cabinet effects belong here.
 struct ReelHousingView: View {
     let resultSymbols: [String]
     let displaySymbols: [String]
@@ -22,845 +24,503 @@ struct ReelHousingView: View {
     let reelSlipIntensity: CGFloat
     var showsHousingDecoration = true
 
-    @State private var stoppedFlashIndex: Int? = nil
-    @State private var stoppedFlashOpacity: Double = 0
-    @State private var wholeReelFlashOpacity: Double = 0
+    @State private var stoppedFlashIndex: Int?
+    @State private var stoppedFlashOpacity = 0.0
+    @State private var wholeWindowFlashOpacity = 0.0
+    @State private var slipEnergyOffset: CGFloat = -52
+    @State private var slipEnergyOpacity = 0.0
+
+    private enum Metrics {
+        static let housingWidth: CGFloat = 280
+        static let housingHeight: CGFloat = 162
+        static let apertureWidth: CGFloat = 78
+        static let apertureHeight: CGFloat = 150
+        static let apertureSpacing: CGFloat = 5
+        static let apertureCornerRadius: CGFloat = 9
+        static let housingCornerRadius: CGFloat = 20
+        static let glassCornerRadius: CGFloat = 15
+    }
 
     private var safeResultSymbols: [String] {
-        [
-            resultSymbols.indices.contains(0) ? resultSymbols[0] : "7",
-            resultSymbols.indices.contains(1) ? resultSymbols[1] : "7",
-            resultSymbols.indices.contains(2) ? resultSymbols[2] : "7"
-        ]
+        (0..<3).map { index in
+            resultSymbols.indices.contains(index) ? resultSymbols[index] : "7"
+        }
     }
 
     private var safeDisplaySymbols: [String] {
-        [
-            displaySymbols.indices.contains(0) ? displaySymbols[0] : "⭐",
-            displaySymbols.indices.contains(1) ? displaySymbols[1] : "🏸",
-            displaySymbols.indices.contains(2) ? displaySymbols[2] : "💰"
-        ]
+        let fallback = ["⭐", "🏸", "💰"]
+        return (0..<3).map { index in
+            displaySymbols.indices.contains(index) ? displaySymbols[index] : fallback[index]
+        }
     }
 
     var body: some View {
         ZStack {
-            if showsHousingDecoration {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.34, green: 0.35, blue: 0.39),
-                                Color(red: 0.07, green: 0.075, blue: 0.095),
-                                Color.black
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+            housingBackground
 
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .fill(Color.black)
-                    .padding(8)
-            }
-
-            HStack(spacing: 7) {
+            HStack(spacing: Metrics.apertureSpacing) {
                 ForEach(0..<3, id: \.self) { index in
-                    PremiumReelColumn(
-                        finalSymbol: safeResultSymbols[index],
-                        initialDisplaySymbol: safeDisplaySymbols[index],
-                        symbolPool: reelPool,
-                        isSpinning: isSpinning && stoppedReelCount <= index,
-                        isStopped: stoppedReelCount > index,
-                        reelIndex: index,
-                    )
+                    reelAperture(index: index)
                 }
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 15)
 
-            reelGlassDepth
-                .allowsHitTesting(false)
-
-            reelGlassReflection
-                .allowsHitTesting(false)
-
+            separatorAssembly
+            centerPayLine
+            stopFlashOverlay
+            slipEnergyOverlay
+            sparkOverlay
+            sharedGlass
+            housingBorder
         }
-        .frame(height: 154)
-        .overlay {
-            if showsHousingDecoration {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.55),
-                                Color.gray.opacity(0.25),
-                                Color.black
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 3
-                    )
-            }
+        .frame(width: Metrics.housingWidth, height: Metrics.housingHeight)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: Metrics.housingCornerRadius,
+                style: .continuous
+            )
+        )
+        .onChange(of: stoppedReelCount) { oldValue, newValue in
+            guard newValue > oldValue, newValue > 0 else { return }
+            playStopFlash(for: min(newValue - 1, 2))
+        }
+        .onChange(of: reelSlipTrigger) { _, trigger in
+            guard trigger > 0, reelSlipIndex >= 0 else { return }
+            playSlipEnergy()
         }
     }
 
-    private var reelGlassDepth: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(
-                    cornerRadius: 17,
-                    style: .continuous
-                )
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.26),
-                            Color.white.opacity(0.07),
-                            Color.black.opacity(0.55),
-                            Color.white.opacity(0.10)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.4
-                )
+    private func reelAperture(index: Int) -> some View {
+        ZStack {
+            CylinderSurface()
 
+            PremiumReelColumn(
+                finalSymbol: safeResultSymbols[index],
+                initialDisplaySymbol: safeDisplaySymbols[index],
+                symbolPool: reelPool,
+                isSpinning: isSpinning && stoppedReelCount <= index,
+                isStopped: stoppedReelCount > index,
+                reelIndex: index
+            )
+
+            CylinderApertureOptics(
+                isSpinning: isSpinning && stoppedReelCount <= index,
+                glowColor: reelGlowColor(index: index)
+            )
+        }
+        .frame(width: Metrics.apertureWidth, height: Metrics.apertureHeight)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: Metrics.apertureCornerRadius,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: Metrics.apertureCornerRadius,
+                style: .continuous
+            )
+            .stroke(
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(0.28),
-                        Color.clear,
-                        Color.clear,
-                        Color.black.opacity(0.34)
+                        Color.white.opacity(0.30),
+                        Color.black.opacity(0.72),
+                        Color.white.opacity(0.10)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1.1
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var housingBackground: some View {
+        if showsHousingDecoration {
+            RoundedRectangle(
+                cornerRadius: Metrics.housingCornerRadius,
+                style: .continuous
+            )
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.38, green: 0.39, blue: 0.43),
+                        Color(red: 0.075, green: 0.08, blue: 0.10),
+                        Color.black
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .blur(radius: 3)
+            )
+        } else {
+            Color.black.opacity(0.90)
+        }
+    }
 
-                RadialGradient(
+    private var separatorAssembly: some View {
+        HStack(spacing: 0) {
+            Spacer()
+            separator(index: 0)
+            Spacer().frame(width: Metrics.apertureWidth)
+            separator(index: 1)
+            Spacer()
+        }
+        .frame(width: 174, height: Metrics.apertureHeight)
+        .allowsHitTesting(false)
+    }
+
+    private func separator(index: Int) -> some View {
+        Capsule()
+            .fill(
+                LinearGradient(
                     colors: [
-                        Color.clear,
-                        Color.clear,
-                        Color.black.opacity(0.20)
+                        Color.black.opacity(0.90),
+                        Color.white.opacity(0.16),
+                        machineGlow.opacity(
+                            isSpinning && stoppedReelCount <= index ? 0.20 : 0.04
+                        ),
+                        Color.black.opacity(0.92)
                     ],
-                    center: .center,
-                    startRadius: 8,
-                    endRadius: max(proxy.size.width, proxy.size.height) * 0.72
+                    startPoint: .leading,
+                    endPoint: .trailing
                 )
+            )
+            .frame(width: 4, height: Metrics.apertureHeight - 6)
+            .shadow(color: .black.opacity(0.82), radius: 2)
+    }
 
-                Ellipse()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.16),
-                                Color.white.opacity(0.035),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(
-                        width: proxy.size.width * 0.92,
-                        height: proxy.size.height * 0.58
-                    )
-                    .offset(y: -proxy.size.height * 0.26)
-                    .blur(radius: 7)
-                    .blendMode(.screen)
-
+    private var centerPayLine: some View {
+        HStack(spacing: Metrics.apertureSpacing) {
+            ForEach(0..<3, id: \.self) { _ in
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color.clear,
-                                Color.white.opacity(0.18),
-                                Color.clear
-                            ],
+                            colors: [.clear, .white.opacity(0.80), .clear],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .frame(
-                        width: proxy.size.width * 0.74,
-                        height: 1.2
-                    )
-                    .offset(y: proxy.size.height * 0.31)
-                    .blur(radius: 0.7)
+                    .frame(width: Metrics.apertureWidth - 7, height: 1)
             }
         }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
+        .opacity(0.18 + stopLineFlashOpacity * 0.82)
+        .shadow(
+            color: machineGlow.opacity(stopLineFlashOpacity),
+            radius: 5
         )
-        .padding(8)
+        .allowsHitTesting(false)
     }
 
-    private var reelStopStrobe: some View {
+    private var stopFlashOverlay: some View {
         GeometryReader { proxy in
             ZStack {
-                if let index = stoppedFlashIndex {
-                    let width = proxy.size.width / 3
-
+                if let stoppedFlashIndex {
+                    let reelStride = Metrics.apertureWidth + Metrics.apertureSpacing
                     RoundedRectangle(
-                        cornerRadius: 11,
+                        cornerRadius: Metrics.apertureCornerRadius,
                         style: .continuous
                     )
                     .fill(
                         LinearGradient(
-                            colors: strobeColors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(
-                        width: max(width - 9, 0),
-                        height: max(proxy.size.height - 18, 0)
-                    )
-                    .position(
-                        x: width * (CGFloat(index) + 0.5),
-                        y: proxy.size.height / 2
-                    )
-                    .opacity(stoppedFlashOpacity)
-                    .blendMode(.screen)
-                    .shadow(
-                        color: machineGlow.opacity(0.95),
-                        radius: 18
-                    )
-                }
-
-                RoundedRectangle(
-                    cornerRadius: 17,
-                    style: .continuous
-                )
-                .fill(
-                    heatLevel == .premium
-                        ? AnyShapeStyle(
-                            AngularGradient(
-                                colors: [
-                                    .red, .orange, .yellow,
-                                    .green, .cyan, .blue,
-                                    .purple, .red
-                                ],
-                                center: .center
-                            )
-                        )
-                        : AnyShapeStyle(Color.white)
-                )
-                .opacity(wholeReelFlashOpacity)
-                .blendMode(.screen)
-            }
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-        )
-        .padding(8)
-    }
-
-    private var strobeColors: [Color] {
-        if heatLevel == .premium {
-            return [
-                Color.white,
-                Color.cyan.opacity(0.95),
-                Color.purple.opacity(0.85),
-                Color.white
-            ]
-        }
-
-        return [
-            Color.white,
-            machineGlow.opacity(0.82),
-            Color.white.opacity(0.92)
-        ]
-    }
-
-    private var reelGlassReflection: some View {
-        GeometryReader { proxy in
-            LinearGradient(
-                colors: [
-                    Color.clear,
-                    Color.white.opacity(0.04),
-                    Color.white.opacity(0.28),
-                    Color.white.opacity(0.08),
-                    Color.clear
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(
-                width: proxy.size.width * 0.34,
-                height: proxy.size.height * 1.7
-            )
-            .rotationEffect(.degrees(18))
-            .offset(
-                x: proxy.size.width * glassSweepOffset,
-                y: -proxy.size.height * 0.35
-            )
-            .blendMode(.screen)
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-        )
-        .padding(8)
-    }
-
-    private var stopSparkOverlay: some View {
-        GeometryReader { proxy in
-            ZStack {
-                ForEach(0..<28, id: \.self) { index in
-                    let angle = Double(index) * (360.0 / 28.0)
-                    let radians = angle * .pi / 180
-                    let distance =
-                        CGFloat(24 + (index % 7) * 7)
-                        * sparkBurstProgress
-
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white,
-                                    index.isMultiple(of: 2)
-                                        ? Color.yellow
-                                        : heatLevel.lampColor,
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(
-                            width: CGFloat(10 + index % 5 * 4),
-                            height: 2.4
-                        )
-                        .rotationEffect(.degrees(angle))
-                        .position(
-                            x: proxy.size.width / 2
-                                + cos(radians) * distance,
-                            y: proxy.size.height / 2
-                                + sin(radians) * distance
-                        )
-                        .opacity(
-                            sparkBurstOpacity
-                                * (1 - Double(sparkBurstProgress) * 0.72)
-                        )
-                        .shadow(
-                            color:
-                                index.isMultiple(of: 2)
-                                    ? Color.yellow.opacity(0.9)
-                                    : heatLevel.lampColor.opacity(0.9),
-                            radius: 5
-                        )
-                }
-            }
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-        )
-        .padding(8)
-    }
-
-    private func reelFrameGlow(
-        size: CGSize,
-        time: Double
-    ) -> some View {
-        HStack(spacing: 7) {
-            ForEach(0..<3, id: \.self) { index in
-                let active =
-                    isSpinning
-                    && stoppedReelCount <= index
-
-                let pulse =
-                    0.78
-                    + 0.22
-                    * sin(
-                        time * 5.2
-                        + Double(index) * 1.35
-                    )
-
-                RoundedRectangle(
-                    cornerRadius: 11,
-                    style: .continuous
-                )
-                .stroke(
-                    reelLightGradient(
-                        index: index,
-                        time: time
-                    ),
-                    lineWidth: active ? 1.35 : 0.65
-                )
-                .opacity(
-                    active
-                        ? 0.24 + pulse * 0.16
-                        : 0.06
-                )
-                .shadow(
-                    color:
-                        reelLampColor(
-                            index: index,
-                            time: time
-                        )
-                        .opacity(
-                            active
-                                ? 0.38
-                                : 0
-                        ),
-                    radius: active ? 5 : 0
-                )
-            }
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 7)
-    }
-
-    private func reelSeparatorLights(
-        size: CGSize,
-        time: Double
-    ) -> some View {
-        let innerWidth =
-            max(size.width - 26, 0)
-
-        let reelWidth =
-            max(
-                (innerWidth - 14) / 3,
-                0
-            )
-
-        let firstX =
-            13 + reelWidth + 3.5
-
-        let secondX =
-            firstX + reelWidth + 7
-
-        return ZStack {
-            separatorLight(
-                xPosition: firstX,
-                active:
-                    isSpinning
-                    && stoppedReelCount <= 0,
-                time: time,
-                phase: 0
-            )
-
-            separatorLight(
-                xPosition: secondX,
-                active:
-                    isSpinning
-                    && stoppedReelCount <= 1,
-                time: time,
-                phase: 1.2
-            )
-        }
-    }
-
-    private func separatorLight(
-        xPosition: CGFloat,
-        active: Bool,
-        time: Double,
-        phase: Double
-    ) -> some View {
-        let travellingPosition =
-            (
-                sin(
-                    time * 3.6 + phase
-                )
-                + 1
-            )
-            / 2
-
-        return ZStack {
-            Capsule()
-                .fill(
-                    Color.black.opacity(0.82)
-                )
-                .frame(
-                    width: 5,
-                    height: 116
-                )
-
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            reelLampColor(
-                                index: Int(phase),
-                                time: time
-                            )
-                            .opacity(active ? 0.10 : 0),
-                            Color.white.opacity(
-                                active ? 0.40 : 0
-                            ),
-                            reelLampColor(
-                                index: Int(phase),
-                                time: time
-                            )
-                            .opacity(active ? 0.12 : 0),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(
-                    width: 1.5,
-                    height: 94
-                )
-                .opacity(active ? 0.55 : 0)
-
-            Capsule()
-                .fill(
-                    reelLampColor(
-                        index: Int(phase),
-                        time: time
-                    )
-                )
-                .frame(
-                    width: 2.2,
-                    height: 18
-                )
-                .blur(radius: 1.2)
-                .offset(
-                    y:
-                        CGFloat(
-                            travellingPosition
-                        )
-                        * 76
-                        - 38
-                )
-                .opacity(active ? 0.72 : 0)
-                .shadow(
-                    color:
-                        reelLampColor(
-                            index: Int(phase),
-                            time: time
-                        )
-                        .opacity(0.72),
-                    radius: 4
-                )
-        }
-        .position(
-            x: xPosition,
-            y: 69
-        )
-    }
-
-    private func outerGlassGlow(
-        size: CGSize,
-        time: Double
-    ) -> some View {
-        let pulse =
-            0.72
-            + 0.28
-            * sin(time * 3.8)
-
-        return RoundedRectangle(
-            cornerRadius: 15,
-            style: .continuous
-        )
-        .stroke(
-            LinearGradient(
-                colors: [
-                    Color.clear,
-                    machineGlow.opacity(
-                        isSpinning
-                            ? 0.13 + pulse * 0.08
-                            : 0.03
-                    ),
-                    Color.white.opacity(
-                        isSpinning
-                            ? 0.10
-                            : 0.02
-                    ),
-                    machineGlow.opacity(
-                        isSpinning
-                            ? 0.13 + pulse * 0.08
-                            : 0.03
-                    ),
-                    Color.clear
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            ),
-            lineWidth: 1
-        )
-        .padding(2)
-        .shadow(
-            color:
-                machineGlow.opacity(
-                    isSpinning
-                        ? 0.15
-                        : 0
-                ),
-            radius: 7
-        )
-    }
-
-    private func reelLightGradient(
-        index: Int,
-        time: Double
-    ) -> LinearGradient {
-        if heatLevel == .premium {
-            let colors = premiumColors(
-                index: index,
-                time: time
-            )
-
-            return LinearGradient(
-                colors: colors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-
-        return LinearGradient(
-            colors: [
-                Color.clear,
-                heatLevel.lampColor.opacity(0.38),
-                Color.white.opacity(0.42),
-                heatLevel.lampColor.opacity(0.32),
-                Color.clear
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private func reelLampColor(
-        index: Int,
-        time: Double
-    ) -> Color {
-        guard heatLevel == .premium else {
-            return heatLevel.lampColor
-        }
-
-        let colors: [Color] = [
-            .red,
-            .orange,
-            .yellow,
-            .green,
-            .cyan,
-            .blue,
-            .purple
-        ]
-
-        let movingIndex =
-            positiveModulo(
-                Int(time * 4.5)
-                + index * 2,
-                colors.count
-            )
-
-        return colors[movingIndex]
-    }
-
-    private func premiumColors(
-        index: Int,
-        time: Double
-    ) -> [Color] {
-        let colors: [Color] = [
-            .red,
-            .orange,
-            .yellow,
-            .green,
-            .cyan,
-            .blue,
-            .purple
-        ]
-
-        let offset =
-            positiveModulo(
-                Int(time * 4.0)
-                + index * 2,
-                colors.count
-            )
-
-        return (0..<5).map { step in
-            colors[
-                positiveModulo(
-                    offset + step,
-                    colors.count
-                )
-            ]
-            .opacity(0.40)
-        }
-    }
-
-    private func playStopStrobe(
-        for index: Int
-    ) {
-        stoppedFlashIndex = index
-        stoppedFlashOpacity = 0
-        wholeReelFlashOpacity = 0
-
-        withAnimation(.easeOut(duration: 0.035)) {
-            stoppedFlashOpacity =
-                index == 2
-                    ? 0.92
-                    : 0.68
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.045
-        ) {
-            withAnimation(.easeOut(duration: 0.16)) {
-                stoppedFlashOpacity = 0
-            }
-        }
-
-        guard index == 2 else {
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + 0.22
-            ) {
-                stoppedFlashIndex = nil
-            }
-            return
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.055
-        ) {
-            withAnimation(.easeOut(duration: 0.04)) {
-                wholeReelFlashOpacity =
-                    heatLevel == .premium
-                        ? 0.72
-                        : 0.38
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.11
-        ) {
-            withAnimation(.easeOut(duration: 0.24)) {
-                wholeReelFlashOpacity = 0
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.34
-        ) {
-            stoppedFlashIndex = nil
-        }
-    }
-
-    private func positiveModulo(
-        _ value: Int,
-        _ divisor: Int
-    ) -> Int {
-        guard divisor > 0 else {
-            return 0
-        }
-
-        let remainder = value % divisor
-
-        return
-            remainder >= 0
-                ? remainder
-                : remainder + divisor
-    }
-
-
-}
-
-
-
-private struct ReelSlipEnergyOverlay: View {
-    let trigger: Int
-    let reelIndex: Int
-    let intensity: CGFloat
-    let glowColor: Color
-
-    @State private var offsetY: CGFloat = -34
-    @State private var opacity = 0.0
-    @State private var scaleY: CGFloat = 0.55
-
-    var body: some View {
-        GeometryReader { proxy in
-            let reelWidth = max((proxy.size.width - 14) / 3, 1)
-            let safeIndex = min(max(reelIndex, 0), 2)
-            let centerX =
-                reelWidth / 2
-                + CGFloat(safeIndex) * (reelWidth + 7)
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                Color.white.opacity(0.88),
-                                glowColor.opacity(0.62),
-                                .clear
-                            ],
+                            colors: [.clear, .white, reelGlowColor(index: stoppedFlashIndex), .clear],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                     .frame(
-                        width: reelWidth,
-                        height: proxy.size.height * 0.72
+                        width: Metrics.apertureWidth,
+                        height: Metrics.apertureHeight
                     )
                     .position(
-                        x: centerX,
-                        y: proxy.size.height / 2 + offsetY
+                        x: proxy.size.width / 2
+                            + CGFloat(stoppedFlashIndex - 1) * reelStride,
+                        y: proxy.size.height / 2
                     )
-                    .scaleEffect(x: 1, y: scaleY)
-                    .opacity(opacity)
+                    .opacity(stoppedFlashOpacity)
                     .blendMode(.screen)
-
-                ForEach(0..<5, id: \.self) { line in
-                    Capsule()
-                        .fill(Color.white.opacity(0.78))
-                        .frame(
-                            width: reelWidth * 0.72,
-                            height: 1.5 + CGFloat(line % 2)
-                        )
-                        .position(
-                            x: centerX,
-                            y:
-                                proxy.size.height * 0.28
-                                + CGFloat(line) * 15
-                                + offsetY
-                        )
-                        .opacity(opacity * (1 - Double(line) * 0.12))
-                        .blur(radius: 0.5)
                 }
+
+                Color.white
+                    .opacity(wholeWindowFlashOpacity)
+                    .blendMode(.screen)
             }
         }
-        .onChange(of: trigger) { _, newValue in
-            guard newValue > 0, reelIndex >= 0 else { return }
-            playSlip()
+        .allowsHitTesting(false)
+    }
+
+    private var slipEnergyOverlay: some View {
+        GeometryReader { proxy in
+            let safeIndex = min(max(reelSlipIndex, 0), 2)
+            let stride = Metrics.apertureWidth + Metrics.apertureSpacing
+            let centerX = proxy.size.width / 2 + CGFloat(safeIndex - 1) * stride
+
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(0.86), machineGlow.opacity(0.52), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: Metrics.apertureWidth * 0.72, height: 56)
+                    .position(x: centerX, y: proxy.size.height / 2 + slipEnergyOffset)
+                    .blur(radius: 2)
+
+                ForEach(0..<4, id: \.self) { line in
+                    Capsule()
+                        .fill(Color.white.opacity(0.72))
+                        .frame(width: Metrics.apertureWidth * 0.62, height: 1.2)
+                        .position(
+                            x: centerX,
+                            y: proxy.size.height / 2
+                                + slipEnergyOffset
+                                + CGFloat(line * 9 - 14)
+                        )
+                }
+            }
+            .opacity(slipEnergyOpacity)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var sparkOverlay: some View {
+        GeometryReader { proxy in
+            ZStack {
+                ForEach(0..<24, id: \.self) { index in
+                    let angle = Double(index) * 15
+                    let radians = angle * .pi / 180
+                    let distance = CGFloat(20 + index % 6 * 7) * sparkBurstProgress
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.white, reelGlowColor(index: index), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: CGFloat(9 + index % 4 * 3), height: 1.8)
+                        .rotationEffect(.degrees(angle))
+                        .position(
+                            x: proxy.size.width / 2 + cos(radians) * distance,
+                            y: proxy.size.height / 2 + sin(radians) * distance
+                        )
+                }
+            }
+            .opacity(
+                sparkBurstOpacity
+                    * max(0, 1 - Double(sparkBurstProgress) * 0.72)
+            )
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var sharedGlass: some View {
+        GeometryReader { proxy in
+            ZStack {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.30), location: 0),
+                        .init(color: .clear, location: 0.22),
+                        .init(color: .clear, location: 0.76),
+                        .init(color: Color.black.opacity(0.34), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                LinearGradient(
+                    colors: [.clear, .white.opacity(0.05), .white.opacity(0.28), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: proxy.size.width * 0.32, height: proxy.size.height * 1.7)
+                .rotationEffect(.degrees(18))
+                .offset(
+                    x: proxy.size.width * glassSweepOffset,
+                    y: -proxy.size.height * 0.34
+                )
+                .blendMode(.screen)
+
+                Ellipse()
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.15), .white.opacity(0.025), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: proxy.size.width * 0.90, height: 58)
+                    .offset(y: -44)
+                    .blur(radius: 7)
+                    .blendMode(.screen)
+            }
+        }
+        .padding(6)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: Metrics.glassCornerRadius,
+                style: .continuous
+            )
+        )
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var housingBorder: some View {
+        if showsHousingDecoration {
+            RoundedRectangle(
+                cornerRadius: Metrics.housingCornerRadius,
+                style: .continuous
+            )
+            .stroke(
+                LinearGradient(
+                    colors: [.white.opacity(0.58), .gray.opacity(0.24), .black],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 3
+            )
+            .allowsHitTesting(false)
         }
     }
 
-    private func playSlip() {
-        offsetY = -38
-        opacity = 0
-        scaleY = 0.48
+    private func reelGlowColor(index: Int) -> Color {
+        guard heatLevel == .premium else { return heatLevel.lampColor }
+        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple]
+        return colors[(max(index, 0) + reelSlipTrigger) % colors.count]
+    }
 
-        withAnimation(.easeOut(duration: 0.055)) {
-            opacity = min(1, 0.60 + Double(intensity) * 0.36)
-            scaleY = 1.08 + intensity * 0.22
+    private func playStopFlash(for index: Int) {
+        stoppedFlashIndex = index
+        stoppedFlashOpacity = 0
+
+        withAnimation(.easeOut(duration: 0.04)) {
+            stoppedFlashOpacity = index == 2 ? 0.88 : 0.62
+        }
+        withAnimation(.easeOut(duration: 0.17).delay(0.045)) {
+            stoppedFlashOpacity = 0
         }
 
+        if index == 2 {
+            withAnimation(.easeOut(duration: 0.045).delay(0.05)) {
+                wholeWindowFlashOpacity = heatLevel == .premium ? 0.58 : 0.28
+            }
+            withAnimation(.easeOut(duration: 0.22).delay(0.10)) {
+                wholeWindowFlashOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+            if stoppedFlashIndex == index {
+                stoppedFlashIndex = nil
+            }
+        }
+    }
+
+    private func playSlipEnergy() {
+        slipEnergyOffset = -52
+        slipEnergyOpacity = 0
+
+        withAnimation(.easeOut(duration: 0.045)) {
+            slipEnergyOpacity = min(1, 0.52 + Double(reelSlipIntensity) * 0.36)
+        }
         withAnimation(
-            .easeIn(duration: 0.18 + Double(intensity) * 0.10)
-            .delay(0.045)
+            .easeIn(duration: 0.16 + Double(reelSlipIntensity) * 0.08)
+            .delay(0.035)
         ) {
-            offsetY = 54 + intensity * 28
-            opacity = 0
-            scaleY = 1.35
+            slipEnergyOffset = 54 + reelSlipIntensity * 20
+            slipEnergyOpacity = 0
         }
     }
 }
 
+private struct CylinderSurface: View {
+    var body: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(red: 0.48, green: 0.49, blue: 0.48), location: 0),
+                        .init(color: Color(red: 0.90, green: 0.90, blue: 0.86), location: 0.13),
+                        .init(color: Color(red: 1.00, green: 0.995, blue: 0.96), location: 0.50),
+                        .init(color: Color(red: 0.89, green: 0.89, blue: 0.85), location: 0.87),
+                        .init(color: Color(red: 0.44, green: 0.45, blue: 0.44), location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .overlay {
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.34),
+                        .clear,
+                        .clear,
+                        Color.black.opacity(0.37)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+    }
+}
+
+private struct CylinderApertureOptics: View {
+    let isSpinning: Bool
+    let glowColor: Color
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.black.opacity(0.74), .black.opacity(0.12), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 12)
+
+                Spacer(minLength: 0)
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.12), .black.opacity(0.74)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 12)
+            }
+
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.black.opacity(0.58), .black.opacity(0.16), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 19)
+
+                Spacer(minLength: 0)
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.17), .black.opacity(0.60)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 19)
+            }
+
+            LinearGradient(
+                colors: [.clear, .white.opacity(isSpinning ? 0.11 : 0.07), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 19)
+            .blur(radius: 4)
+            .blendMode(.screen)
+
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(glowColor.opacity(isSpinning ? 0.10 : 0.025), lineWidth: 0.8)
+        }
+        .allowsHitTesting(false)
+    }
+}

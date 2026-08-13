@@ -87,6 +87,7 @@ final class SlotAnimationController: ObservableObject {
 
     func prepare(soundEnabled: Bool) {
         sound.prepare(enabled: soundEnabled)
+        SlotHapticManager.shared.prepare()
     }
 
     // MARK: - Lever
@@ -432,7 +433,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SPINNING"
         subStatusText = "GOOD LUCK"
 
-        await sleep(3.20)
+        await sleep(2.05)
 
         await stopReels(
             intervals: [
@@ -455,7 +456,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SPINNING"
         subStatusText = "GOOD LUCK"
 
-        await sleep(2.10)
+        await sleep(1.36)
 
         guard !Task.isCancelled else { return }
 
@@ -464,7 +465,7 @@ final class SlotAnimationController: ObservableObject {
         subStatusText = "EXPECTATION RISING"
         stage = .chance
 
-        await sleep(1.65)
+        await sleep(1.07)
 
         guard !Task.isCancelled else { return }
 
@@ -475,7 +476,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "CHANCE MODE"
         subStatusText = "DO NOT LOOK AWAY"
 
-        await sleep(2.05)
+        await sleep(1.33)
 
         await stopReels(
             intervals: [
@@ -498,7 +499,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SPINNING"
         subStatusText = "GOOD LUCK"
 
-        await sleep(1.75)
+        await sleep(1.14)
 
         guard !Task.isCancelled else { return }
 
@@ -509,7 +510,7 @@ final class SlotAnimationController: ObservableObject {
         stage = .idle
         sound.playWarning()
 
-        await sleep(2.15)
+        await sleep(1.40)
 
         guard !Task.isCancelled else { return }
 
@@ -519,7 +520,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SUPER MODE"
         subStatusText = "FINAL PHASE"
 
-        await sleep(2.25)
+        await sleep(1.46)
 
         await stopReels(
             intervals: [
@@ -544,7 +545,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SPINNING"
         subStatusText = "GOOD LUCK"
 
-        await sleep(1.65)
+        await sleep(1.07)
 
         guard !Task.isCancelled else { return }
 
@@ -554,7 +555,7 @@ final class SlotAnimationController: ObservableObject {
         stage = .idle
         sound.stopSpin()
 
-        await sleep(1.55)
+        await sleep(1.01)
 
         guard !Task.isCancelled else { return }
 
@@ -562,7 +563,7 @@ final class SlotAnimationController: ObservableObject {
         stage = .idle
         sound.playWarning()
 
-        await sleep(2.20)
+        await sleep(1.43)
 
         guard !Task.isCancelled else { return }
 
@@ -572,7 +573,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "WARNING MODE"
         subStatusText = "MAXIMUM EXPECTATION"
 
-        await sleep(2.45)
+        await sleep(1.59)
 
         await stopReels(
             intervals: [
@@ -603,7 +604,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SPINNING"
         subStatusText = "GOOD LUCK"
 
-        await sleep(1.65)
+        await sleep(1.07)
 
         guard !Task.isCancelled else { return }
 
@@ -613,7 +614,7 @@ final class SlotAnimationController: ObservableObject {
         stage = .idle
         sound.stopSpin()
 
-        await sleep(1.35)
+        await sleep(0.88)
 
         guard !Task.isCancelled else { return }
 
@@ -622,7 +623,7 @@ final class SlotAnimationController: ObservableObject {
         shouldReverseReels = true
         sound.playWarning()
 
-        await sleep(2.45)
+        await sleep(1.59)
 
         guard !Task.isCancelled else { return }
 
@@ -631,7 +632,7 @@ final class SlotAnimationController: ObservableObject {
 
         sound.intensifySpin()
 
-        await sleep(1.85)
+        await sleep(1.20)
 
         guard !Task.isCancelled else { return }
 
@@ -640,7 +641,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "REVERSE MODE"
         subStatusText = "PREMIUM POSSIBILITY"
 
-        await sleep(2.40)
+        await sleep(1.56)
 
         await stopReels(
             intervals: [
@@ -672,7 +673,7 @@ final class SlotAnimationController: ObservableObject {
         statusText = "SPINNING"
         subStatusText = "PREMIUM TEST"
 
-        await sleep(2.50)
+        await sleep(1.62)
         guard !Task.isCancelled else { return }
 
         heatLevel = .premium
@@ -779,13 +780,12 @@ final class SlotAnimationController: ObservableObject {
             cinematicPhase = .pushStandby
             cinematicTrigger += 1
 
-            // 右リールだけ回転中
-            // 始動SEなしでリール回転ループのみ開始
+            // 第3リールはPUSH入力まで回転状態を維持する。
             sound.startSpin()
             sound.intensifySpin()
 
             statusText = ""
-            subStatusText = "PUSH TO STOP"
+            subStatusText = "PUSH FOR BONUS"
 
             // 復帰演出を見せる
             await sleep(1.05)
@@ -819,7 +819,7 @@ final class SlotAnimationController: ObservableObject {
                 return
             }
 
-            // PUSHを押した瞬間に最後の右リールを停止
+            // PUSH入力を唯一のトリガーとして第3リールを停止する。
             await performSlipIfNeeded(index: 2)
 
             guard !Task.isCancelled else {
@@ -964,51 +964,7 @@ final class SlotAnimationController: ObservableObject {
         index: Int,
         isFinal: Bool
     ) {
-        let style: UIImpactFeedbackGenerator.FeedbackStyle
-        let intensity: CGFloat
-
-        switch index {
-        case 0:
-            style = .light
-            intensity = 0.68
-
-        case 1:
-            style = .medium
-            intensity = 0.84
-
-        default:
-            style = .heavy
-            intensity = 1.0
-        }
-
-        let impact = UIImpactFeedbackGenerator(style: style)
-        impact.prepare()
-        impact.impactOccurred(intensity: intensity)
-
-        guard isFinal else { return }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.085
-        ) {
-            let lockImpact = UIImpactFeedbackGenerator(style: .rigid)
-            lockImpact.prepare()
-            lockImpact.impactOccurred(intensity: 0.72)
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.18
-        ) {
-            switch self.resultTitle {
-            case "参加費無料券",
-                 "ガット張り工賃無料券":
-                let notification = UINotificationFeedbackGenerator()
-                notification.prepare()
-                notification.notificationOccurred(.success)
-
-            default:
-                break
-            }
-        }
+        SlotHapticManager.shared.reelStop(index: index, isFinal: isFinal)
     }
 
     // MARK: - Result Sound

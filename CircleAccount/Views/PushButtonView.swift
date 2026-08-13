@@ -217,6 +217,7 @@ struct PushButtonView: View {
     private func handlePush() {
         guard isEnabled else { return }
 
+        SlotHapticManager.shared.regularStopPushClick()
         playShockwave()
 
         withAnimation(.easeOut(duration: 0.055)) {
