@@ -77,6 +77,7 @@ struct SlotLuckyLampView: View {
                 .opacity(blackoutOpacity)
         }
         .frame(width: 132, height: 92)
+        .clipShape(Ellipse())
         .scaleEffect(revealScale)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("SiRiUS LUCKY CHANCEランプ")
@@ -122,6 +123,10 @@ struct SlotLuckyLampView: View {
                     .blendMode(.screen)
             }
         }
+        .mask {
+            Ellipse()
+                .frame(width: 124, height: 84)
+        }
         .allowsHitTesting(false)
     }
 
@@ -144,6 +149,10 @@ struct SlotLuckyLampView: View {
             .blur(radius: 18)
             .opacity(leakOpacity)
             .blendMode(.screen)
+            .mask {
+                Ellipse()
+                    .frame(width: 124, height: 84)
+            }
             .allowsHitTesting(false)
     }
 

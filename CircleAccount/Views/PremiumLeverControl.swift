@@ -110,8 +110,9 @@ struct PremiumLeverControl: View {
                 .blur(radius: 1)
         }
         .shadow(color: Color.red.opacity(0.65), radius: 10)
-        .shadow(color: glowColor.opacity(0.55), radius: 14)
-        .opacity(enabled ? 1.0 : 0.58)
+        .shadow(color: Color.red.opacity(0.42), radius: 14)
+        // 操作可否はgesture側だけで制御する。回転中もノブの発色は変えない。
+        .opacity(1.0)
     }
 
 }

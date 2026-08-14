@@ -287,8 +287,8 @@ struct ReelHousingView: View {
     private var sparkOverlay: some View {
         GeometryReader { proxy in
             ZStack {
-                ForEach(0..<24, id: \.self) { index in
-                    let angle = Double(index) * 15
+                ForEach(0..<8, id: \.self) { index in
+                    let angle = Double(index) * 45
                     let radians = angle * .pi / 180
                     let distance = CGFloat(20 + index % 6 * 7) * sparkBurstProgress
 
@@ -300,7 +300,7 @@ struct ReelHousingView: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: CGFloat(9 + index % 4 * 3), height: 1.8)
+                        .frame(width: CGFloat(7 + index % 3 * 2), height: 1.1)
                         .rotationEffect(.degrees(angle))
                         .position(
                             x: proxy.size.width / 2 + cos(radians) * distance,
@@ -309,7 +309,7 @@ struct ReelHousingView: View {
                 }
             }
             .opacity(
-                sparkBurstOpacity
+                sparkBurstOpacity * 0.26
                     * max(0, 1 - Double(sparkBurstProgress) * 0.72)
             )
         }
