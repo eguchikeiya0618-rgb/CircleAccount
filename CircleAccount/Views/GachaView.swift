@@ -4,9 +4,6 @@ import UIKit
 
 struct GachaView: View {
     private let db = Firestore.firestore()
-      private let forceSSRTestMode = true
-      private let forceRainbowSSR = true
-
     @AppStorage("currentUserId")
     private var currentUserId = ""
 
@@ -35,19 +32,6 @@ struct GachaView: View {
     }
 
     private var reelSymbols: [String] {
-        if GachaTestConfiguration.forceSRStopSoundTestMode {
-            return ["7", "7", "BAR"]
-        }
-
-        // SSR演出確認モード中は、抽選結果に関係なく777を表示する
-        if forceSSRTestMode {
-            if forceRainbowSSR {
-                return ["🌈7", "🌈7", "🌈7"]
-            } else {
-                return ["7", "7", "7"]
-            }
-        }
-
         guard let prize = pendingPrize else {
             return ["BAR", "🔔", "🍇"]
         }
@@ -496,26 +480,10 @@ struct GachaView: View {
     }
 
     private func animationRoute(for prize: GachaPrize) -> SlotAnimationRoute {
-        if GachaTestConfiguration.forceSRStopSoundTestMode {
-            return .superChance
-        }
-
-        // SSR演出確認モード中は、必ずPremiumルートを使う
-        if forceSSRTestMode {
-            return .premium
-        }
-
         switch prize.rarity {
         case 5...:
-            let premiumRoll = Int.random(in: 0..<100)
-
-            if premiumRoll < 45 {
-                return .premium
-            } else if premiumRoll < 75 {
-                return .reverse
-            } else {
-                return .warning
-            }
+            // SSRは完成版Premiumシーケンスを唯一のマスター経路とする。
+            return .premium
 
         case 4:
             return Int.random(in: 0..<100) < 55

@@ -167,6 +167,12 @@ struct PremiumSlotMachineView: View {
     private var isRainbowJackpot: Bool {
         safeSymbols == ["🌈7", "🌈7", "🌈7"]
     }
+
+    private var isStandardRResult: Bool {
+        safeSymbols == ["BAR", "BAR", "BAR"]
+            || safeSymbols == ["🔔", "🔔", "🔔"]
+            || safeSymbols == ["🍇", "🍇", "🍇"]
+    }
     
     var body: some View {
         ZStack(alignment: .center) {
@@ -493,7 +499,7 @@ struct PremiumSlotMachineView: View {
             if spinning {
                 resetLightingEffects(resumeForSpin: true)
                 SlotSoundManager.shared.setDefaultJackpotSoundEnabled(
-                    !isRainbowJackpot
+                    !isSevenJackpot
                 )
                 hasActivePremiumSpin = true
                 isGekiAtsuVisible = false
@@ -524,7 +530,7 @@ struct PremiumSlotMachineView: View {
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.50) {
-                guard isRainbowJackpot,
+                guard isSevenJackpot,
                       hasActivePremiumSpin,
                       !hasPlayedBlackoutCharge else {
                     return
@@ -548,11 +554,7 @@ struct PremiumSlotMachineView: View {
         .onChange(of: cinematicPhase) { _, phase in
             switch phase {
             case .kyuiin:
-                if safeSymbols == ["🌈7", "🌈7", "🌈7"] {
-                    luckyLampMode = .premium
-                    luckyLampTrigger += 1
-                    
-                } else {
+                if !isSevenJackpot {
                     luckyLampMode = .gold
                     luckyLampTrigger += 1
                 }
@@ -564,19 +566,19 @@ struct PremiumSlotMachineView: View {
                 SlotSoundManager.shared.playBlackoutCharge()
                 
             case .finalSilence:
-                if isRainbowJackpot,
+                if isSevenJackpot,
                    hasActivePremiumSpin,
                    !hasStartedMovieSequence {
                     hasStartedMovieSequence = true
                     startPremiumTypewriter()
                 } else if safeSymbols == ["7", "7", "BAR"] {
                     startPremiumTypewriter()
-                } else if !isRainbowJackpot {
+                } else if !isSevenJackpot {
                     nextEpisodePreviewTrigger += 1
                 }
                 
             case .doorOpen:
-                guard isRainbowJackpot,
+                guard isSevenJackpot,
                       hasActivePremiumSpin,
                       hasPremiumTypewriterFinished,
                       !hasStartedVMovie else {
@@ -590,8 +592,9 @@ struct PremiumSlotMachineView: View {
                 SlotSoundManager.shared.playVMovieSequenceSounds()
 
             case .ticketReady:
-                // SR（7・7・BAR）はSSRと同じ筐体内カード表示を直接使用する。
-                guard safeSymbols == ["7", "7", "BAR"] else { break }
+                // SR・RはSSRと同じ筐体内カード表示を直接使用する。
+                guard safeSymbols == ["7", "7", "BAR"]
+                        || isStandardRResult else { break }
                 withAnimation(.easeIn(duration: 0.20)) {
                     premiumTicketVisible = true
                 }
@@ -638,12 +641,12 @@ struct PremiumSlotMachineView: View {
             }
             
             if newValue == 2,
-               (isRainbowJackpot || safeSymbols == ["7", "7", "BAR"]) {
+               (isSevenJackpot || safeSymbols == ["7", "7", "BAR"]) {
                 playGekiAtsuSequence()
             }
             
             if newValue >= 3 {
-                if isRainbowJackpot {
+                if isSevenJackpot {
                     return
                 }
                 
@@ -1880,7 +1883,7 @@ struct PremiumSlotMachineView: View {
         }
 
         withAnimation(
-            .easeInOut(duration: 0.28)
+            .easeInOut(duration: 0.45)
                 .repeatForever(autoreverses: true)
         ) {
             pushTextPulse = true
@@ -2058,7 +2061,10 @@ struct PremiumSlotMachineView: View {
         SlotSoundManager.shared.stopSpin()
 
         guard isSevenJackpot else {
-            playResultSound()
+            // Rでは旧図柄別結果音を使わず、通常STOP音と共通カード音だけにする。
+            if !isStandardRResult {
+                playResultSound()
+            }
             playResultCelebration()
             return
         }
@@ -2410,6 +2416,8 @@ private struct PremiumPushEmphasisOverlay: View {
     let glowPulse: Bool
     let sweepProgress: CGFloat
 
+    @State private var promptPulse = false
+
     private let arrowCount = 3
 
     var body: some View {
@@ -2477,7 +2485,13 @@ private struct PremiumPushEmphasisOverlay: View {
                             width: promptWidth,
                             height: promptHeight
                         )
+                        .scaleEffect(promptPulse ? 1.05 : 1.00)
                         .shadow(color: Color.black.opacity(0.46), radius: 8, y: 3)
+                        .shadow(
+                            color: Color(red: 0.56, green: 0.22, blue: 0.92)
+                                .opacity(promptPulse ? 0.42 : 0.16),
+                            radius: promptPulse ? 14 : 7
+                        )
 
                     // 矢印の常時点灯レイヤー。
                     Image("PremiumPushArrows")
@@ -2581,12 +2595,31 @@ private struct PremiumPushEmphasisOverlay: View {
                         .opacity(glowPulse ? 0.72 : 0.28),
                     radius: glowPulse ? 14 : 7
                 )
+                .shadow(
+                    color: Color(red: 0.56, green: 0.22, blue: 0.92)
+                        .opacity(glowPulse ? 0.30 : 0.12),
+                    radius: glowPulse ? 11 : 6
+                )
                 .position(
                     x: proxy.size.width / 2,
                     y: proxy.size.height * 0.54
                 )
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .onAppear {
+            promptPulse = false
+            DispatchQueue.main.async {
+                withAnimation(
+                    .easeInOut(duration: 0.45)
+                        .repeatForever(autoreverses: true)
+                ) {
+                    promptPulse = true
+                }
+            }
+        }
+        .onDisappear {
+            promptPulse = false
         }
     }
 

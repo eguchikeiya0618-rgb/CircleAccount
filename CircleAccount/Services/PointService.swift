@@ -2,8 +2,8 @@ import Foundation
 import FirebaseFirestore
 
 enum GachaTestConfiguration {
-    // stop_sr.wav確認後はfalseへ戻すだけで通常抽選へ復帰する。
-    static let forceSRStopSoundTestMode = true
+    // falseへ戻すだけで通常の1/1/3/18/39/38%抽選へ復帰する。
+    static let usesSSRAndSRVerificationMode = true
 }
 
 struct GachaPrize {
@@ -288,13 +288,8 @@ final class PointService {
         let cost = 100
         let memberRef = db.collection("members").document(memberId)
 
-        let prize = GachaTestConfiguration.forceSRStopSoundTestMode
-            ? GachaPrize(
-                icon: "🏸",
-                title: "参加費半額券",
-                ticketField: "halfPriceTickets",
-                rarity: 4
-            )
+        let prize = GachaTestConfiguration.usesSSRAndSRVerificationMode
+            ? drawSSRAndSRVerificationPrize()
             : drawGachaPrize()
 
         db.runTransaction({ transaction, errorPointer in
@@ -361,6 +356,35 @@ final class PointService {
             }
         }
     }
+
+    private func drawSSRAndSRVerificationPrize() -> GachaPrize {
+        if Int.random(in: 0..<100) < 50 {
+            // SSR枠内では777と🌈777を均等に確認できるようにする。
+            if Bool.random() {
+                return GachaPrize(
+                    icon: "🎾",
+                    title: "ガット張り工賃無料券",
+                    ticketField: "stringingFreeTickets",
+                    rarity: 5
+                )
+            }
+
+            return GachaPrize(
+                icon: "🎁",
+                title: "参加費無料券",
+                ticketField: "freeTickets",
+                rarity: 5
+            )
+        }
+
+        return GachaPrize(
+            icon: "🏸",
+            title: "参加費半額券",
+            ticketField: "halfPriceTickets",
+            rarity: 4
+        )
+    }
+
     private func drawGachaPrize() -> GachaPrize {
         let number = Int.random(in: 1...100)
 

@@ -78,6 +78,15 @@ final class SlotAnimationController: ObservableObject {
         resultTitle == "参加費半額券"
     }
 
+    private var isRResult: Bool {
+        switch resultTitle {
+        case "参加費500円券", "対戦指名券", "優先ゲーム券":
+            return true
+        default:
+            return false
+        }
+    }
+
     private var animationTask: Task<Void, Never>?
     private var pushContinuation:
         CheckedContinuation<Void, Never>?
@@ -950,7 +959,11 @@ final class SlotAnimationController: ObservableObject {
             stopReel(index: 2)
             isSpinning = false
             sound.stopSpin()
-            playResultSound()
+
+            if isRResult {
+                // SRと同じく停止図柄の余韻を保ってから共通カードへ進む。
+                await sleep(3.0)
+            }
         }
     }
 
@@ -1066,27 +1079,6 @@ final class SlotAnimationController: ObservableObject {
         isFinal: Bool
     ) {
         SlotHapticManager.shared.reelStop(index: index, isFinal: isFinal)
-    }
-
-    // MARK: - Result Sound
-
-    private func playResultSound() {
-        switch resultTitle {
-        case "参加費無料券":
-            sound.playRainbowSeven()
-
-        case "ガット張り工賃無料券":
-            sound.playSeven()
-
-        case "対戦指名券":
-            sound.playBell()
-
-        case "優先ゲーム券":
-            sound.playGrape()
-
-        default:
-            break
-        }
     }
 
     // MARK: - SSR Physical PUSH
@@ -1241,7 +1233,7 @@ final class SlotAnimationController: ObservableObject {
     private func showCardAndFinish() async {
         cinematicPhase = .ticketReady
         cinematicTrigger += 1
-        stage = isSRResult ? .idle : .cardReveal
+        stage = (isSRResult || isRResult) ? .idle : .cardReveal
 
         statusText = "PRIZE GET"
         subStatusText = "CONGRATULATIONS"
