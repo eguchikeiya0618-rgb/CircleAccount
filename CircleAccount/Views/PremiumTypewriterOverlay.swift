@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct PremiumTypewriterOverlay: View {
+    var usesSRArtwork = false
     let onFinished: () -> Void
 
     private struct CharacterImage: Identifiable {
@@ -13,15 +14,26 @@ struct PremiumTypewriterOverlay: View {
         let assetName: String
     }
 
-    private let characterImages = [
-        CharacterImage(id: 0, assetName: "typewriter_next"),
-        CharacterImage(id: 1, assetName: "typewriter_time"),
-        CharacterImage(id: 2, assetName: "typewriter_destiny"),
-        CharacterImage(id: 3, assetName: "typewriter_fate"),
-        CharacterImage(id: 4, assetName: "typewriter_awake"),
-        CharacterImage(id: 5, assetName: "typewriter_awakening"),
-        CharacterImage(id: 6, assetName: "typewriter_exclamation")
-    ]
+    private var characterImages: [CharacterImage] {
+        [
+            CharacterImage(id: 0, assetName: "typewriter_next"),
+            CharacterImage(id: 1, assetName: "typewriter_time"),
+            CharacterImage(id: 2, assetName: "typewriter_destiny"),
+            CharacterImage(id: 3, assetName: "typewriter_fate"),
+            CharacterImage(id: 4, assetName: "typewriter_awake"),
+            CharacterImage(id: 5, assetName: "typewriter_awakening"),
+            CharacterImage(
+                id: 6,
+                assetName: usesSRArtwork
+                    ? "type_question"
+                    : "typewriter_exclamation"
+            )
+        ]
+    }
+
+    private var finalImageName: String {
+        usesSRArtwork ? "type_final_sr" : "typewriter_full"
+    }
 
     private let characterDisplayDuration: Duration = .milliseconds(250)
     private let exclamationDisplayDuration: Duration = .milliseconds(350)
@@ -58,7 +70,7 @@ struct PremiumTypewriterOverlay: View {
             }
             
             if isFullImageVisible {
-                Image("typewriter_full")
+                Image(finalImageName)
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()

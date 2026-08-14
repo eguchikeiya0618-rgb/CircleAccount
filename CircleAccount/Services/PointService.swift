@@ -1,6 +1,11 @@
 import Foundation
 import FirebaseFirestore
 
+enum GachaTestConfiguration {
+    // stop_sr.wav確認後はfalseへ戻すだけで通常抽選へ復帰する。
+    static let forceSRStopSoundTestMode = true
+}
+
 struct GachaPrize {
     let icon: String
     let title: String
@@ -283,7 +288,14 @@ final class PointService {
         let cost = 100
         let memberRef = db.collection("members").document(memberId)
 
-        let prize = drawGachaPrize()
+        let prize = GachaTestConfiguration.forceSRStopSoundTestMode
+            ? GachaPrize(
+                icon: "🏸",
+                title: "参加費半額券",
+                ticketField: "halfPriceTickets",
+                rarity: 4
+            )
+            : drawGachaPrize()
 
         db.runTransaction({ transaction, errorPointer in
             let snapshot: DocumentSnapshot

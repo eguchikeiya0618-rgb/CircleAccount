@@ -74,6 +74,10 @@ final class SlotAnimationController: ObservableObject {
 
     private let sound = SlotSoundManager.shared
 
+    private var isSRResult: Bool {
+        resultTitle == "参加費半額券"
+    }
+
     private var animationTask: Task<Void, Never>?
     private var pushContinuation:
         CheckedContinuation<Void, Never>?
@@ -471,7 +475,9 @@ final class SlotAnimationController: ObservableObject {
 
         stage = .idle
 
-        sound.intensifySpin()
+        if !isSRResult {
+            sound.intensifySpin()
+        }
 
         statusText = "CHANCE MODE"
         subStatusText = "DO NOT LOOK AWAY"
@@ -494,6 +500,11 @@ final class SlotAnimationController: ObservableObject {
     // MARK: - Super Chance Route
 
     private func runSuperChanceRoute() async {
+        if isSRResult {
+            await runSRWithSSRPresentation()
+            return
+        }
+
         heatLevel = .normal
 
         statusText = "SPINNING"
@@ -508,14 +519,18 @@ final class SlotAnimationController: ObservableObject {
         subStatusText = "HIGH EXPECTATION"
         // 旧SUPER CHANCE全画面表示は使わない。
         stage = .idle
-        sound.playWarning()
+        if !isSRResult {
+            sound.playWarning()
+        }
 
         await sleep(1.40)
 
         guard !Task.isCancelled else { return }
 
         stage = .idle
-        sound.intensifySpin()
+        if !isSRResult {
+            sound.intensifySpin()
+        }
 
         statusText = "SUPER MODE"
         subStatusText = "FINAL PHASE"
@@ -532,9 +547,29 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        await showJackpot()
+        await showCardAndFinish()
+    }
 
+    /// SSR Premiumルートと同じ上部表示・色・切替タイミングをSRへ適用する。
+    /// SSR本体は呼び替えず、SRだけがこの共通仕様を参照する。
+    private func runSRWithSSRPresentation() async {
+        heatLevel = .normal
+        stage = .idle
+        cinematicPhase = .idle
+        statusText = "SPINNING"
+        subStatusText = "PREMIUM TEST"
+
+        await sleep(1.62)
         guard !Task.isCancelled else { return }
+
+        heatLevel = .premium
+        statusText = "STOP READY"
+        subStatusText = "PRESS LEFT STOP"
+
+        await stopReels(intervals: [1.20, 1.50, 0.60])
+        guard !Task.isCancelled else { return }
+
+        await showCardAndFinish()
     }
 
     // MARK: - Warning Route
@@ -733,7 +768,68 @@ final class SlotAnimationController: ObservableObject {
 
         guard !Task.isCancelled else { sound.stopSpin(); return }
 
-        if usesCinematicReveal {
+        if isSRResult {
+            statusText = ""
+            subStatusText = ""
+
+            // SSRと同じ激アツの余韻を残してからCRTを落とす。
+            let warningImpact = UIImpactFeedbackGenerator(style: .rigid)
+            warningImpact.prepare()
+            warningImpact.impactOccurred(intensity: 0.72)
+            await sleep(0.42)
+
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+
+            cinematicPhase = .silentFreeze
+            cinematicTrigger += 1
+            await sleep(1.20)
+
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+
+            sound.stopSpin()
+            cinematicPhase = .finalSilence
+            cinematicTrigger += 1
+
+            // SSRと同じタイプライターを最後まで表示する。
+            await sleep(6.55)
+
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+
+            // SSRと同じCRT復帰を完了してから第3リールを止める。
+            sound.playPushAppear()
+            cinematicPhase = .pushStandby
+            cinematicTrigger += 1
+
+            // SSRのCRT復帰時と同じ回転音・復帰音を使用する。
+            sound.startSpin()
+            sound.intensifySpin()
+
+            statusText = "STOP READY"
+            subStatusText = "TAP REELS FOR RIGHT STOP"
+            await sleep(1.05)
+
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+
+            // SRの第3リールは自動停止せず、ユーザーのSTOP入力を待つ。
+            canStopFirstReel = true
+            await waitForReelTap()
+
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+
+            canStopFirstReel = false
+            await performSlipIfNeeded(index: 2)
+
+            guard !Task.isCancelled else { sound.stopSpin(); return }
+
+            stopReel(index: 2)
+            isSpinning = false
+            sound.stopSpin()
+
+            // 停止図柄と停止演出を見せてからカードへ進む。
+            await sleep(3.0)
+
+            guard !Task.isCancelled else { return }
+        } else if usesCinematicReveal {
             statusText = ""
             subStatusText = ""
 
@@ -930,10 +1026,15 @@ final class SlotAnimationController: ObservableObject {
     ) {
         stoppedReelCount = index + 1
 
-        sound.playReelStop(
-            index: index,
-            isFinal: index == 2
-        )
+        if index == 2,
+           resultTitle == "参加費半額券" {
+            sound.playSRStop()
+        } else {
+            sound.playReelStop(
+                index: index,
+                isFinal: index == 2
+            )
+        }
 
         playStopHaptic(
             index: index,
@@ -1140,7 +1241,7 @@ final class SlotAnimationController: ObservableObject {
     private func showCardAndFinish() async {
         cinematicPhase = .ticketReady
         cinematicTrigger += 1
-        stage = .cardReveal
+        stage = isSRResult ? .idle : .cardReveal
 
         statusText = "PRIZE GET"
         subStatusText = "CONGRATULATIONS"

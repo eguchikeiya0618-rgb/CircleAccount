@@ -14,6 +14,7 @@ final class SlotSoundManager: NSObject {
     private var pushAppearPlayer: AVAudioPlayer?
     private var pushPressPlayer: AVAudioPlayer?
     private var firstStopPlayer: AVAudioPlayer?
+    private var srStopPlayer: AVAudioPlayer?
     private var gekiatsuPlayer: AVAudioPlayer?
     private var vmovieStartPlayer: AVAudioPlayer?
     private var vmovieFollowPlayer: AVPlayer?
@@ -88,6 +89,10 @@ final class SlotSoundManager: NSObject {
 
             if leverPlayer == nil {
                 prepareLeverPlayer()
+            }
+
+            if srStopPlayer == nil {
+                prepareSRStopPlayer()
             }
         } catch {
             print(
@@ -202,6 +207,23 @@ final class SlotSoundManager: NSObject {
         if isFinal || index >= 2 {
             stopSpin()
         }
+    }
+
+    func playSRStop() {
+        guard isSoundEnabled else { return }
+
+        prepareIfNeeded()
+
+        if srStopPlayer == nil {
+            prepareSRStopPlayer()
+        }
+
+        guard let srStopPlayer else { return }
+
+        srStopPlayer.currentTime = 0
+        srStopPlayer.numberOfLoops = 0
+        srStopPlayer.volume = adjustedVolume(0.90)
+        srStopPlayer.play()
     }
 
     func playWarning() {
@@ -497,6 +519,7 @@ final class SlotSoundManager: NSObject {
         pushAppearPlayer?.stop()
         pushPressPlayer?.stop()
         firstStopPlayer?.stop()
+        srStopPlayer?.stop()
         gekiatsuPlayer?.stop()
         vmovieFollowWorkItem?.cancel()
         vmovieFollowWorkItem = nil
@@ -637,6 +660,27 @@ final class SlotSoundManager: NSObject {
         } catch {
             print(
                 "SlotSoundManager first stop error: "
+                + error.localizedDescription
+            )
+        }
+    }
+
+    private func prepareSRStopPlayer() {
+        guard let url = Bundle.main.url(
+            forResource: "stop_sr",
+            withExtension: "wav"
+        ) else {
+            print("SlotSoundManager: stop_sr.wav not found")
+            return
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            srStopPlayer = player
+        } catch {
+            print(
+                "SlotSoundManager SR stop error: "
                 + error.localizedDescription
             )
         }

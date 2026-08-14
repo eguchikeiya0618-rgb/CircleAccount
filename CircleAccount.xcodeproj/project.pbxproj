@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5C4D91E6302EC4E5008FEC86 /* stop_sr.wav in Resources */ = {isa = PBXBuildFile; fileRef = 5C4D91E5302EC4E5008FEC86 /* stop_sr.wav */; };
 		5C6659DC2FF258680098D6E8 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659DB2FF258680098D6E8 /* FirebaseCore */; };
 		5C6659E22FF2608F0098D6E8 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659E12FF2608F0098D6E8 /* FirebaseFirestore */; };
 		5C665A002FF3B5A40098D6E8 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5C6659FF2FF3B5A40098D6E8 /* FirebaseAuth */; };
 		5C665A472FF61B000098D6E8 /* PointProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C665A462FF61B000098D6E8 /* PointProgressCard.swift */; };
 		5C6EF6E43008BB4A00B834AB /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E33008BB4A00B834AB /* SoundManager.swift */; };
-		5C6EF6E530098BF600B834AB /* ラッパのファンファーレ.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */; };
 		7E0000010000000000000001 /* SiriUSV2ReelDrumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000001 /* SiriUSV2ReelDrumView.swift */; };
 		7E0000010000000000000002 /* ReelEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000002 /* ReelEngine.swift */; };
 		7E0000010000000000000003 /* ReelFrameClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0000010000000000000003 /* ReelFrameClock.swift */; };
@@ -25,8 +25,8 @@
 
 /* Begin PBXFileReference section */
 		5C12CE0B2FEF9187007BB317 /* CircleAccount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CircleAccount.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C4D91E5302EC4E5008FEC86 /* stop_sr.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = stop_sr.wav; sourceTree = "<group>"; };
 		5C665A462FF61B000098D6E8 /* PointProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointProgressCard.swift; sourceTree = "<group>"; };
-		5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "ラッパのファンファーレ.mp3"; sourceTree = "<group>"; };
 		5C6EF6E33008BB4A00B834AB /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 		7F0000010000000000000001 /* SiriUSV2ReelDrumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiriUSV2ReelDrumView.swift; sourceTree = "<group>"; };
 		7F0000010000000000000002 /* ReelEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelEngine.swift; sourceTree = "<group>"; };
@@ -135,7 +135,7 @@
 		5C6EF6DF3008B3EB00B834AB /* Sounds */ = {
 			isa = PBXGroup;
 			children = (
-				5C6EF6E23008B6F800B834AB /* ラッパのファンファーレ.mp3 */,
+				5C4D91E5302EC4E5008FEC86 /* stop_sr.wav */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -226,7 +226,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5C6EF6E530098BF600B834AB /* ラッパのファンファーレ.mp3 in Resources */,
+				5C4D91E6302EC4E5008FEC86 /* stop_sr.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

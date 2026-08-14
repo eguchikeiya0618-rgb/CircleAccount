@@ -35,6 +35,10 @@ struct GachaView: View {
     }
 
     private var reelSymbols: [String] {
+        if GachaTestConfiguration.forceSRStopSoundTestMode {
+            return ["7", "7", "BAR"]
+        }
+
         // SSR演出確認モード中は、抽選結果に関係なく777を表示する
         if forceSSRTestMode {
             if forceRainbowSSR {
@@ -200,9 +204,8 @@ struct GachaView: View {
 
             RadialGradient(
                 colors: [
-                    animation.heatLevel.glowColor.opacity(
-                        animation.isSpinning ? 0.24 : 0.08
-                    ),
+                    Color(red: 0.055, green: 0.060, blue: 0.075)
+                        .opacity(0.20),
                     Color.clear
                 ],
                 center: .top,
@@ -493,6 +496,10 @@ struct GachaView: View {
     }
 
     private func animationRoute(for prize: GachaPrize) -> SlotAnimationRoute {
+        if GachaTestConfiguration.forceSRStopSoundTestMode {
+            return .superChance
+        }
+
         // SSR演出確認モード中は、必ずPremiumルートを使う
         if forceSSRTestMode {
             return .premium

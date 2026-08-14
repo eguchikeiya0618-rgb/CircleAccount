@@ -142,6 +142,14 @@ struct PremiumSlotMachineView: View {
     private var machineGlow: Color {
         heatLevel.glowColor
     }
+
+    private var cinematicGlow: Color {
+        // SRのCRTだけを、完成済みSSRのプレミアム色へ揃える。
+        // SSRを含む他の演出色は従来値をそのまま使用する。
+        safeSymbols == ["7", "7", "BAR"]
+            ? .purple
+            : machineGlow
+    }
     
     private var safeSymbols: [String] {
         [
@@ -560,7 +568,9 @@ struct PremiumSlotMachineView: View {
                    hasActivePremiumSpin,
                    !hasStartedMovieSequence {
                     hasStartedMovieSequence = true
-                    isPremiumTypewriterVisible = true
+                    startPremiumTypewriter()
+                } else if safeSymbols == ["7", "7", "BAR"] {
+                    startPremiumTypewriter()
                 } else if !isRainbowJackpot {
                     nextEpisodePreviewTrigger += 1
                 }
@@ -578,6 +588,13 @@ struct PremiumSlotMachineView: View {
                 isVMovieVisible = true
                 SlotHapticManager.shared.beginMoviePulse()
                 SlotSoundManager.shared.playVMovieSequenceSounds()
+
+            case .ticketReady:
+                // SR（7・7・BAR）はSSRと同じ筐体内カード表示を直接使用する。
+                guard safeSymbols == ["7", "7", "BAR"] else { break }
+                withAnimation(.easeIn(duration: 0.20)) {
+                    premiumTicketVisible = true
+                }
                 
             case .idle:
                 SlotHapticManager.shared.endMoviePulse()
@@ -621,7 +638,7 @@ struct PremiumSlotMachineView: View {
             }
             
             if newValue == 2,
-               isRainbowJackpot {
+               (isRainbowJackpot || safeSymbols == ["7", "7", "BAR"]) {
                 playGekiAtsuSequence()
             }
             
@@ -728,10 +745,19 @@ struct PremiumSlotMachineView: View {
             Text(statusText)
                 .font(.system(size: 17, weight: .black, design: .monospaced))
                 .tracking(1.3)
-                .foregroundStyle(heatLevel.displayColor)
+                .foregroundStyle(
+                    statusText == "STOP READY"
+                        ? Color.white
+                        : heatLevel.displayColor
+                )
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
-                .shadow(color: machineGlow, radius: 6)
+                .shadow(
+                    color: statusText == "STOP READY"
+                        ? Color.purple
+                        : machineGlow,
+                    radius: 6
+                )
             
             Text(subStatusText)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -752,7 +778,7 @@ struct PremiumSlotMachineView: View {
         PremiumCRTBlackoutOverlay(
             phase: cinematicPhase,
             trigger: cinematicTrigger,
-            glowColor: machineGlow
+            glowColor: cinematicGlow
         )
         .frame(width: 370, height: 320)
         .mask {
@@ -762,6 +788,12 @@ struct PremiumSlotMachineView: View {
         }
         .offset(y: -5)
     }
+
+    private func startPremiumTypewriter() {
+        hasPremiumTypewriterFinished = false
+        isPremiumTypewriterVisible = true
+    }
+
     private var premiumEffectArea: some View {
         GeometryReader { geometry in
             let displaySize = premiumLCDDisplaySize(in: geometry)
@@ -780,7 +812,9 @@ struct PremiumSlotMachineView: View {
                 }
                 
                 if isPremiumTypewriterVisible {
-                    PremiumTypewriterOverlay {
+                    PremiumTypewriterOverlay(
+                        usesSRArtwork: safeSymbols == ["7", "7", "BAR"]
+                    ) {
                         guard isPremiumTypewriterVisible else { return }
 
                         isPremiumTypewriterVisible = false
