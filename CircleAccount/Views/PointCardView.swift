@@ -51,6 +51,7 @@ struct PointCardView: View {
     @State private var backgroundPulse = false
     @State private var displayedTotalPoint = 0
     @State private var titleShimmerOffset: CGFloat = -1.4
+    @State private var hasStartedPresentationAnimations = false
 
     // プレミアムカード操作演出
     @State private var cardDragOffset: CGSize = .zero
@@ -131,7 +132,7 @@ struct PointCardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 22) {
+                LazyVStack(spacing: 22) {
                     premiumHeader
 
                     flippingCard
@@ -211,6 +212,9 @@ struct PointCardView: View {
 
                 loadMember()
                 loadRanking()
+
+                guard !hasStartedPresentationAnimations else { return }
+                hasStartedPresentationAnimations = true
 
                 withAnimation(
                     .easeInOut(duration: 3.0)
@@ -645,6 +649,529 @@ struct PointCardView: View {
 }
 import SwiftUI
 
+private struct PremiumOwnedTicketArtworkView: View, Equatable {
+    let ticketField: String
+
+    static let artworkWidth: CGFloat = 128
+    static let artworkHeight: CGFloat = 76
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.ticketField == rhs.ticketField
+    }
+
+    private var theme: PremiumOwnedTicketTheme {
+        PremiumOwnedTicketTheme(ticketField: ticketField)
+    }
+
+    var body: some View {
+        let width = Self.artworkWidth
+        let height = Self.artworkHeight
+
+        return ZStack {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: theme.plateColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                LinearGradient(
+                    colors: [
+                        Color.clear,
+                        theme.hologramColor.opacity(0.42),
+                        Color.white.opacity(0.20),
+                        Color.clear
+                    ],
+                    startPoint: UnitPoint(x: 0.05, y: 0.95),
+                    endPoint: UnitPoint(x: 0.90, y: 0.05)
+                )
+                .blendMode(.screen)
+                .clipped()
+
+                LinearGradient(
+                    colors: theme.reflectionColors,
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: width * 0.30, height: height * 1.55)
+                .rotationEffect(.degrees(18))
+                .offset(x: width * 0.22)
+                .blur(radius: 1.1)
+                .blendMode(.screen)
+                .clipped()
+
+                Rectangle()
+                    .stroke(
+                        LinearGradient(
+                            colors: theme.frameColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.4
+                    )
+                    .padding(2)
+
+                Rectangle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.42),
+                                Color.clear,
+                                theme.accentColor.opacity(0.28)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.7
+                    )
+                    .padding(4)
+
+                HStack(spacing: 5) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("SIRIUS")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .tracking(1.0)
+                            .foregroundStyle(Color.white)
+
+                        Text("PREMIUM")
+                            .font(.system(size: 5.5, weight: .black, design: .rounded))
+                            .tracking(0.8)
+                            .foregroundStyle(theme.accentColor)
+
+                        Text("TICKET")
+                            .font(.system(size: 10, weight: .black, design: .rounded))
+                            .tracking(0.6)
+                            .foregroundStyle(Color.white.opacity(0.92))
+                    }
+
+                    Spacer(minLength: 2)
+
+                    VStack(spacing: 3) {
+                        Image(systemName: theme.symbolName)
+                            .font(.system(size: 17, weight: .black))
+                            .foregroundStyle(theme.accentColor)
+
+                        HStack(spacing: 2) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                Circle()
+                                    .fill(Color.purple.opacity(0.90))
+                                    .frame(width: 2.6, height: 2.6)
+                                    .shadow(color: Color.purple.opacity(0.85), radius: 2)
+                            }
+                        }
+                    }
+                    .offset(x: -6)
+                }
+                .padding(.horizontal, 12)
+
+                VStack {
+                    HStack {
+                        Text(theme.serialNumber)
+                            .font(.system(size: 6.8, weight: .bold, design: .monospaced))
+                            .tracking(0.35)
+                            .foregroundStyle(Color.white.opacity(0.45))
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(theme.rarityText)
+                                .font(.system(size: 6.5, weight: .black, design: .rounded))
+                                .tracking(0.7)
+                                .foregroundStyle(theme.rarityColor)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(
+                                    LinearGradient(
+                                        colors: theme.rarityBadgeColors,
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .clipShape(Capsule())
+                                .overlay {
+                                    Capsule()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.88),
+                                                    theme.rarityColor.opacity(0.78),
+                                                    Color.black.opacity(0.72)
+                                                ],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            ),
+                                            lineWidth: 0.8
+                                        )
+                                }
+                                .shadow(color: theme.rarityColor.opacity(0.28), radius: 2)
+
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 8)
+
+                HStack {
+                    ticketNotch
+                        .offset(x: -5.5)
+
+                    Spacer()
+
+                    ticketNotch
+                        .offset(x: 5.5)
+                }
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.50))
+                    .frame(width: width * 0.52, height: 0.7)
+                    .rotationEffect(.degrees(-18))
+                    .offset(x: width * 0.08, y: -height * 0.18)
+                    .blur(radius: 0.25)
+                    .blendMode(.screen)
+
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.18),
+                        Color.clear,
+                        Color.black.opacity(0.12)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .blendMode(.screen)
+                .allowsHitTesting(false)
+            }
+            .clipped()
+        .frame(width: width, height: height)
+        .accessibilityHidden(true)
+    }
+
+    private var ticketNotch: some View {
+        Circle()
+            .fill(Color.black)
+            .frame(width: 11, height: 11)
+            .overlay {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.65),
+                                theme.accentColor.opacity(0.82),
+                                Color.black
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: Color.black.opacity(0.72), radius: 1.5)
+    }
+}
+
+private struct PremiumOwnedTicketTheme {
+    let plateColors: [Color]
+    let frameColors: [Color]
+    let accentColor: Color
+    let hologramColor: Color
+    let symbolName: String
+    let rarityText: String
+    let rarityColor: Color
+    let glowOpacity: Double
+    let glowRadius: CGFloat
+    let serialNumber: String
+
+    var reflectionColors: [Color] {
+        switch rarityText {
+        case "SSR":
+            return [
+                Color.clear,
+                Color.cyan.opacity(0.12),
+                Color.white.opacity(0.72),
+                Color.pink.opacity(0.18),
+                Color.clear
+            ]
+        case "SR":
+            return [
+                Color.clear,
+                Color.purple.opacity(0.06),
+                Color.white.opacity(0.34),
+                Color.purple.opacity(0.10),
+                Color.clear
+            ]
+        default:
+            return Array(repeating: Color.clear, count: 5)
+        }
+    }
+
+    var rarityBadgeColors: [Color] {
+        switch rarityText {
+        case "SSR":
+            return [
+                Color.red.opacity(0.72),
+                Color.yellow.opacity(0.72),
+                Color.cyan.opacity(0.72),
+                Color.purple.opacity(0.72)
+            ]
+        case "SR":
+            return [
+                Color.white.opacity(0.34),
+                Color.purple.opacity(0.78),
+                Color.black.opacity(0.72)
+            ]
+        default:
+            return [
+                Color.white.opacity(0.58),
+                Color.gray.opacity(0.72),
+                Color.black.opacity(0.76)
+            ]
+        }
+    }
+
+    init(ticketField: String) {
+        switch ticketField {
+        case "stringingFreeTickets":
+            plateColors = [.black, Color(red: 0.22, green: 0.16, blue: 0.03), .black]
+            frameColors = [.white, .yellow, .orange]
+            accentColor = .yellow
+            hologramColor = .yellow
+            symbolName = "crown.fill"
+            rarityText = "R"
+            rarityColor = .white
+            glowOpacity = 0.075
+            glowRadius = 3
+            serialNumber = "No.001"
+
+        case "challengeTickets":
+            plateColors = [Color(red: 0.16, green: 0.01, blue: 0.02), Color(red: 0.48, green: 0.03, blue: 0.06), .black]
+            frameColors = [.white, .yellow, .red]
+            accentColor = .yellow
+            hologramColor = .red
+            symbolName = "star.fill"
+            rarityText = "R"
+            rarityColor = .white
+            glowOpacity = 0.075
+            glowRadius = 3
+            serialNumber = "No.002"
+
+        case "priorityTickets":
+            plateColors = [Color(red: 0.01, green: 0.07, blue: 0.18), Color(red: 0.03, green: 0.28, blue: 0.54), .black]
+            frameColors = [.white, .cyan, Color.white.opacity(0.65)]
+            accentColor = .cyan
+            hologramColor = .blue
+            symbolName = "bolt.fill"
+            rarityText = "R"
+            rarityColor = .white
+            glowOpacity = 0.075
+            glowRadius = 3
+            serialNumber = "No.003"
+
+        case "cleanupTickets":
+            plateColors = [Color(red: 0.01, green: 0.12, blue: 0.07), Color(red: 0.02, green: 0.34, blue: 0.17), .black]
+            frameColors = [.white, .green, Color.yellow.opacity(0.65)]
+            accentColor = .green
+            hologramColor = .green
+            symbolName = "leaf.fill"
+            rarityText = "R"
+            rarityColor = .white
+            glowOpacity = 0.06
+            glowRadius = 2.25
+            serialNumber = "No.004"
+
+        case "discountTickets":
+            plateColors = [Color(red: 0.20, green: 0.10, blue: 0.01), Color(red: 0.62, green: 0.36, blue: 0.03), .black]
+            frameColors = [.white, .yellow, .orange]
+            accentColor = .yellow
+            hologramColor = .orange
+            symbolName = "yensign.circle.fill"
+            rarityText = "R"
+            rarityColor = .white
+            glowOpacity = 0.075
+            glowRadius = 3
+            serialNumber = "No.005"
+
+        case "halfPriceTickets":
+            plateColors = [Color(red: 0.10, green: 0.02, blue: 0.17), Color(red: 0.42, green: 0.08, blue: 0.62), .black]
+            frameColors = [.white, .purple, .yellow]
+            accentColor = Color(red: 0.84, green: 0.56, blue: 1.0)
+            hologramColor = .purple
+            symbolName = "percent"
+            rarityText = "SR"
+            rarityColor = Color(red: 0.88, green: 0.66, blue: 1.0)
+            glowOpacity = 0.15
+            glowRadius = 5.25
+            serialNumber = "No.006"
+
+        default:
+            plateColors = [
+                Color(red: 0.28, green: 0.02, blue: 0.12),
+                Color(red: 0.05, green: 0.24, blue: 0.42),
+                Color(red: 0.27, green: 0.04, blue: 0.46),
+                .black
+            ]
+            frameColors = [.white, .yellow, .pink, .cyan, .yellow]
+            accentColor = .yellow
+            hologramColor = .pink
+            symbolName = "gift.fill"
+            rarityText = "SSR"
+            rarityColor = .yellow
+            glowOpacity = 0.255
+            glowRadius = 7.5
+            serialNumber = "No.007"
+        }
+    }
+}
+
+private struct PremiumTicketTapStyle: ButtonStyle {
+    let isEnabled: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && isEnabled ? 1.03 : 1)
+            .offset(y: configuration.isPressed && isEnabled ? -3 : 0)
+            .shadow(
+                color: configuration.isPressed && isEnabled
+                    ? Color.purple.opacity(0.42)
+                    : Color.clear,
+                radius: configuration.isPressed && isEnabled ? 14 : 0,
+                y: configuration.isPressed && isEnabled ? 7 : 0
+            )
+            .animation(
+                .spring(response: 0.22, dampingFraction: 0.72),
+                value: configuration.isPressed
+            )
+    }
+}
+
+private struct PremiumTicketArtworkGlow: ViewModifier {
+    let ticketField: String
+    let isEnabled: Bool
+
+    @State private var glowPulse = false
+    @State private var shimmerMoves = false
+
+    private var isSSR: Bool { ticketField == "freeTickets" }
+    private var isSR: Bool { ticketField == "halfPriceTickets" }
+
+    private var glowColor: Color {
+        if isSSR { return Color(red: 0.68, green: 0.46, blue: 1.0) }
+        if isSR { return Color.purple }
+        return Color(red: 0.96, green: 0.72, blue: 0.22)
+    }
+
+    private var borderColors: [Color] {
+        if isSSR {
+            return [.red, .yellow, .green, .cyan, .blue, .purple, .red]
+        }
+        if isSR {
+            return [
+                Color.white.opacity(0.70),
+                Color.purple,
+                Color(red: 0.78, green: 0.48, blue: 1.0)
+            ]
+        }
+        return [
+            Color.white.opacity(0.54),
+            Color(red: 0.96, green: 0.72, blue: 0.22),
+            Color(red: 0.56, green: 0.34, blue: 0.08)
+        ]
+    }
+
+    private var minimumGlowOpacity: Double {
+        if isSSR { return 0.18 }
+        if isSR { return 0.13 }
+        return 0.08
+    }
+
+    private var maximumGlowOpacity: Double {
+        if isSSR { return 0.38 }
+        if isSR { return 0.29 }
+        return 0.19
+    }
+
+    private var minimumGlowRadius: CGFloat {
+        if isSSR { return 5 }
+        if isSR { return 4 }
+        return 3
+    }
+
+    private var maximumGlowRadius: CGFloat {
+        if isSSR { return 11 }
+        if isSR { return 8 }
+        return 6
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                Rectangle()
+                    .stroke(
+                        LinearGradient(
+                            colors: borderColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.0
+                    )
+                    .opacity(
+                        isEnabled
+                            ? (glowPulse ? 0.76 : 0.34)
+                            : 0
+                    )
+            }
+            .overlay {
+                ZStack {
+                    Color.clear
+
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.white.opacity(0.62),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 16)
+                        .rotationEffect(.degrees(12))
+                        .offset(x: shimmerMoves ? 100 : -100)
+                        .opacity(isEnabled && isSSR ? 0.58 : 0)
+                        .animation(
+                            .linear(duration: 0.55)
+                                .delay(4.1)
+                                .repeatForever(autoreverses: false),
+                            value: shimmerMoves
+                        )
+                }
+                .clipped()
+            }
+            .shadow(
+                color: glowColor.opacity(
+                    isEnabled
+                        ? (glowPulse ? maximumGlowOpacity : minimumGlowOpacity)
+                        : 0
+                ),
+                radius: glowPulse ? maximumGlowRadius : minimumGlowRadius
+            )
+            .animation(
+                .easeInOut(duration: 1.3)
+                    .repeatForever(autoreverses: true),
+                value: glowPulse
+            )
+            .onAppear {
+                glowPulse = true
+                shimmerMoves = true
+            }
+    }
+}
+
 extension PointCardView {
     var flippingCard: some View {
         ZStack {
@@ -1010,24 +1537,46 @@ extension PointCardView {
                     .clipShape(Capsule())
             }
             
-            ticketRow(icon: "🎾", title: "ガット張り工賃無料券", count: stringingFreeTickets, ticketField: "stringingFreeTickets")
-            Divider()
-            ticketRow(icon: "⭐", title: "対戦指名券", count: challengeTickets, ticketField: "challengeTickets")
-            Divider()
-            ticketRow(icon: "🚀", title: "優先ゲーム券", count: priorityTickets, ticketField: "priorityTickets")
-            Divider()
-            ticketRow(icon: "🧹", title: "片付けパス", count: cleanupTickets, ticketField: "cleanupTickets")
-            Divider()
-            ticketRow(icon: "💰", title: "参加費500円券", count: discountTickets, ticketField: "discountTickets")
-            Divider()
-            ticketRow(icon: "🏸", title: "参加費半額券", count: halfPriceTickets, ticketField: "halfPriceTickets")
-            Divider()
-            ticketRow(icon: "🎁", title: "参加費無料券", count: freeTickets, ticketField: "freeTickets")
+            LazyVStack(spacing: 12) {
+                ticketRow(icon: "🎾", title: "ガット張り工賃無料券", count: stringingFreeTickets, ticketField: "stringingFreeTickets")
+                ticketRow(icon: "⭐", title: "対戦指名券", count: challengeTickets, ticketField: "challengeTickets")
+                ticketRow(icon: "🚀", title: "優先ゲーム券", count: priorityTickets, ticketField: "priorityTickets")
+                ticketRow(icon: "🧹", title: "片付けパス", count: cleanupTickets, ticketField: "cleanupTickets")
+                ticketRow(icon: "💰", title: "参加費500円券", count: discountTickets, ticketField: "discountTickets")
+                ticketRow(icon: "🏸", title: "参加費半額券", count: halfPriceTickets, ticketField: "halfPriceTickets")
+                ticketRow(icon: "🎁", title: "参加費無料券", count: freeTickets, ticketField: "freeTickets")
+            }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    Color(red: 0.08, green: 0.055, blue: 0.13),
+                    Color(red: 0.025, green: 0.02, blue: 0.04)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .foregroundStyle(.white)
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.34),
+                            Color.yellow.opacity(0.50),
+                            Color.purple.opacity(0.40)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
         .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        .shadow(color: Color.purple.opacity(0.16), radius: 16, x: 0, y: 8)
     }
     
     var exchangeSection: some View {
@@ -1269,47 +1818,10 @@ extension PointCardView {
         + stringingFreeTickets
     }
 
-    func ticketRow(icon: String, title: String, count: Int, ticketField: String) -> some View {
-        HStack(spacing: 14) {
-            Text(icon)
-                .font(.title2)
-            
-            VStack(alignment: .leading) {
-                Text(title)
-                    .font(.headline)
-                
-                Text("残り \(count)枚")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-
-            Text("\(count)")
-                .font(
-                    .system(
-                        size: 17,
-                        weight: .black,
-                        design: .rounded
-                    )
-                )
-                .foregroundStyle(
-                    count > 0 ? Color.primary : Color.secondary
-                )
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(
-                    count > 0
-                    ? Color.purple
-                    : Color.secondary.opacity(0.45)
-                )
-        }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onTapGesture {
+    func ticketRow(icon: String, title: String, count: Int, ticketField: String) -> AnyView {
+        AnyView(Button {
             guard count > 0 else { return }
-            
+
             if ticketField == "priorityTickets" || ticketField == "challengeTickets" {
                 showActivityTicketAlert = true
                 return
@@ -1319,8 +1831,87 @@ extension PointCardView {
             selectedTicketField = ticketField
             selectedTicketIcon = icon
             showUseTicketAlert = true
+        } label: {
+            HStack(spacing: 10) {
+                PremiumOwnedTicketArtworkView(ticketField: ticketField)
+                    .equatable()
+                    .frame(
+                        width: PremiumOwnedTicketArtworkView.artworkWidth,
+                        height: PremiumOwnedTicketArtworkView.artworkHeight,
+                        alignment: .center
+                    )
+                    .clipped()
+                    .modifier(
+                        PremiumTicketArtworkGlow(
+                            ticketField: ticketField,
+                            isEnabled: count > 0
+                        )
+                    )
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.72)
+                        .allowsTightening(true)
+                        .shadow(color: Color.black.opacity(0.72), radius: 2, y: 1)
+
+                    Text("残り \(count)枚")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.58))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .frame(minWidth: 82, maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(2)
+
+                Text("×\(count)")
+                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(width: 52, alignment: .trailing)
+                    .foregroundStyle(
+                        count > 0 ? Color.white : Color.white.opacity(0.38)
+                    )
+                    .shadow(
+                        color: count > 0
+                            ? Color.purple.opacity(0.55)
+                            : Color.clear,
+                        radius: 8
+                    )
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.black))
+                    .frame(width: 10, alignment: .trailing)
+                    .foregroundStyle(
+                        count > 0
+                            ? Color.yellow.opacity(0.86)
+                            : Color.white.opacity(0.24)
+                    )
+            }
+            .padding(.leading, 9)
+            .padding(.trailing, 12)
+            .frame(height: 137)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(count > 0 ? 0.065 : 0.035))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        count > 0
+                            ? Color.yellow.opacity(0.22)
+                            : Color.white.opacity(0.08),
+                        lineWidth: 1
+                    )
+            }
         }
+        .buttonStyle(PremiumTicketTapStyle(isEnabled: count > 0))
+        .disabled(count <= 0))
     }
+
     
     func exchangeButton(title: String, point: Int, icon: String, ticketField: String) -> some View {
         Button {

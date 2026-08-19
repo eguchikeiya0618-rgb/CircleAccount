@@ -140,81 +140,10 @@ struct SlotEffectsView: View {
                 Color.black.opacity(0.58)
 
                 VStack(spacing: 18) {
-                    ZStack {
-                        RoundedRectangle(
-                            cornerRadius: 28,
-                            style: .continuous
-                        )
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.black,
-                                    Color(
-                                        red: 0.15,
-                                        green: 0.12,
-                                        blue: 0.03
-                                    ),
-                                    Color.black
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                        RoundedRectangle(
-                            cornerRadius: 28,
-                            style: .continuous
-                        )
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white,
-                                    Color.yellow,
-                                    Color.orange,
-                                    Color.white
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 4
-                        )
-
-                        VStack(spacing: 10) {
-                            Image(systemName: "ticket.fill")
-                                .font(
-                                    .system(
-                                        size: 44,
-                                        weight: .black
-                                    )
-                                )
-                                .foregroundStyle(Color.yellow)
-
-                            Text(resultTitle)
-                                .font(
-                                    .system(
-                                        size: 25,
-                                        weight: .black,
-                                        design: .rounded
-                                    )
-                                )
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(Color.white)
-
-                            Text(resultSubtitle)
-                                .font(
-                                    .system(
-                                        size: 13,
-                                        weight: .bold,
-                                        design: .rounded
-                                    )
-                                )
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(
-                                    Color.white.opacity(0.70)
-                                )
-                        }
-                        .padding(24)
-                    }
+                    PremiumTicketArtworkView(
+                        title: resultTitle,
+                        subtitle: resultSubtitle
+                    )
                     .frame(width: 270, height: 330)
                     .offset(y: cardOffset)
                     .rotation3DEffect(
@@ -400,6 +329,57 @@ struct SlotEffectsView: View {
     }
 }
 
+// ガチャ結果と保有チケットで共有する唯一のチケット描画。
+// ここを変更すると両画面へ同時に反映される。
+struct PremiumTicketArtworkView: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.black,
+                            Color(red: 0.15, green: 0.12, blue: 0.03),
+                            Color.black
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white, .yellow, .orange, .white],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 4
+                )
+
+            VStack(spacing: 10) {
+                Image(systemName: "ticket.fill")
+                    .font(.system(size: 44, weight: .black))
+                    .foregroundStyle(Color.yellow)
+
+                Text(title)
+                    .font(.system(size: 25, weight: .black, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Color.white)
+
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Color.white.opacity(0.70))
+            }
+            .padding(24)
+        }
+    }
+}
+
 #Preview {
     ZStack {
         Color.black
@@ -413,4 +393,3 @@ struct SlotEffectsView: View {
         )
     }
 }
-
