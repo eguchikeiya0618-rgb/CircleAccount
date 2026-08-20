@@ -146,34 +146,61 @@ struct PointCardView: View {
                         .foregroundStyle(.secondary)
                     
                     ticketsSection
+                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                            content.opacity(phase.isIdentity ? 1.0 : 0.98)
+                        }
                     exchangeSection
+                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                            content.opacity(phase.isIdentity ? 1.0 : 0.98)
+                        }
                     
                     if currentUserIsAdmin {
                         monthlyAwardButton
+                            .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                                content.opacity(phase.isIdentity ? 1.0 : 0.98)
+                            }
                         mvpSelectionTestButton
+                            .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                                content.opacity(phase.isIdentity ? 1.0 : 0.98)
+                            }
                         celebrationTestButton
+                            .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                                content.opacity(phase.isIdentity ? 1.0 : 0.98)
+                            }
                     }
                     
                     Button {
                         showHallOfFame = true
                     } label: {
-                        Label("歴代チャンピオンを見る", systemImage: "crown.fill")
+                        HStack {
+                            Label("歴代チャンピオンを見る", systemImage: "crown.fill")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                        }
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color(.systemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .shadow(color: .black.opacity(0.046), radius: 6.9, y: 3)
                     }
                     .buttonStyle(.plain)
                     NavigationLink {
                         PointHistoryView()
                     } label: {
-                        Label("ポイント履歴を見る", systemImage: "clock.arrow.circlepath")
+                        HStack {
+                            Label("ポイント履歴を見る", systemImage: "clock.arrow.circlepath")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                        }
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color(.systemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .shadow(color: .black.opacity(0.046), radius: 6.9, y: 3)
                     }
                     .buttonStyle(.plain)
                     
@@ -181,12 +208,18 @@ struct PointCardView: View {
                         NavigationLink {
                             TicketUsageHistoryView()
                         } label: {
-                            Label("🎫 チケット使用履歴", systemImage: "clock.badge.checkmark")
+                            HStack {
+                                Label("🎫 チケット使用履歴", systemImage: "clock.badge.checkmark")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                            }
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
                                 .padding()
                                 .background(Color(.systemBackground))
                                 .clipShape(RoundedRectangle(cornerRadius: 18))
+                                .shadow(color: .black.opacity(0.046), radius: 6.9, y: 3)
                         }
                         .buttonStyle(.plain)
                     }
@@ -213,6 +246,8 @@ struct PointCardView: View {
                 loadMember()
                 loadRanking()
 
+                restartPointCardShimmer()
+
                 guard !hasStartedPresentationAnimations else { return }
                 hasStartedPresentationAnimations = true
 
@@ -224,24 +259,10 @@ struct PointCardView: View {
                 }
 
                 withAnimation(
-                    .linear(duration: 4.5)
-                    .repeatForever(autoreverses: false)
-                ) {
-                    shimmerOffset = 1.5
-                }
-
-                withAnimation(
                     .easeInOut(duration: 1.45)
                     .repeatForever(autoreverses: true)
                 ) {
                     backgroundPulse = true
-                }
-
-                withAnimation(
-                    .linear(duration: 2.8)
-                    .repeatForever(autoreverses: false)
-                ) {
-                    titleShimmerOffset = 1.4
                 }
 
                 withAnimation(
@@ -425,27 +446,35 @@ struct PointCardView: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            premiumRankPrimaryColor,
-                            Color.white,
-                            premiumRankSecondaryColor
+                            Color(red: 0.18, green: 0.56, blue: 1.0),
+                            Color(red: 0.54, green: 0.28, blue: 0.96),
+                            Color(red: 0.12, green: 0.88, blue: 1.0)
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .overlay {
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Color.white.opacity(0.95),
-                            Color.clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: 70)
-                    .rotationEffect(.degrees(-18))
-                    .offset(x: titleShimmerOffset * 170)
+                    ZStack {
+                        Color.clear
+
+                        LinearGradient(
+                            colors: [
+                                Color.clear,
+                                Color.white.opacity(0.20),
+                                Color.cyan.opacity(0.62),
+                                Color.white.opacity(0.98),
+                                Color.purple.opacity(0.52),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: 28)
+                        .rotationEffect(.degrees(-20))
+                        .offset(x: titleShimmerOffset * 85)
+                        .blendMode(.screen)
+                    }
                     .mask {
                         Text("SiRiUS")
                             .font(
@@ -456,6 +485,9 @@ struct PointCardView: View {
                                 )
                             )
                     }
+                }
+                .task {
+                    await runTitleShimmerLoop()
                 }
 
             Text("PREMIUM MEMBER WALLET")
@@ -646,17 +678,59 @@ struct PointCardView: View {
             }
         }
     }
+
+    private func restartPointCardShimmer() {
+        shimmerOffset = -1.3
+
+        DispatchQueue.main.async {
+            withAnimation(
+                .linear(duration: 5.2)
+                    .repeatForever(autoreverses: false)
+            ) {
+                shimmerOffset = 1.5
+            }
+        }
+    }
+
+    @MainActor
+    private func runTitleShimmerLoop() async {
+        while !Task.isCancelled {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+
+            withTransaction(transaction) {
+                titleShimmerOffset = -1.4
+            }
+
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.linear(duration: 0.8)) {
+                titleShimmerOffset = 1.4
+            }
+
+            try? await Task.sleep(for: .seconds(0.8))
+            guard !Task.isCancelled else { return }
+
+            try? await Task.sleep(for: .seconds(3.2))
+        }
+    }
+
 }
 import SwiftUI
 
 private struct PremiumOwnedTicketArtworkView: View, Equatable {
     let ticketField: String
+    let iconGlowActive: Bool
+
+    @Environment(\.premiumTicketIsPressed) private var isPressed
 
     static let artworkWidth: CGFloat = 128
     static let artworkHeight: CGFloat = 76
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.ticketField == rhs.ticketField
+        && lhs.iconGlowActive == rhs.iconGlowActive
     }
 
     private var theme: PremiumOwnedTicketTheme {
@@ -752,6 +826,10 @@ private struct PremiumOwnedTicketArtworkView: View, Equatable {
                         Image(systemName: theme.symbolName)
                             .font(.system(size: 17, weight: .black))
                             .foregroundStyle(theme.accentColor)
+                            .shadow(
+                                color: theme.accentColor.opacity(iconGlowActive ? 0.52 : 0.16),
+                                radius: iconGlowActive ? 4.5 : 1.5
+                            )
 
                         HStack(spacing: 2) {
                             ForEach(0..<4, id: \.self) { _ in
@@ -847,6 +925,13 @@ private struct PremiumOwnedTicketArtworkView: View, Equatable {
             }
             .clipped()
         .frame(width: width, height: height)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(
+            isPressed
+                ? .easeOut(duration: 0.15)
+                : .spring(response: 0.28, dampingFraction: 0.72),
+            value: isPressed
+        )
         .accessibilityHidden(true)
     }
 
@@ -1026,23 +1111,25 @@ private struct PremiumOwnedTicketTheme {
     }
 }
 
+private struct PremiumTicketPressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var premiumTicketIsPressed: Bool {
+        get { self[PremiumTicketPressedKey.self] }
+        set { self[PremiumTicketPressedKey.self] = newValue }
+    }
+}
+
 private struct PremiumTicketTapStyle: ButtonStyle {
     let isEnabled: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && isEnabled ? 1.03 : 1)
-            .offset(y: configuration.isPressed && isEnabled ? -3 : 0)
-            .shadow(
-                color: configuration.isPressed && isEnabled
-                    ? Color.purple.opacity(0.42)
-                    : Color.clear,
-                radius: configuration.isPressed && isEnabled ? 14 : 0,
-                y: configuration.isPressed && isEnabled ? 7 : 0
-            )
-            .animation(
-                .spring(response: 0.22, dampingFraction: 0.72),
-                value: configuration.isPressed
+            .environment(
+                \.premiumTicketIsPressed,
+                configuration.isPressed && isEnabled
             )
     }
 }
@@ -1525,7 +1612,7 @@ extension PointCardView {
 
                 Spacer()
 
-                Text("\(totalTicketCount)枚")
+                Text("\(totalTicketCount.formatted(.number.grouping(.automatic)))枚")
                     .font(.caption)
                     .fontWeight(.black)
                     .padding(.horizontal, 11)
@@ -1576,7 +1663,7 @@ extension PointCardView {
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: Color.purple.opacity(0.16), radius: 16, x: 0, y: 8)
+        .shadow(color: Color.purple.opacity(0.184), radius: 18.4, x: 0, y: 8)
     }
     
     var exchangeSection: some View {
@@ -1585,10 +1672,20 @@ extension PointCardView {
         } label: {
             HStack(spacing: 14) {
                 Text("🛒")
-                    .font(.system(size: 38))
+                    .font(.system(size: 41))
                     .frame(width: 56, height: 56)
-                    .background(Color.blue.opacity(0.10))
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                Color.blue.opacity(0.16),
+                                Color.yellow.opacity(0.055)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: Color.yellow.opacity(0.12), radius: 3, y: 1)
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("チケットショップ")
@@ -1604,17 +1701,28 @@ extension PointCardView {
                 Spacer()
                 
                 Image(systemName: "chevron.right")
-                    .font(.headline)
+                    .font(.headline.weight(.black))
                     .foregroundStyle(.secondary)
+                    .shadow(color: Color.yellow.opacity(0.22), radius: 2)
             }
             .padding()
-            .background(Color(.systemBackground))
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(.systemBackground),
+                        Color.yellow.opacity(0.035),
+                        Color(.systemBackground)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .shadow(
-                color: .black.opacity(0.06),
-                radius: 8,
+                color: .black.opacity(0.069),
+                radius: 9.2,
                 x: 0,
-                y: 4
+                y: 4.6
             )
         }
         .buttonStyle(.plain)
@@ -1625,7 +1733,7 @@ extension PointCardView {
         } label: {
             HStack {
                 Text("🏆")
-                    .font(.title2)
+                    .font(.system(size: 25))
                 
                 VStack(alignment: .leading) {
                     Text("前月の表彰を確定する")
@@ -1642,8 +1750,18 @@ extension PointCardView {
                     .foregroundStyle(.secondary)
             }
             .padding()
-            .background(Color.orange.opacity(0.14))
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.orange.opacity(0.17),
+                        Color.yellow.opacity(0.12)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.055), radius: 6.9, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -1729,6 +1847,12 @@ extension PointCardView {
                         lineWidth: 1
                     )
             }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.white.opacity(0.20), lineWidth: 0.6)
+                    .padding(1)
+            }
+            .shadow(color: .black.opacity(0.055), radius: 6.9, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -1805,6 +1929,12 @@ extension PointCardView {
                         lineWidth: 1
                     )
             }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.white.opacity(0.20), lineWidth: 0.6)
+                    .padding(1)
+            }
+            .shadow(color: .black.opacity(0.055), radius: 6.9, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -1833,7 +1963,10 @@ extension PointCardView {
             showUseTicketAlert = true
         } label: {
             HStack(spacing: 10) {
-                PremiumOwnedTicketArtworkView(ticketField: ticketField)
+                PremiumOwnedTicketArtworkView(
+                    ticketField: ticketField,
+                    iconGlowActive: glowAnimation && count > 0
+                )
                     .equatable()
                     .frame(
                         width: PremiumOwnedTicketArtworkView.artworkWidth,
@@ -1841,12 +1974,6 @@ extension PointCardView {
                         alignment: .center
                     )
                     .clipped()
-                    .modifier(
-                        PremiumTicketArtworkGlow(
-                            ticketField: ticketField,
-                            isEnabled: count > 0
-                        )
-                    )
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
@@ -1959,7 +2086,7 @@ extension PointCardView {
     }
     
     var pointRuleSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("ポイントルール")
                 .font(.headline)
             
@@ -1968,22 +2095,23 @@ extension PointCardView {
             ruleRow("🔧 設営参加", "+5pt")
             ruleRow("👥 Bクラス入賞者レベル以上の方を新規で連れてくる", "+20pt")
         }
-        .padding()
+        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.04), radius: 6)
+        .shadow(color: .black.opacity(0.046), radius: 6.9)
     }
     
     func ruleRow(_ title: String, _ point: String) -> some View {
         HStack {
             Text(title)
                 .font(.caption)
+                .lineSpacing(2)
             
             Spacer()
             
             Text(point)
-                .font(.caption)
-                .bold()
+                .font(.caption.weight(.heavy))
                 .foregroundStyle(.blue)
         }
     }
@@ -3059,7 +3187,7 @@ private struct PremiumPointCardEffects: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: 76, height: 520)
+            .frame(width: 68, height: 520)
             .rotationEffect(.degrees(-23))
             .offset(x: shimmerOffset * 360)
             .blur(radius: 6)
@@ -3076,7 +3204,7 @@ private struct PremiumPointCardEffects: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: 30, height: 500)
+            .frame(width: 26, height: 500)
             .rotationEffect(.degrees(-23))
             .offset(x: shimmerOffset * 405)
             .blur(radius: 2.2)
@@ -3106,13 +3234,13 @@ private struct PremiumPointCardEffects: View {
     private var hologramColors: [Color] {
         switch rank {
         case "LEGEND", "PLATINUM":
-            return [.clear, .cyan.opacity(0.32), .purple.opacity(0.30), .pink.opacity(0.29), .yellow.opacity(0.30), .clear]
+            return [.clear, .cyan.opacity(0.37), .purple.opacity(0.35), .pink.opacity(0.34), .yellow.opacity(0.35), .clear]
         case "GOLD":
-            return [.clear, .yellow.opacity(0.33), .white.opacity(0.43), .orange.opacity(0.27), .clear]
+            return [.clear, .yellow.opacity(0.38), .white.opacity(0.48), .orange.opacity(0.32), .clear]
         case "SILVER":
-            return [.clear, .blue.opacity(0.18), .white.opacity(0.48), .cyan.opacity(0.16), .clear]
+            return [.clear, .blue.opacity(0.23), .white.opacity(0.53), .cyan.opacity(0.21), .clear]
         default:
-            return [.clear, .orange.opacity(0.25), .white.opacity(0.34), .red.opacity(0.16), .clear]
+            return [.clear, .orange.opacity(0.30), .white.opacity(0.39), .red.opacity(0.21), .clear]
         }
     }
 }
