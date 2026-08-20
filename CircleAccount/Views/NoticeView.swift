@@ -224,16 +224,7 @@ struct NoticeView: View {
             }
 
             if isLoading {
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .tint(.white)
-
-                    Text("読み込み中...")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.58))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 36)
+                SiriusLoadingStateView("お知らせを読み込み中")
                 .background(.ultraThinMaterial)
                 .clipShape(
                     RoundedRectangle(
@@ -242,19 +233,11 @@ struct NoticeView: View {
                     )
                 )
             } else if notices.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "megaphone")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.white.opacity(0.36))
-
-                    Text("まだお知らせはありません")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-
-                    Text("投稿した内容がここに表示されます")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.52))
-                }
+                SiriusEmptyStateView(
+                    systemImage: "megaphone.fill",
+                    title: "まだお知らせはありません",
+                    message: "投稿した内容がここに表示されます"
+                )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 34)
                 .background(.ultraThinMaterial)

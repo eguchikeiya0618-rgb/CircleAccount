@@ -419,16 +419,7 @@ struct CalendarView: View {
     }
 
     private var loadingCard: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .tint(.white)
-
-            Text("活動を読み込んでいます")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.58))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 34)
+        SiriusLoadingStateView("活動を読み込み中")
         .background(.ultraThinMaterial)
         .clipShape(
             RoundedRectangle(

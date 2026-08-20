@@ -201,33 +201,13 @@ struct TicketUsageHistoryView: View {
     @ViewBuilder
     private var usageList: some View {
         if isLoading {
-            VStack(spacing: 12) {
-                ProgressView()
-                    .tint(.white)
-
-                Text("読み込み中...")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.60))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 42)
+            SiriusLoadingStateView("チケット使用履歴を読み込み中")
         } else if filteredUsages.isEmpty {
-            VStack(spacing: 12) {
-                Image(systemName: "ticket")
-                    .font(.system(size: 38))
-                    .foregroundStyle(.white.opacity(0.42))
-
-                Text("該当する履歴がありません")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-
-                Text("チケットが使用されると、ここに表示されます")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.56))
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 38)
+            SiriusEmptyStateView(
+                systemImage: "ticket",
+                title: "該当する履歴がありません",
+                message: "チケットが使用されると、ここに表示されます"
+            )
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         } else {

@@ -138,35 +138,21 @@ struct PointCardView: View {
                     flippingCard
                         .opacity(screenAppeared ? 1 : 0)
                         .offset(y: screenAppeared ? 0 : 24)
+                        .siriusScrollEntrance()
 
-                    premiumPointSummary
+                    premiumPointSummary.siriusScrollEntrance()
                     
                     Text("カードをタップするとランキングが見れます")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    ticketsSection
-                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                            content.opacity(phase.isIdentity ? 1.0 : 0.98)
-                        }
-                    exchangeSection
-                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                            content.opacity(phase.isIdentity ? 1.0 : 0.98)
-                        }
+                    ticketsSection.siriusScrollEntrance()
+                    exchangeSection.siriusScrollEntrance()
                     
                     if currentUserIsAdmin {
-                        monthlyAwardButton
-                            .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                                content.opacity(phase.isIdentity ? 1.0 : 0.98)
-                            }
-                        mvpSelectionTestButton
-                            .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                                content.opacity(phase.isIdentity ? 1.0 : 0.98)
-                            }
-                        celebrationTestButton
-                            .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                                content.opacity(phase.isIdentity ? 1.0 : 0.98)
-                            }
+                        monthlyAwardButton.siriusScrollEntrance()
+                        mvpSelectionTestButton.siriusScrollEntrance()
+                        celebrationTestButton.siriusScrollEntrance()
                     }
                     
                     Button {
@@ -186,6 +172,7 @@ struct PointCardView: View {
                             .shadow(color: .black.opacity(0.046), radius: 6.9, y: 3)
                     }
                     .buttonStyle(.plain)
+                    .siriusScrollEntrance()
                     NavigationLink {
                         PointHistoryView()
                     } label: {
@@ -203,6 +190,7 @@ struct PointCardView: View {
                             .shadow(color: .black.opacity(0.046), radius: 6.9, y: 3)
                     }
                     .buttonStyle(.plain)
+                    .siriusScrollEntrance()
                     
                     if currentUserIsAdmin {
                         NavigationLink {
@@ -222,9 +210,10 @@ struct PointCardView: View {
                                 .shadow(color: .black.opacity(0.046), radius: 6.9, y: 3)
                         }
                         .buttonStyle(.plain)
+                        .siriusScrollEntrance()
                     }
                     
-                    pointRuleSection
+                    pointRuleSection.siriusScrollEntrance()
                     }
                     .padding()
                     .padding(.bottom, 110)
@@ -239,7 +228,7 @@ struct PointCardView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
             }
-            .navigationTitle("ポイントカード")
+            .navigationTitle("POINT")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
 
@@ -719,7 +708,7 @@ struct PointCardView: View {
 }
 import SwiftUI
 
-private struct PremiumOwnedTicketArtworkView: View, Equatable {
+struct PremiumOwnedTicketArtworkView: View, Equatable {
     let ticketField: String
     let iconGlowActive: Bool
 
@@ -727,6 +716,11 @@ private struct PremiumOwnedTicketArtworkView: View, Equatable {
 
     static let artworkWidth: CGFloat = 128
     static let artworkHeight: CGFloat = 76
+
+    init(ticketField: String, iconGlowActive: Bool) {
+        self.ticketField = ticketField
+        self.iconGlowActive = iconGlowActive
+    }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.ticketField == rhs.ticketField

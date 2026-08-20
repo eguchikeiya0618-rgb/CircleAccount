@@ -16,6 +16,8 @@ struct ProfileEditView: View {
     @State private var playStyle = ""
     @State private var dominantHand = ""
     @State private var favoriteShot = ""
+    @State private var favoriteEvent = ""
+    @State private var courtPosition = ""
     @State private var comment = ""
 
     @State private var isLoading = true
@@ -154,6 +156,22 @@ struct ProfileEditView: View {
             )
 
             VStack(alignment: .leading, spacing: 7) {
+                Text("得意種目")
+                    .font(.caption)
+                    .bold()
+                    .foregroundStyle(.secondary)
+
+                TextField("例：男子ダブルス・ミックス", text: $favoriteEvent)
+                    .textFieldStyle(.roundedBorder)
+
+                Text("ポジション")
+                    .font(.caption)
+                    .bold()
+                    .foregroundStyle(.secondary)
+
+                TextField("例：前衛・後衛", text: $courtPosition)
+                    .textFieldStyle(.roundedBorder)
+
                 Text("プレースタイル")
                     .font(.caption)
                     .bold()
@@ -326,6 +344,10 @@ struct ProfileEditView: View {
                         data["playStyle"] as? String ?? ""
                     favoriteShot =
                         data["favoriteShot"] as? String ?? ""
+                    favoriteEvent =
+                        data["favoriteEvent"] as? String ?? ""
+                    courtPosition =
+                        data["courtPosition"] as? String ?? ""
                     dominantHand =
                         data["dominantHand"] as? String ?? ""
 
@@ -358,6 +380,8 @@ struct ProfileEditView: View {
             "tension": tension.trimmingCharacters(in: .whitespacesAndNewlines),
             "playStyle": playStyle.trimmingCharacters(in: .whitespacesAndNewlines),
             "favoriteShot": favoriteShot.trimmingCharacters(in: .whitespacesAndNewlines),
+            "favoriteEvent": favoriteEvent.trimmingCharacters(in: .whitespacesAndNewlines),
+            "courtPosition": courtPosition.trimmingCharacters(in: .whitespacesAndNewlines),
             "dominantHand": dominantHand,
             "comment": comment.trimmingCharacters(in: .whitespacesAndNewlines)
         ]

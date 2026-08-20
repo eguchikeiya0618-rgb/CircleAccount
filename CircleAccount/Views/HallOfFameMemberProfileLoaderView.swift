@@ -37,14 +37,7 @@ struct HallOfFameMemberProfileLoaderView: View {
     // MARK: - 読み込み中
 
     private var loadingView: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .controlSize(.large)
-
-            Text("プロフィールを読み込み中...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        SiriusLoadingStateView("プロフィールを読み込み中")
         .frame(
             maxWidth: .infinity,
             maxHeight: .infinity

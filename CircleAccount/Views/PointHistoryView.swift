@@ -141,43 +141,16 @@ struct PointHistoryView: View {
     }
 
     private var loadingView: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .tint(.cyan)
-                .scaleEffect(1.15)
-
-            Text("ポイント履歴を読み込み中...")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.60))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 52)
+        SiriusLoadingStateView("ポイント履歴を読み込み中")
         .premiumHistoryCard()
     }
 
     private var emptyView: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.07))
-                    .frame(width: 84, height: 84)
-
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.38))
-            }
-
-            Text("ポイント履歴はまだありません")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
-
-            Text("活動参加やチケット利用の履歴が\nここに表示されます")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.50))
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 38)
+        SiriusEmptyStateView(
+            systemImage: "clock.arrow.circlepath",
+            title: "ポイント履歴はまだありません",
+            message: "活動参加やチケット利用の履歴がここに表示されます"
+        )
         .premiumHistoryCard()
     }
 

@@ -98,15 +98,7 @@ struct HallOfFameView: View {
             Color.black.opacity(0.12)
                 .ignoresSafeArea()
 
-            VStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(.orange)
-
-                Text("殿堂記録を読み込み中...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            SiriusLoadingStateView("殿堂記録を読み込み中")
             .padding(24)
             .background(.regularMaterial)
             .clipShape(
@@ -132,23 +124,24 @@ struct HallOfFameView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 104, height: 104)
+                    .frame(width: 88, height: 88)
 
                 Circle()
                     .stroke(
                         Color.white.opacity(0.68),
                         lineWidth: 2
                     )
-                    .frame(width: 92, height: 92)
+                    .frame(width: 78, height: 78)
 
                 Text("👑")
-                    .font(.system(size: 60))
+                    .font(.system(size: 51))
             }
+            .offset(y: -5)
             .shadow(
-                color: Color.orange.opacity(0.35),
-                radius: 22,
+                color: Color.orange.opacity(0.24),
+                radius: 16,
                 x: 0,
-                y: 10
+                y: 7
             )
 
             VStack(spacing: 5) {
@@ -172,50 +165,52 @@ struct HallOfFameView: View {
                     )
 
                 Text("歴代チャンピオン・永久記録")
-                    .font(.subheadline)
+                    .font(.system(size: 13, weight: .semibold))
                     .fontWeight(.semibold)
+                    .tracking(0.8)
                     .foregroundStyle(.secondary)
+                    .padding(.vertical, 9)
             }
 
             if let latestRecord {
-                HStack(spacing: 9) {
+                HStack(spacing: 11) {
                     Image(systemName: "crown.fill")
                         .foregroundStyle(.yellow)
 
-                    Text("最新王者")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.72))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("CURRENT KING")
+                            .font(.system(size: 8, weight: .black))
+                            .tracking(1.2)
+                            .foregroundStyle(.yellow.opacity(0.88))
 
-                    Text(latestRecord.displayPointKingName)
-                        .font(.headline)
-                        .bold()
-                        .foregroundStyle(.white)
+                        Text("現在のチャンピオン")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.68))
+
+                        Text(latestRecord.displayPointKingName)
+                            .font(.headline)
+                            .bold()
+                            .foregroundStyle(.white)
+                    }
 
                     Spacer()
 
-                    if currentPointKingStreak.count >= 2 {
-                        Text("\(currentPointKingStreak.count)連覇中")
-                            .font(
-                                .system(
-                                    size: 9,
-                                    weight: .black
-                                )
-                            )
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                Color.yellow.opacity(0.18)
-                            )
+                    VStack(alignment: .trailing, spacing: 5) {
+                        if currentPointKingStreak.count >= 2 {
+                            Text("\(currentPointKingStreak.count)連覇中")
+                                .font(.system(size: 9, weight: .black))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(Color.yellow.opacity(0.18))
+                                .foregroundStyle(.yellow)
+                                .clipShape(Capsule())
+                        }
+
+                        Text(formattedMonth(latestRecord.month))
+                            .font(.caption2)
+                            .bold()
                             .foregroundStyle(.yellow)
-                            .clipShape(Capsule())
                     }
-                    
-                    Text(
-                        formattedMonth(latestRecord.month)
-                    )
-                    .font(.caption2)
-                    .bold()
-                    .foregroundStyle(.yellow)
                 }
                 .padding(.horizontal, 15)
                 .padding(.vertical, 12)
@@ -275,17 +270,19 @@ struct HallOfFameView: View {
             ) {
                 permanentRecordCard(
                     icon: "👑",
+                    badgeIcon: "✨",
                     title: "最多ポイント王",
                     name: mostPointWins.name,
                     value:
                         mostPointWins.count > 0
                             ? "\(mostPointWins.count)回"
                             : "記録なし",
-                    color: .orange
+                    color: .yellow
                 )
 
                 permanentRecordCard(
                     icon: "⚡️",
+                    badgeIcon: "⚡",
                     title: "歴代最高ポイント",
                     name:
                         highestPointRecord?
@@ -300,6 +297,7 @@ struct HallOfFameView: View {
 
                 permanentRecordCard(
                     icon: "🏸",
+                    badgeIcon: "🏸",
                     title: "最多参加王",
                     name: mostAttendanceWins.name,
                     value:
@@ -311,6 +309,7 @@ struct HallOfFameView: View {
 
                 permanentRecordCard(
                     icon: "🔨",
+                    badgeIcon: "🔨",
                     title: "最多設営王",
                     name: mostSetupWins.name,
                     value:
@@ -470,6 +469,7 @@ struct HallOfFameView: View {
 
     private func permanentRecordCard(
         icon: String,
+        badgeIcon: String,
         title: String,
         name: String,
         value: String,
@@ -482,13 +482,9 @@ struct HallOfFameView: View {
 
                 Spacer()
 
-                Circle()
-                    .fill(color.opacity(0.65))
-                    .frame(width: 7, height: 7)
-                    .shadow(
-                        color: color,
-                        radius: 5
-                    )
+                Text(badgeIcon)
+                    .font(.system(size: 13))
+                    .opacity(0.78)
             }
 
             Text(title)
@@ -515,8 +511,15 @@ struct HallOfFameView: View {
         )
         .padding(14)
         .background(
-            Color(.systemBackground)
-                .opacity(0.88)
+            LinearGradient(
+                colors: [
+                    color.opacity(0.075),
+                    Color(.systemBackground).opacity(0.88),
+                    Color(.systemBackground).opacity(0.88)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         )
         .clipShape(
             RoundedRectangle(cornerRadius: 18)
@@ -563,7 +566,7 @@ struct HallOfFameView: View {
                             isLatest: index == 0
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(HallOfFameMonthPressStyle())
                 }
             }
         }
@@ -659,11 +662,11 @@ struct HallOfFameView: View {
                         Text("MONTHLY AWARDS")
                             .font(
                                 .system(
-                                    size: 8,
+                                    size: 10,
                                     weight: .black
                                 )
                             )
-                            .tracking(1.2)
+                            .tracking(1.5)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -743,7 +746,8 @@ struct HallOfFameView: View {
                         ? "記録なし"
                         : "MVP",
                 color: .yellow,
-                memberId: record.mvpId
+                memberId: record.mvpId,
+                isMVP: true
             )
 
             if !record.secondName.isEmpty
@@ -759,7 +763,8 @@ struct HallOfFameView: View {
                     compactRankingRow(
                         icon: "🥇",
                         name: record.displayPointKingName,
-                        point: record.displayPointKingPoint
+                        point: record.displayPointKingPoint,
+                        isFirst: true
                     )
 
                     if !record.secondName.isEmpty {
@@ -782,13 +787,15 @@ struct HallOfFameView: View {
         }
         .padding(18)
         .background {
+            let accent = monthAccentColor(record.month)
+
             ZStack {
                 LinearGradient(
                     colors: [
-                        Color.yellow.opacity(
+                        accent.opacity(
                             isLatest ? 0.14 : 0.07
                         ),
-                        Color.orange.opacity(
+                        accent.opacity(
                             isLatest ? 0.07 : 0.03
                         ),
                         Color(.systemBackground)
@@ -799,7 +806,7 @@ struct HallOfFameView: View {
 
                 Circle()
                     .fill(
-                        Color.yellow.opacity(
+                        accent.opacity(
                             isLatest ? 0.11 : 0.05
                         )
                     )
@@ -811,14 +818,16 @@ struct HallOfFameView: View {
             RoundedRectangle(cornerRadius: 25)
         )
         .overlay {
+            let accent = monthAccentColor(record.month)
+
             RoundedRectangle(cornerRadius: 25)
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color.yellow.opacity(
+                            accent.opacity(
                                 isLatest ? 0.42 : 0.18
                             ),
-                            Color.orange.opacity(0.12),
+                            accent.opacity(0.12),
                             Color.clear
                         ],
                         startPoint: .topLeading,
@@ -828,7 +837,7 @@ struct HallOfFameView: View {
                 )
         }
         .shadow(
-            color: Color.orange.opacity(
+            color: monthAccentColor(record.month).opacity(
                 isLatest ? 0.11 : 0.04
             ),
             radius: isLatest ? 13 : 7,
@@ -844,7 +853,8 @@ struct HallOfFameView: View {
         name: String,
         value: String,
         color: Color,
-        memberId: String = ""
+        memberId: String = "",
+        isMVP: Bool = false
     ) -> some View {
         let imageBase64 = profileImage(
             memberId: memberId,
@@ -903,7 +913,7 @@ struct HallOfFameView: View {
             Spacer()
 
             Text(value)
-                .font(.headline)
+                .font(isMVP ? .title3 : .headline)
                 .bold()
                 .foregroundStyle(color)
                 .lineLimit(1)
@@ -913,7 +923,7 @@ struct HallOfFameView: View {
         .padding(.vertical, 11)
         .background(
             Color(.systemBackground)
-                .opacity(0.78)
+                .opacity(isMVP ? 0.84 : 0.78)
         )
         .clipShape(
             RoundedRectangle(cornerRadius: 17)
@@ -921,16 +931,22 @@ struct HallOfFameView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 17)
                 .stroke(
-                    color.opacity(0.11),
-                    lineWidth: 1
+                    color.opacity(isMVP ? 0.32 : 0.11),
+                    lineWidth: isMVP ? 1.2 : 1
                 )
         }
+        .shadow(
+            color: isMVP ? Color.yellow.opacity(0.18) : Color.clear,
+            radius: isMVP ? 10 : 0,
+            y: isMVP ? 3 : 0
+        )
     }
 
     private func compactRankingRow(
         icon: String,
         name: String,
-        point: Int
+        point: Int,
+        isFirst: Bool = false
     ) -> some View {
         HStack(spacing: 11) {
             Text(icon)
@@ -941,6 +957,12 @@ struct HallOfFameView: View {
                 .font(.subheadline)
                 .bold()
                 .lineLimit(1)
+
+            if isFirst {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(.yellow)
+            }
 
             Spacer()
 
@@ -958,6 +980,23 @@ struct HallOfFameView: View {
         .clipShape(
             RoundedRectangle(cornerRadius: 14)
         )
+    }
+
+    private func monthAccentColor(_ month: String) -> Color {
+        let normalized = month.replacingOccurrences(of: "/", with: "-")
+        let monthNumber = normalized
+            .split(separator: "-")
+            .last
+            .flatMap { Int($0.filter(\.isNumber)) }
+
+        switch monthNumber {
+        case 8: return .yellow
+        case 7: return .purple
+        case 6: return .blue
+        case 5: return .green
+        case 4: return .red
+        default: return .orange
+        }
     }
 
     // MARK: - 共通見出し
@@ -1409,6 +1448,17 @@ struct HallOfFameCountRecord {
 struct HallOfFameStreakRecord {
     let name: String
     let count: Int
+}
+
+private struct HallOfFameMonthPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(
+                .spring(response: 0.24, dampingFraction: 0.82),
+                value: configuration.isPressed
+            )
+    }
 }
 // MARK: - 背景演出
 

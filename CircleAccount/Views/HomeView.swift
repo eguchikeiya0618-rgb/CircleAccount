@@ -181,16 +181,16 @@ struct HomeView: View {
                     .allowsHitTesting(false)
 
                 ScrollView {
-                    LazyVStack(spacing: 18) {
+                    LazyVStack(spacing: 28) {
                         luxuryHeader
 
                         if !latestNotice.isEmpty {
-                            noticeCard
+                            noticeCard.homeCardEntrance()
                         }
 
-                        activitySection
+                        activitySection.homeCardEntrance()
 
-                        homeDashboardHero
+                        homeDashboardHero.homeCardEntrance()
 
                         HomeRankingCard(
                             entries: rankingEntries,
@@ -198,6 +198,7 @@ struct HomeView: View {
                             currentUserRank: currentUserRank,
                             pointToNextRank: pointToNextRank
                         )
+                        .homeCardEntrance()
 
                         LatestMVPHeroCard(
                             mvpName:
@@ -213,17 +214,18 @@ struct HomeView: View {
                                     ? testMVPImageBase64
                                     : latestMVPImageBase64
                         )
+                        .homeCardEntrance()
 
-                        featuredGachaCard
+                        featuredGachaCard.homeCardEntrance()
 
-                        quickMenuSection
+                        quickMenuSection.homeCardEntrance()
 
-                        latestChampionCard
+                        latestChampionCard.homeCardEntrance()
 
                         if currentUserIsAdmin {
-                            administratorDashboard
+                            administratorDashboard.homeCardEntrance()
                         } else {
-                            memberSummaryGrid
+                            memberSummaryGrid.homeCardEntrance()
                         }
 
                         sloganView
@@ -676,6 +678,8 @@ struct HomeView: View {
                         )
                     )
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
 
                 Text(playerDashboardMessage)
                     .font(.subheadline)
@@ -721,10 +725,17 @@ struct HomeView: View {
                         radius: 10
                     )
 
-                Text("TOTAL \(displayedPoint)pt")
-                    .font(.caption)
-                    .fontWeight(.black)
-                    .foregroundStyle(.cyan)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("\(displayedPoint)pt")
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundStyle(.cyan)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
+                    Text("PREMIUM POINT")
+                        .font(.system(size: 8, weight: .black))
+                        .tracking(1.1)
+                        .foregroundStyle(.white.opacity(0.52))
+                }
             }
         }
         .padding(.horizontal, 22)
@@ -1085,6 +1096,7 @@ struct HomeView: View {
                             )
                         )
                         .frame(width: 88, height: 88)
+                        .shadow(color: .black.opacity(0.32), radius: 8, y: 5)
 
                         RoundedRectangle(
                             cornerRadius: 22,
@@ -1103,6 +1115,10 @@ struct HomeView: View {
                             lineWidth: 1.5
                         )
                         .frame(width: 88, height: 88)
+
+                        RoundedRectangle(cornerRadius: 19, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                            .frame(width: 80, height: 80)
 
                         Text("🎰")
                             .font(.system(size: 52))
@@ -1373,13 +1389,11 @@ struct HomeView: View {
                 .ultraThinMaterial
             )
             .clipShape(
-                RoundedRectangle(
-                    cornerRadius: 20
-                )
+                RoundedRectangle(cornerRadius: 24)
             )
             .overlay {
                 RoundedRectangle(
-                    cornerRadius: 20
+                    cornerRadius: 24
                 )
                 .stroke(
                     Color.white.opacity(0.12),
@@ -1387,8 +1401,8 @@ struct HomeView: View {
                 )
             }
             .shadow(
-                color: .black.opacity(0.045),
-                radius: 8,
+                color: .black.opacity(0.10),
+                radius: 10,
                 x: 0,
                 y: 4
             )
@@ -2205,7 +2219,7 @@ struct HomeView: View {
                             .tracking(1.1)
                             .foregroundStyle(.white)
 
-                        Text("歴代チャンピオン・永久記録")
+                        Text("2026 SEASON • 歴代チャンピオン・永久記録")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundStyle(
@@ -2575,12 +2589,21 @@ struct HomeView: View {
 
                 Spacer()
 
-                if !latestNoticeDate.isEmpty {
-                    Text(latestNoticeDate)
-                        .font(.caption)
-                        .foregroundStyle(
-                            .secondary
-                        )
+                HStack(spacing: 7) {
+                    Text("NEW")
+                        .font(.system(size: 9, weight: .black))
+                        .tracking(0.8)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.78))
+                        .clipShape(Capsule())
+
+                    if !latestNoticeDate.isEmpty {
+                        Text(latestNoticeDate)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -2664,6 +2687,7 @@ struct HomeView: View {
                                 "chart.bar.xaxis"
                         )
                         .foregroundStyle(.indigo)
+                        .shadow(color: .indigo.opacity(0.34), radius: 5)
                     }
 
                     VStack(
@@ -2752,6 +2776,7 @@ struct HomeView: View {
             }
         }
         .padding(19)
+        .background(.ultraThinMaterial)
         .background(
             LinearGradient(
                 colors: [
@@ -2783,6 +2808,7 @@ struct HomeView: View {
                 lineWidth: 1
             )
         }
+        .shadow(color: .black.opacity(0.18), radius: 13, y: 7)
     }
 
     private func dashboardMiniCard(
@@ -3925,7 +3951,7 @@ private struct HomeAmbientBackground: View {
     let accentColor: Color
 
     var body: some View {
-        TimelineView(.animation) {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) {
             timeline in
 
             let time =
@@ -3992,8 +4018,24 @@ private struct HomeAmbientBackground: View {
                                 sin(
                                     time * 0.15
                                 )
-                            ) * 130,
+                    ) * 130,
                         y: 650
+                    )
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(0.045), .cyan.opacity(0.035), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 230, height: 12)
+                    .blur(radius: 6)
+                    .rotationEffect(.degrees(-18))
+                    .offset(
+                        x: CGFloat(sin(time * 0.10)) * 45,
+                        y: -95
                     )
             }
         }
@@ -4080,7 +4122,7 @@ private struct DashboardParticleLayer: View {
     ]
 
     var body: some View {
-        TimelineView(.animation) {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) {
             timeline in
 
             let time =
@@ -4179,10 +4221,13 @@ private struct HomeStarfieldOverlay: View {
         (70, 470, 2.2, 0.46),
         (155, 610, 1.7, 0.53),
         (-75, 745, 2.6, 0.49)
+        ,(-130, 865, 1.6, 0.43)
+        ,(25, 925, 2.0, 0.40)
+        ,(140, 1030, 1.5, 0.46)
     ]
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
             let time =
                 timeline.date
                     .timeIntervalSinceReferenceDate
@@ -4232,6 +4277,17 @@ private struct HomeStarfieldOverlay: View {
                     }
                 }
             }
+        }
+    }
+}
+
+private extension View {
+    func homeCardEntrance() -> some View {
+        scrollTransition(.animated(.easeOut(duration: 0.25)), axis: .vertical) { content, phase in
+            content
+                .opacity(phase.isIdentity ? 1 : 0.90)
+                .scaleEffect(phase.isIdentity ? 1 : 0.98)
+                .offset(y: phase.isIdentity ? 0 : 10)
         }
     }
 }

@@ -22,6 +22,10 @@ struct MyPageView: View {
     @State private var tension = ""
     @State private var playStyle = ""
     @State private var comment = ""
+    @State private var dominantHand = ""
+    @State private var favoriteShot = ""
+    @State private var favoriteEvent = ""
+    @State private var courtPosition = ""
     
     @State private var showProfileEditor = false
     
@@ -41,6 +45,10 @@ struct MyPageView: View {
     @State private var monthlySecondCount = 0
     @State private var monthlyThirdCount = 0
     @State private var legendCount = 0
+    @State private var tournamentCount = 0
+    @State private var totalGames = 0
+    @State private var totalWins = 0
+    @State private var longestStreakCount = 0
     
     @State private var cleanupTickets = 0
     @State private var discountTickets = 0
@@ -54,6 +62,8 @@ struct MyPageView: View {
     @State private var profileImage: UIImage?
     
     @State private var selectedAchievement: Achievement?
+    @State private var selectedBadgeTitle = ""
+    @State private var showBadgeDescription = false
     @State private var unlockedAchievement: Achievement?
     
     @State private var showLevelUp = false
@@ -61,6 +71,7 @@ struct MyPageView: View {
     
     @State private var recentActivities: [String] = []
     @State private var savedBadgeIds: [String] = []
+    @State private var profileRingFlow = false
     var earnedBadges: [(icon: String, title: String)] {
         var badges: [(icon: String, title: String)] = []
 
@@ -172,76 +183,22 @@ struct MyPageView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 18) {
-                    profileCard
-                    pointCard
-                    NavigationLink {
-                        TicketShopView()
-                    } label: {
-                        HStack {
-                            Image(systemName: "cart.fill")
-                                .font(.title2)
-
-                            VStack(alignment: .leading) {
-                                Text("チケットショップ")
-                                    .font(.headline)
-
-                                Text("ポイントでチケットを交換")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding()
-                        .foregroundStyle(.white)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(.white.opacity(0.12), lineWidth: 1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    achievementGrid
-                
-                    
-                    TicketCardView(
-                        stringingFreeTickets: stringingFreeTickets,
-                        challengeTickets: challengeTickets,
-                        priorityTickets: priorityTickets,
-                        cleanupTickets: cleanupTickets,
-                        discountTickets: discountTickets,
-                        halfPriceTickets: halfPriceTickets,
-                        freeTickets: freeTickets
-                    )
-                    ActivityHistoryCardView(
-                        recentActivities: recentActivities
-                    )
+                VStack(spacing: 24) {
+                    profileCard.siriusScrollEntrance()
+                    badmintonProfileCard.siriusScrollEntrance()
+                    activityDataCard.siriusScrollEntrance()
+                    achievementGrid.siriusScrollEntrance()
+                    earnedBadgesCard.siriusScrollEntrance()
                     if currentUserIsAdmin {
-                        adminSection
+                        adminSection.siriusScrollEntrance()
                     }
-
-                    logoutButton
+                    settingsSection.siriusScrollEntrance()
+                    logoutButton.siriusScrollEntrance()
                 }
                 .padding()
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.black,
-                        Color.indigo.opacity(0.94),
-                        Color.purple.opacity(0.72)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-            )
-            .navigationTitle("My Page")
+            .background(MyPagePremiumBackground(pulse: false).ignoresSafeArea())
+            .navigationTitle("MY PAGE")
             .toolbarBackground(.hidden, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedAchievement) { achievement in
@@ -278,6 +235,11 @@ struct MyPageView: View {
                 }
                 .padding()
             }
+            .alert(selectedBadgeTitle, isPresented: $showBadgeDescription) {
+                Button("OK") { }
+            } message: {
+                Text(badgeDescription(title: selectedBadgeTitle))
+            }
            
             .fullScreenCover(isPresented: $showLevelUp) {
                 LevelUpView(
@@ -288,6 +250,11 @@ struct MyPageView: View {
             .onAppear {
                 loadMember()
                 loadMyRank()
+                if !profileRingFlow {
+                    withAnimation(.linear(duration: 52).repeatForever(autoreverses: false)) {
+                        profileRingFlow = true
+                    }
+                }
                
             }
             .onChange(of: selectedPhoto) { _, newItem in
@@ -299,8 +266,8 @@ struct MyPageView: View {
     }
 
     var profileCard: some View {
-        VStack(spacing: 14) {
-            ZStack(alignment: .bottomTrailing) {
+        VStack(spacing: 6) {
+            ZStack {
                 if let profileImage {
                     Image(uiImage: profileImage)
                         .resizable()
@@ -313,21 +280,41 @@ struct MyPageView: View {
                         .foregroundStyle(.gray.opacity(0.45))
                 }
 
+            }
+            .overlay {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.yellow.opacity(0.95), .orange.opacity(0.72), .yellow.opacity(0.90)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .frame(width: 112, height: 112)
+
+                Circle()
+                    .trim(from: 0.05, to: 0.30)
+                    .stroke(
+                        AngularGradient(colors: [.cyan, .purple, .pink, .yellow, .cyan], center: .center),
+                        style: StrokeStyle(lineWidth: 1.4, lineCap: .round)
+                    )
+                    .frame(width: 118, height: 118)
+                    .rotationEffect(.degrees(profileRingFlow ? 360 : 0))
+                    .shadow(color: .purple.opacity(0.34), radius: 5)
+            }
+            .overlay(alignment: .top) {
                 Text(rankIcon)
                     .font(.title2)
                     .frame(width: 36, height: 36)
                     .background(.ultraThinMaterial)
                     .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.12), radius: 5)
+                    .shadow(color: .black.opacity(0.24), radius: 4, y: 2)
+                    .shadow(color: .yellow.opacity(0.22), radius: 6)
+                    .offset(y: -28)
             }
-            .overlay(
-                Circle()
-                    .stroke(
-                        totalPoint >= 700 ? Color.yellow : Color.blue,
-                        lineWidth: 4
-                    )
-                    .frame(width: 112, height: 112)
-            )
+            .shadow(color: .yellow.opacity(0.14), radius: 7)
+            .padding(.top, 8)
 
             PhotosPicker(selection: $selectedPhoto, matching: .images) {
                 Text("写真を変更")
@@ -338,152 +325,72 @@ struct MyPageView: View {
                     .background(Color(.systemGray6))
                     .clipShape(Capsule())
             }
-            Button {
-                showProfileEditor = true
-            } label: {
-                Label("バドプロフィールを編集", systemImage: "pencil")
-                    .font(.headline)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(Color.blue.opacity(0.12))
-                    .clipShape(Capsule())
-            }
             Text(name.isEmpty ? "メンバー" : name)
                 .font(.system(size: 34, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.62)
+                .padding(.horizontal, 16)
+
+            HStack(spacing: 8) {
+                Text(rankIcon)
+                Text(rankBadge).tracking(1.2)
+            }
+            .font(.title3.bold())
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
+            .background(rankColor.opacity(0.18))
+            .foregroundStyle(rankColor)
+            .clipShape(Capsule())
 
             Text("Lv.\(memberLevel)")
-                .font(.headline)
-                .bold()
+                .font(.subheadline.bold())
                 .foregroundStyle(.orange)
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.black.opacity(0.38))
+                    Capsule()
+                        .fill(LinearGradient(colors: [.orange, .yellow.opacity(0.92)], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: proxy.size.width * min(Double(totalPoint % 50) / 50, 1))
+                        .shadow(color: .orange.opacity(0.30), radius: 3)
+                }
+            }
+                .frame(width: 240, height: 4)
+                .animation(.easeInOut(duration: 0.8), value: totalPoint)
+
             if streakCount > 0 {
                 Text("🔥 現在\(streakCount)連続参加中")
-                    .font(.subheadline)
-                    .bold()
+                    .font(.headline.bold())
                     .foregroundStyle(.orange)
             } else {
                 Text("次の参加から連続記録スタート")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            ProgressView(
-                value: Double(totalPoint % 50),
-                total: 50
-            )
-            .tint(.orange)
-            .frame(maxWidth: 240)
-
-            Text("あと\(50 - (totalPoint % 50))ptでLv.\(memberLevel + 1)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                Text(rankIcon)
-                Text(rankBadge)
-                    .tracking(1.2)
-            }
-            .font(.headline)
-            .bold()
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(rankColor.opacity(0.14))
-            .foregroundStyle(rankColor)
-            .clipShape(Capsule())
-
             Text("Member No. \(String(format: "%06d", memberNo))")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.58))
-
-            Text("\(gender) ・ \(level)")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.58))
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("獲得バッジ", systemImage: "medal.fill")
-                        .font(.headline)
-                        .bold()
-                        .foregroundStyle(.orange)
-
-                    Spacer()
-
-                    Text("\(earnedBadges.count)個")
-                        .font(.caption)
-                        .bold()
-                        .foregroundStyle(.secondary)
-                }
-
-                if earnedBadges.isEmpty {
-                    HStack(spacing: 10) {
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(.secondary)
-
-                        Text("条件を達成するとバッジを獲得できます")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(
-                                Array(earnedBadges.enumerated()),
-                                id: \.offset
-                            ) { _, badge in
-                                VStack(spacing: 8) {
-                                    Text(badge.icon)
-                                        .font(.system(size: 32))
-                                        .frame(width: 58, height: 58)
-                                        .background(
-                                            Circle()
-                                                .fill(
-                                                    badgeColor(
-                                                        title: badge.title
-                                                    ).opacity(0.15)
-                                                )
-                                        )
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    badgeColor(
-                                                        title: badge.title
-                                                    ).opacity(0.45),
-                                                    lineWidth: 2
-                                                )
-                                        }
-
-                                    Text(badge.title)
-                                        .font(.caption2)
-                                        .bold()
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.7)
-                                }
-                                .frame(width: 86)
-                                .padding(.vertical, 12)
-                                .background(Color(.systemGray6).opacity(0.75))
-                                .clipShape(RoundedRectangle(cornerRadius: 18))
-                            }
-                        }
-                        .padding(.horizontal, 2)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 6)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
+        .padding(.vertical, 24)
         .padding(.horizontal)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(Color.black.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.30), .white.opacity(0.07), .purple.opacity(0.18)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
         }
-        .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 8)
+        .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
         .sheet(isPresented: $showProfileEditor) {
             ProfileEditView()
         }
@@ -531,16 +438,267 @@ struct MyPageView: View {
         .mypageCard()
     }
 
+    var badmintonProfileCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                sectionHeader("バドプロフィール", icon: "figure.badminton")
+
+                Spacer()
+
+                Button {
+                    showProfileEditor = true
+                } label: {
+                    Label("編集", systemImage: "pencil")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.blue.opacity(0.16))
+                        .clipShape(Capsule())
+                }
+            }
+
+            badmintonProfileRow(icon: "hand.raised.fill", title: "利き手", value: dominantHand)
+            badmintonProfileRow(icon: "sportscourt.fill", title: "得意種目", value: favoriteEvent.isEmpty ? favoriteShot : favoriteEvent)
+            badmintonProfileRow(icon: "person.2.fill", title: "ポジション", value: courtPosition.isEmpty ? playStyle : courtPosition)
+            badmintonProfileRow(icon: "figure.badminton", title: "使用ラケット", value: racket)
+            badmintonProfileRow(icon: "circle.grid.cross.fill", title: "使用ガット", value: stringName)
+            badmintonProfileRow(icon: "person.text.rectangle", title: "所属クラス", value: level)
+            badmintonProfileRow(icon: "calendar", title: "バド歴", value: badmintonYears > 0 ? "\(badmintonYears)年" : "")
+
+            if !comment.isEmpty {
+                Divider().overlay(Color.white.opacity(0.12))
+                Label(comment, systemImage: "quote.bubble.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.82))
+            }
+        }
+        .mypageCard()
+    }
+
+    var activityDataCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader("活動データ", icon: "chart.bar.xaxis")
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                activityMetric(icon: "figure.badminton", title: "練習参加", value: "\(attendanceCount)回", color: .blue, emphasized: true)
+                activityMetric(icon: "flag.checkered", title: "大会参加", value: "\(tournamentCount)回", color: .purple)
+                activityMetric(icon: "trophy.fill", title: "優勝", value: "\(monthlyChampionCount)回", color: .yellow)
+                activityMetric(icon: "medal.fill", title: "準優勝", value: "\(monthlySecondCount)回", color: .orange)
+                activityMetric(icon: "star.fill", title: "MVP獲得", value: "\(mvpCount)回", color: .yellow)
+                activityMetric(icon: "percent", title: "勝率", value: totalGames > 0 ? "\(Int((Double(totalWins) / Double(totalGames) * 100).rounded()))%" : "—", color: .mint)
+                activityMetric(icon: "flame.fill", title: "最長連続参加", value: "\(max(longestStreakCount, streakCount))回", color: .orange)
+                activityMetric(icon: "circle.grid.3x3.fill", title: "累計ゲーム", value: "\(totalGames)回", color: .indigo)
+            }
+        }
+        .mypageCard()
+    }
+
+    var earnedBadgesCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader("獲得バッジ", icon: "medal.fill")
+
+            if earnedBadges.isEmpty {
+                Text("獲得済みのバッジはまだありません")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(Array(earnedBadges.enumerated()), id: \.offset) { _, badge in
+                        Button {
+                            selectedBadgeTitle = badge.title
+                            showBadgeDescription = true
+                        } label: {
+                            VStack(spacing: 8) {
+                                Text(badge.icon).font(.title)
+                                Text(badge.title)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                Text(badgeShortDescription(title: badge.title))
+                                    .font(.caption2)
+                                    .foregroundStyle(.white.opacity(0.52))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.70)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 88)
+                            .background(badgeColor(title: badge.title).opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(badgeColor(title: badge.title).opacity(0.34), lineWidth: 1)
+                            }
+                        }
+                        .buttonStyle(MyPageMenuButtonStyle())
+                    }
+                }
+            }
+        }
+        .mypageCard()
+    }
+
+    var recentAchievementsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("最近獲得した実績", systemImage: "sparkles")
+                    .font(.title2.bold())
+                Spacer()
+                Text("NEW")
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(.yellow)
+            }
+            .foregroundStyle(.white)
+
+            if earnedBadges.isEmpty {
+                Text("新しい実績はまだありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(earnedBadges.prefix(3).enumerated()), id: \.offset) { _, badge in
+                    HStack(spacing: 12) {
+                        Text(badge.icon).font(.title2)
+                        Text(badge.title).font(.headline.bold())
+                        Spacer()
+                        Image(systemName: "checkmark.seal.fill").foregroundStyle(.yellow)
+                    }
+                    .padding(12)
+                    .background(badgeColor(title: badge.title).opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+        }
+        .mypageCard()
+    }
+
+    var recentActivityCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("最近の活動履歴", systemImage: "clock.arrow.circlepath")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+
+            if recentActivities.isEmpty {
+                Text("まだ活動履歴はありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(recentActivities.enumerated()), id: \.offset) { index, activity in
+                    HStack(spacing: 13) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.cyan.opacity(0.12))
+                                .frame(width: 42, height: 42)
+                            Image(systemName: "figure.badminton")
+                                .foregroundStyle(.cyan)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(activity)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.90))
+                                .lineLimit(2)
+                            Text(index == 0 ? "最新の活動" : "参加履歴")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.42))
+                        }
+                        Spacer(minLength: 8)
+                        if !activity.contains("不参加") {
+                            Text("+5pt")
+                                .font(.subheadline.weight(.black))
+                                .foregroundStyle(.cyan)
+                        }
+                    }
+                    .padding(12)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.white.opacity(0.09), lineWidth: 0.7)
+                    }
+                }
+            }
+        }
+        .mypageCard()
+    }
+
+    var pointRuleCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("ポイントルール", systemImage: "list.bullet.rectangle.portrait.fill")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+
+            pointRuleRow(icon: "figure.badminton", title: "練習参加", point: "+5pt")
+            pointRuleRow(icon: "clock.badge.checkmark.fill", title: "前日回答", point: "+2pt")
+            pointRuleRow(icon: "wrench.and.screwdriver.fill", title: "設営", point: "+5pt")
+            pointRuleRow(icon: "person.badge.plus.fill", title: "新規紹介", point: "+20pt")
+        }
+        .mypageCard()
+    }
+
+    var recentTicketsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("最近獲得したチケット", systemImage: "ticket.fill")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+
+            if ownedTicketSummary.isEmpty {
+                Text("獲得したチケットはまだありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(ownedTicketSummary.prefix(3).enumerated()), id: \.offset) { _, ticket in
+                    HStack(spacing: 12) {
+                        Text(ticket.icon).font(.title2)
+                        Text(ticket.title).font(.headline)
+                        Spacer()
+                        Text("×\(ticket.count)")
+                            .font(.headline.weight(.black))
+                            .foregroundStyle(.yellow)
+                    }
+                }
+            }
+        }
+        .mypageCard()
+    }
+
+    var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader("設定", icon: "gearshape.fill")
+
+            Button {
+                showProfileEditor = true
+            } label: {
+                menuRow(icon: "person.crop.circle.fill", title: "プロフィール編集", color: .cyan)
+            }
+
+            NavigationLink { MyPageSettingDetailView(title: "通知設定", message: "通知は端末の設定から変更できます。") } label: {
+                menuRow(icon: "bell.fill", title: "通知設定", color: .orange)
+            }
+            NavigationLink { MyPageSettingDetailView(title: "テーマ", message: "SIRIUS Premiumテーマを使用中です。") } label: {
+                menuRow(icon: "paintpalette.fill", title: "テーマ", color: .purple)
+            }
+            NavigationLink { MyPageSettingDetailView(title: "アプリについて", message: "CircleAccount / SIRIUS Premium") } label: {
+                menuRow(icon: "info.circle.fill", title: "アプリについて", color: .blue)
+            }
+            NavigationLink { MyPageSettingDetailView(title: "利用規約", message: "利用規約をご確認ください。") } label: {
+                menuRow(icon: "doc.text.fill", title: "利用規約", color: .gray)
+            }
+            NavigationLink { MyPageSettingDetailView(title: "プライバシーポリシー", message: "プライバシーポリシーをご確認ください。") } label: {
+                menuRow(icon: "hand.raised.fill", title: "プライバシーポリシー", color: .mint)
+            }
+            NavigationLink { MyPageSettingDetailView(title: "お問い合わせ", message: "管理者までお問い合わせください。") } label: {
+                menuRow(icon: "envelope.fill", title: "お問い合わせ", color: .cyan)
+            }
+        }
+        .mypageCard()
+        .buttonStyle(MyPageMenuButtonStyle())
+    }
+
     var achievementGrid: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             NavigationLink {
                 AchievementsView(achievements: achievements)
             } label: {
                 HStack {
-                    Text("🏆 実績")
-                        .font(.title2)
-                        .bold()
-                        .foregroundStyle(.white)
+                    sectionHeader("実績", icon: "trophy.fill")
 
                     Spacer()
 
@@ -553,7 +711,7 @@ struct MyPageView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(MyPageMenuButtonStyle())
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),
@@ -574,18 +732,15 @@ struct MyPageView: View {
                     .background(Color.blue.opacity(0.10))
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(MyPageMenuButtonStyle())
         }
         .mypageCard()
     }
     
     
     var adminSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("管理メニュー")
-                .font(.title2)
-                .bold()
-                .foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader("管理メニュー", icon: "crown.fill")
 
             NavigationLink { MembersView() } label: {
                 menuRow(icon: "person.3.fill", title: "メンバー管理", color: .blue)
@@ -606,10 +761,11 @@ struct MyPageView: View {
                 )
             }
             NavigationLink { CalendarView() } label: {
-                menuRow(icon: "calendar.circle.fill", title: "カレンダー", color: .purple)
+                menuRow(icon: "calendar.circle.fill", title: "カレンダー管理", color: .purple)
             }
         }
         .mypageCard()
+        .buttonStyle(MyPageMenuButtonStyle())
     }
 
     var logoutButton: some View {
@@ -630,10 +786,15 @@ struct MyPageView: View {
                 Spacer()
             }
             .padding()
-            .background(Color.red.opacity(0.22))
+            .foregroundStyle(.red)
+            .background(Color.white.opacity(0.94))
             .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.red.opacity(0.55), lineWidth: 1)
+            }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MyPageMenuButtonStyle())
     }
 
     var rankColor: Color {
@@ -922,6 +1083,18 @@ struct MyPageView: View {
     var achievedCount: Int {
         achievements.filter { $0.isAchieved }.count
     }
+    var ownedTicketSummary: [(icon: String, title: String, count: Int)] {
+        [
+            ("🎁", "参加費無料券", freeTickets),
+            ("🏸", "参加費半額券", halfPriceTickets),
+            ("⭐", "対戦指名券", challengeTickets),
+            ("🚀", "優先ゲーム券", priorityTickets),
+            ("🎾", "ガット張り工賃無料券", stringingFreeTickets),
+            ("💰", "参加費500円券", discountTickets),
+            ("🧹", "片付けパス", cleanupTickets)
+        ]
+        .filter { $0.count > 0 }
+    }
     func badgeColor(title: String) -> Color {
         switch title {
         case "LEGEND":
@@ -954,6 +1127,46 @@ struct MyPageView: View {
             return .purple
         }
     }
+
+    func badgeDescription(title: String) -> String {
+        switch title {
+        case "LEGEND": return "累計ポイントで最高ランクへ到達した証です。"
+        case "月間王者": return "月間ランキングで1位を獲得した証です。"
+        case "MVP": return "活動でMVPに選ばれた証です。"
+        case "常連": return "継続して活動へ参加した証です。"
+        case "ベテラン": return "50回以上活動へ参加した証です。"
+        case "設営王候補": return "設営を積極的に支えた証です。"
+        case "紹介者": return "新しい仲間を紹介した証です。"
+        default: return "継続的な活動によって獲得したSIRIUSバッジです。"
+        }
+    }
+
+    func badgeShortDescription(title: String) -> String {
+        switch title {
+        case "LEGEND": return "最高ランク到達"
+        case "月間王者": return "月間ランキング1位"
+        case "MVP": return "MVP獲得"
+        case "常連": return "継続参加達成"
+        case "ベテラン": return "50回参加達成"
+        case "設営王候補": return "設営サポート達成"
+        case "紹介者": return "メンバー紹介達成"
+        default:
+            if title.contains("連続参加") { return "連続参加達成" }
+            return "SIRIUS実績達成"
+        }
+    }
+
+    func sectionHeader(_ title: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.90))
+                .frame(width: 24, alignment: .center)
+            Text(title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+    }
     func profileStatBox(icon: String, title: String, value: String, color: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
@@ -971,6 +1184,66 @@ struct MyPageView: View {
         .frame(maxWidth: .infinity)
     }
 
+    func badmintonProfileRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.cyan)
+                .frame(width: 24)
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.58))
+            Spacer()
+            Text(value.isEmpty ? "未登録" : value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(
+                    value.isEmpty
+                        ? Color.white.opacity(0.42)
+                        : Color.white
+                )
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 10)
+    }
+
+    func activityMetric(icon: String, title: String, value: String, color: Color, emphasized: Bool = false) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.headline)
+                .foregroundStyle(color.opacity(0.90))
+            Text(value)
+                .font(.title2.weight(.black))
+                .foregroundStyle(.white)
+            Text(title)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, minHeight: 82)
+        .background(Color.white.opacity(emphasized ? 0.080 : 0.055))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(color.opacity(emphasized ? 0.24 : 0.14), lineWidth: 1)
+        }
+    }
+
+    func pointRuleRow(icon: String, title: String, point: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.yellow.opacity(0.88))
+                .frame(width: 28)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.86))
+            Spacer()
+            Text(point)
+                .font(.headline.weight(.black))
+                .foregroundStyle(.cyan)
+        }
+        .padding(.vertical, 3)
+    }
+
     func achievementBadge(_ achievement: Achievement) -> some View {
         VStack(spacing: 10) {
             Text(achievement.isAchieved ? achievement.icon : "🔒")
@@ -979,54 +1252,100 @@ struct MyPageView: View {
             Text(achievement.title)
                 .font(.headline)
                 .bold()
+                .foregroundStyle(Color.white.opacity(0.96))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
 
-            Text(achievement.subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(achievement.isAchieved ? "✅ 達成済み" : achievement.subtitle)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.90))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
 
             Divider()
 
             Text(achievement.description)
-                .font(.caption2)
+                .font(.caption2.weight(.medium))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.white.opacity(0.66))
                 .lineLimit(2)
+                .lineSpacing(3)
                 .minimumScaleFactor(0.75)
 
-            Text("🎁 \(achievement.reward)")
+            HStack(spacing: 3) {
+                Text("🎁")
+                    .foregroundStyle(.orange)
+                highlightedRewardText(achievement.reward)
+            }
                 .font(.caption)
-                .bold()
-                .foregroundStyle(.orange)
-                .multilineTextAlignment(.center)
+                .fontWeight(.semibold)
                 .lineLimit(2)
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 10)
-        .padding(.vertical, 16)
-        .background(
-            achievement.isAchieved
-            ? achievement.color.opacity(0.14)
-            : Color(.systemGray6)
-        )
+        .padding(.vertical, 15)
+        .background(.ultraThinMaterial)
+        .background(achievement.isAchieved ? achievement.color.opacity(0.12) : Color.black.opacity(0.14))
         .overlay(
             RoundedRectangle(cornerRadius: 18)
                 .stroke(
-                    achievement.isAchieved
-                    ? achievement.color.opacity(0.35)
-                    : .clear,
+                    achievementBorderStyle(achievement),
                     lineWidth: 1
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .opacity(achievement.isAchieved ? 1 : 0.55)
+        .opacity(achievement.isAchieved ? 1 : 0.72)
+        .shadow(
+            color: achievement.isAchieved
+                ? achievementGlowColor(achievement).opacity(0.12)
+                : .clear,
+            radius: achievement.isAchieved ? 4 : 0
+        )
         .onTapGesture {
             selectedAchievement = achievement
         }
+    }
+
+    func highlightedRewardText(_ reward: String) -> Text {
+        let parts = reward.split(separator: "×", omittingEmptySubsequences: false)
+        guard parts.count > 1 else {
+            return Text(reward).foregroundColor(.white)
+        }
+
+        var result = Text(String(parts[0])).foregroundColor(.white)
+        for part in parts.dropFirst() {
+            let quantity = part.prefix { $0.isNumber }
+            let remainder = part.dropFirst(quantity.count)
+            result = result
+                + Text("×\(quantity)").foregroundColor(.yellow)
+                + Text(String(remainder)).foregroundColor(.white)
+        }
+        return result
+    }
+
+    func achievementGlowColor(_ achievement: Achievement) -> Color {
+        switch achievement.title {
+        case "BRONZE": return .brown
+        case "SILVER": return Color.white.opacity(0.84)
+        case "GOLD": return .yellow
+        case "PLATINUM": return .cyan
+        case "LEGEND": return .purple
+        default: return achievement.color
+        }
+    }
+
+    func achievementBorderStyle(_ achievement: Achievement) -> AnyShapeStyle {
+        guard achievement.isAchieved else { return AnyShapeStyle(Color.clear) }
+        if achievement.title == "LEGEND" {
+            return AnyShapeStyle(
+                AngularGradient(
+                    colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
+                    center: .center
+                )
+            )
+        }
+        return AnyShapeStyle(achievementGlowColor(achievement).opacity(0.38))
     }
     func ticketRow(icon: String, title: String, count: Int) -> some View {
         HStack {
@@ -1046,20 +1365,38 @@ struct MyPageView: View {
     }
 
     func menuRow(icon: String, title: String, color: Color) -> some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .frame(width: 28)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.14))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(color.opacity(0.90))
+            }
+            .frame(width: 36, height: 36)
 
             Text(title)
                 .font(.headline)
+                .foregroundStyle(.white.opacity(0.90))
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.black))
+                .foregroundStyle(Color.white.opacity(0.48))
+                .shadow(color: color.opacity(0.24), radius: 3)
+                .frame(width: 16, alignment: .trailing)
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.7)
+        }
+        .shadow(color: .black.opacity(0.10), radius: 7, y: 4)
     }
 
     func loadSelectedPhoto(_ item: PhotosPickerItem) {
@@ -1246,6 +1583,17 @@ struct MyPageView: View {
                 gender = data["gender"] as? String ?? ""
                 level = data["level"] as? String ?? ""
                 savedBadgeIds = data["earnedBadges"] as? [String] ?? []
+                badmintonStartAge = data["badmintonStartAge"] as? Int ?? 0
+                badmintonYears = data["badmintonYears"] as? Int ?? 0
+                racket = data["racket"] as? String ?? ""
+                stringName = data["stringName"] as? String ?? ""
+                tension = data["tension"] as? String ?? ""
+                playStyle = data["playStyle"] as? String ?? ""
+                dominantHand = data["dominantHand"] as? String ?? ""
+                favoriteShot = data["favoriteShot"] as? String ?? ""
+                favoriteEvent = data["favoriteEvent"] as? String ?? ""
+                courtPosition = data["courtPosition"] as? String ?? ""
+                comment = data["comment"] as? String ?? ""
                 
                 totalPoint = data["totalPoint"] as? Int ?? 0
                 availablePoint = data["availablePoint"] as? Int ?? 0
@@ -1261,6 +1609,10 @@ struct MyPageView: View {
                 monthlySecondCount = data["monthlySecondCount"] as? Int ?? 0
                 monthlyThirdCount = data["monthlyThirdCount"] as? Int ?? 0
                 legendCount = data["legendCount"] as? Int ?? 0
+                tournamentCount = data["tournamentCount"] as? Int ?? 0
+                totalGames = data["totalGames"] as? Int ?? 0
+                totalWins = data["totalWins"] as? Int ?? 0
+                longestStreakCount = data["longestStreakCount"] as? Int ?? streakCount
                 
                 cleanupTickets = data["cleanupTickets"] as? Int ?? 0
                 discountTickets = data["discountTickets"] as? Int ?? 0
@@ -1392,14 +1744,114 @@ extension View {
         self
             .padding()
             .background(.ultraThinMaterial)
+            .background(Color.black.opacity(0.10))
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.30),
+                                Color.white.opacity(0.07),
+                                Color.purple.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.8
+                    )
             }
             .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
     }
+
+    func siriusScrollEntrance() -> some View {
+        scrollTransition(.animated(.easeOut(duration: 0.25)), axis: .vertical) { content, phase in
+            content
+                .opacity(phase.isIdentity ? 1 : 0.94)
+                .scaleEffect(phase.isIdentity ? 1 : 0.98)
+                .offset(y: phase.isIdentity ? 0 : 10)
+        }
+    }
 }
+
+private struct MyPageMenuButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .brightness(configuration.isPressed ? 0.018 : 0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct MyPagePremiumBackground: View {
+    let pulse: Bool
+
+    private let particles: [(CGFloat, CGFloat, CGFloat)] = [
+        (0.10, 0.13, 1.2), (0.24, 0.31, 0.8), (0.82, 0.18, 1.0),
+        (0.68, 0.43, 0.7), (0.14, 0.62, 0.9), (0.90, 0.72, 1.1),
+        (0.36, 0.84, 0.7), (0.73, 0.91, 0.9)
+    ]
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(red: 0.12, green: 0.04, blue: 0.24),
+                        Color.purple.opacity(0.72),
+                        Color(red: 0.25, green: 0.04, blue: 0.20).opacity(0.72)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                Circle()
+                    .fill(Color.purple.opacity(pulse ? 0.15 : 0.09))
+                    .frame(width: 310, height: 310)
+                    .blur(radius: 72)
+                    .offset(x: pulse ? 110 : 72, y: pulse ? -210 : -170)
+
+                Circle()
+                    .fill(Color.yellow.opacity(pulse ? 0.065 : 0.035))
+                    .frame(width: 240, height: 240)
+                    .blur(radius: 68)
+                    .offset(x: pulse ? -120 : -88, y: pulse ? 260 : 220)
+
+                ForEach(Array(particles.enumerated()), id: \.offset) { _, particle in
+                    Circle()
+                        .fill(Color.white.opacity(0.16))
+                        .frame(width: particle.2, height: particle.2)
+                        .position(x: proxy.size.width * particle.0, y: proxy.size.height * particle.1)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct MyPageSettingDetailView: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 42))
+                .foregroundStyle(.cyan)
+            Text(title)
+                .font(.title2.bold())
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(28)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 struct Achievement: Identifiable {
     let id = UUID()
 

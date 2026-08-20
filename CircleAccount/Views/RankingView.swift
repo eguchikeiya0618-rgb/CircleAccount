@@ -130,16 +130,7 @@ struct RankingView: View {
                     rankingTypePicker
 
                     if isLoading {
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .scaleEffect(1.25)
-                                .tint(.white)
-
-                            Text("ランキングを集計中...")
-                                .font(.headline)
-                                .foregroundStyle(.white.opacity(0.82))
-                        }
-                        .frame(maxWidth: .infinity)
+                        SiriusLoadingStateView("ランキングを集計中")
                         .padding(.top, 64)
 
                     } else if !errorMessage.isEmpty {
@@ -156,15 +147,11 @@ struct RankingView: View {
                         .padding(.top, 50)
 
                     } else if sortedMembers.isEmpty {
-                        VStack(spacing: 14) {
-                            Image(systemName: "person.3.sequence.fill")
-                                .font(.system(size: 42))
-                                .foregroundStyle(.white.opacity(0.72))
-
-                            Text("ランキング対象のメンバーがいません")
-                                .foregroundStyle(.white.opacity(0.78))
-                        }
-                        .frame(maxWidth: .infinity)
+                        SiriusEmptyStateView(
+                            systemImage: "trophy.fill",
+                            title: "まだランキングがありません",
+                            message: "集計データが反映されると、ここに表示されます"
+                        )
                         .padding(.top, 60)
 
                     } else {
@@ -315,6 +302,17 @@ struct RankingView: View {
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(Color.white.opacity(0.16), lineWidth: 1)
                     }
+                    .scaleEffect(selectedRankingType == type ? 1.03 : 1.0)
+                    .shadow(
+                        color: selectedRankingType == type
+                            ? Color.yellow.opacity(0.24)
+                            : Color.clear,
+                        radius: 7
+                    )
+                    .animation(
+                        .easeInOut(duration: 0.2),
+                        value: selectedRankingType
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -363,9 +361,18 @@ struct RankingView: View {
             Spacer()
 
             if let member {
-                Text(rankingValueText(member))
-                    .font(.title3.weight(.black))
-                    .foregroundStyle(.white)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(rankingValueText(member))
+                        .font(.title3.weight(.black))
+                        .foregroundStyle(.white)
+
+                    if selectedRankingType == .point {
+                        Text("今月獲得ポイント")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
+                    }
+                }
             }
         }
         .padding(18)
@@ -449,6 +456,13 @@ struct RankingView: View {
                         .font(.headline.weight(.bold))
                         .foregroundStyle(.white)
 
+                    if rank == 1 {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.yellow)
+                            .shadow(color: .yellow.opacity(0.42), radius: 3)
+                    }
+
                     if member.id == currentUserId {
                         Text("YOU")
                             .font(.caption2.weight(.black))
@@ -482,9 +496,11 @@ struct RankingView: View {
         .background(
             RoundedRectangle(cornerRadius: 22)
                 .fill(
-                    member.id == currentUserId
-                        ? Color.blue.opacity(0.24)
-                        : Color.white.opacity(rank <= 3 ? 0.15 : 0.09)
+                    rank == 1
+                        ? Color.yellow.opacity(0.13)
+                        : member.id == currentUserId
+                            ? Color.blue.opacity(0.24)
+                            : Color.white.opacity(rank <= 3 ? 0.15 : 0.09)
                 )
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 22))
@@ -492,17 +508,21 @@ struct RankingView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 22)
                 .stroke(
-                    member.id == currentUserId
-                        ? Color.cyan.opacity(0.7)
-                        : rankColor(rank).opacity(rank <= 3 ? 0.42 : 0.14),
-                    lineWidth: member.id == currentUserId ? 1.4 : 1
+                    rank == 1
+                        ? Color.yellow.opacity(0.68)
+                        : member.id == currentUserId
+                            ? Color.cyan.opacity(0.7)
+                            : rankColor(rank).opacity(rank <= 3 ? 0.42 : 0.14),
+                    lineWidth: rank == 1 || member.id == currentUserId ? 1.4 : 1
                 )
         }
         .shadow(
-            color: rank <= 3
-                ? rankColor(rank).opacity(0.16)
-                : .black.opacity(0.12),
-            radius: 12,
+            color: rank == 1
+                ? Color.yellow.opacity(0.24)
+                : rank <= 3
+                    ? rankColor(rank).opacity(0.16)
+                    : .black.opacity(0.12),
+            radius: rank == 1 ? 15 : 12,
             y: 7
         )
     }
@@ -563,7 +583,7 @@ struct RankingView: View {
     ) -> String {
         switch selectedRankingType {
         case .point:
-            return "累計 \(member.totalPoint)pt"
+            return "TOTAL • 累計 \(member.totalPoint)pt"
 
         case .attendance:
             return "累計参加 \(member.attendanceCount)回"
@@ -640,13 +660,21 @@ struct RankingView: View {
                         Image(systemName: "crown.fill")
                     }
 
-                    Text(
-                        isSavingHallOfFame
-                            ? "保存中..."
-                            : "今月の結果を殿堂入り"
-                    )
-                    .font(.headline)
-                    .bold()
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("HALL OF FAME")
+                            .font(.system(size: 9, weight: .black))
+                            .tracking(1.2)
+
+                        Text(
+                            isSavingHallOfFame
+                                ? "保存中..."
+                                : "永久記録・今月の結果を殿堂入り"
+                        )
+                        .font(.headline)
+                        .bold()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)

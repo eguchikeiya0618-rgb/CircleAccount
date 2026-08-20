@@ -549,10 +549,14 @@ struct UltimateGachaResultView: View {
     @Binding var showResult: Bool
 
     @State private var contentVisible = false
-    @State private var iconScale: CGFloat = 0.10
+    @State private var iconScale: CGFloat = 0.85
     @State private var ringRotation = 0.0
     @State private var glowScale: CGFloat = 0.78
     @State private var flashVisible = true
+    @State private var ticketFloating = false
+    @State private var ticketGlowPulse = false
+    @State private var sparklePhase = false
+    @State private var informationVisible = false
 
     private var rarityText: String {
         switch prize.rarity {
@@ -565,10 +569,66 @@ struct UltimateGachaResultView: View {
 
     private var rarityColor: Color {
         switch prize.rarity {
-        case 5...: return .yellow
+        case 5...: return Color(red: 0.64, green: 0.48, blue: 1.0)
         case 4: return .purple
-        case 3: return .orange
-        default: return .blue
+        case 3: return .blue
+        default: return .gray
+        }
+    }
+
+    private var itemDescription: String {
+        switch prize.ticketField {
+        case "stringingFreeTickets":
+            return "ガット張り工賃が無料になります"
+        case "freeTickets":
+            return "活動参加費が無料になります"
+        case "halfPriceTickets":
+            return "参加費が50%OFFになります"
+        case "discountTickets":
+            return "活動参加費が500円になります"
+        case "challengeTickets":
+            return "対戦相手を指名できます"
+        case "priorityTickets":
+            return "ゲームへ優先的に参加できます"
+        case "cleanupTickets":
+            return "活動後の片付けを免除できます"
+        default:
+            return "CircleAccountで使用できるプレミアムチケットです"
+        }
+    }
+
+    private var rarityLabel: String {
+        switch prize.rarity {
+        case 5...: return "PREMIUM SSR TICKET"
+        case 4: return "SUPER RARE TICKET"
+        case 3: return "RARE TICKET"
+        default: return "NORMAL TICKET"
+        }
+    }
+
+    private var usageNote: String {
+        switch prize.ticketField {
+        case "halfPriceTickets":
+            return "次回参加時に自動で使用されます"
+        case "freeTickets", "discountTickets":
+            return "次回参加時に利用できます"
+        case "stringingFreeTickets":
+            return "ガット張りの受付時に利用できます"
+        case "challengeTickets", "priorityTickets":
+            return "対象の活動で利用できます"
+        case "cleanupTickets":
+            return "次回の活動参加時に利用できます"
+        default:
+            return "保有チケット画面から確認できます"
+        }
+    }
+
+    private var rarityLongName: String {
+        switch prize.rarity {
+        case 5...: return "SSR PREMIUM"
+        case 4: return "SUPER RARE"
+        case 3: return "RARE"
+        default: return "NORMAL"
         }
     }
 
@@ -648,44 +708,81 @@ struct UltimateGachaResultView: View {
                     )
                     .shadow(color: rarityColor, radius: 22)
 
+                Text(rarityLongName)
+                    .font(.system(size: 11, weight: .light, design: .rounded))
+                    .tracking(2.8)
+                    .foregroundStyle(Color.white.opacity(0.90))
+
                 ZStack {
-                    Circle()
-                        .stroke(
-                            AngularGradient(
-                                colors: isSSR
-                                ? [
-                                    .red, .orange, .yellow, .green,
-                                    .cyan, .blue, .purple, .pink, .red
-                                ]
-                                : [
-                                    rarityColor, .white, rarityColor
-                                ],
-                                center: .center
-                            ),
-                            lineWidth: isSSR ? 11 : 5
-                        )
-                        .frame(width: 240, height: 240)
-                        .rotationEffect(.degrees(ringRotation))
+                    PremiumOwnedTicketArtworkView(
+                        ticketField: prize.ticketField,
+                        iconGlowActive: true
+                    )
+                    .scaleEffect(
+                        x: 1.40 * iconScale,
+                        y: 1.26 * iconScale,
+                        anchor: .center
+                    )
+                    .frame(width: 190, height: 100)
+                    .shadow(
+                        color: rarityColor.opacity(ticketGlowPulse ? 0.54 : 0.38),
+                        radius: ticketGlowPulse ? 24 : 17,
+                        y: 8
+                    )
 
-                    Circle()
-                        .fill(Color.white.opacity(0.96))
-                        .frame(width: 185, height: 185)
-                        .shadow(color: rarityColor, radius: 34)
-
-                    Text(prize.icon)
-                        .font(.system(size: 94))
-                        .scaleEffect(iconScale)
+                    ticketSparkles
                 }
+                .offset(y: ticketFloating ? -31 : -28)
 
-                Text(prize.title)
-                    .font(.system(size: 29, weight: .black))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal)
+                VStack(spacing: 7) {
+                    Text(prize.title)
+                        .font(.system(size: 24, weight: .black))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white)
 
-                Text("チケットを1枚獲得しました")
-                    .font(.headline)
-                    .foregroundStyle(Color.white.opacity(0.70))
+                    Text(rarityLabel)
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .tracking(1.2)
+                        .foregroundStyle(rarityColor)
+
+                    Text(itemDescription)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+
+                    Text(usageNote)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.48))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+
+                    Text("チケットを1枚獲得しました")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.white.opacity(0.54))
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 15)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.24),
+                                    rarityColor.opacity(0.30),
+                                    Color.white.opacity(0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+                .padding(.horizontal, 24)
+                .opacity(informationVisible ? 1 : 0)
+                .offset(y: informationVisible ? -44 : -38)
 
                 Spacer()
 
@@ -718,7 +815,7 @@ struct UltimateGachaResultView: View {
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GachaReceiveButtonStyle())
                 .padding(.horizontal, 28)
                 .padding(.bottom, 28)
             }
@@ -731,13 +828,21 @@ struct UltimateGachaResultView: View {
         }
         .interactiveDismissDisabled()
         .onAppear {
-            let notification = UINotificationFeedbackGenerator()
-            notification.prepare()
-            notification.notificationOccurred(.success)
+            playRarityHaptic()
 
-            withAnimation(.spring(response: 0.76, dampingFraction: 0.52)) {
+            withAnimation(.easeOut(duration: 0.16)) {
                 contentVisible = true
-                iconScale = 1
+            }
+
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
+                iconScale = 1.08
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
+                    iconScale = 1.0
+                    informationVisible = true
+                }
             }
 
             withAnimation(
@@ -748,16 +853,89 @@ struct UltimateGachaResultView: View {
             }
 
             withAnimation(
-                .easeInOut(duration: 0.62)
+                .easeInOut(duration: 1.0)
                 .repeatForever(autoreverses: true)
             ) {
-                glowScale = 1.16
+                glowScale = 1.0
+                ticketGlowPulse = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                withAnimation(
+                    .easeInOut(duration: 1.5)
+                        .repeatForever(autoreverses: true)
+                ) {
+                    ticketFloating = true
+                }
+
+                sparklePhase = true
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
                 flashVisible = false
             }
         }
+    }
+
+    private var ticketSparkles: some View {
+        ZStack {
+            sparkle(index: 0, x: -100, y: -48)
+            sparkle(index: 1, x: 102, y: -31)
+            sparkle(index: 2, x: 94, y: 47)
+            sparkle(index: 3, x: -92, y: 50)
+            sparkle(index: 4, x: 24, y: -66)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func sparkle(index: Int, x: CGFloat, y: CGFloat) -> some View {
+        Image(systemName: index == 1 ? "sparkle" : "sparkles")
+            .font(.system(size: index == 1 ? 10 : 13, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.86))
+            .shadow(color: rarityColor.opacity(0.58), radius: 4)
+            .offset(
+                x: x,
+                y: y + (sparklePhase ? -7 : 3)
+            )
+            .opacity(sparklePhase ? 0.88 : 0.10)
+            .animation(
+                .easeInOut(duration: 1.15)
+                    .delay(Double(index) * 0.24)
+                    .repeatForever(autoreverses: true),
+                value: sparklePhase
+            )
+    }
+
+    private func playRarityHaptic() {
+        switch prize.rarity {
+        case 5...:
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(.success)
+        case 4:
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.prepare()
+            generator.impactOccurred(intensity: 0.82)
+        case 3:
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.prepare()
+            generator.impactOccurred(intensity: 0.72)
+        default:
+            let generator = UISelectionFeedbackGenerator()
+            generator.prepare()
+            generator.selectionChanged()
+        }
+    }
+}
+
+private struct GachaReceiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(
+                .spring(response: 0.25, dampingFraction: 0.78),
+                value: configuration.isPressed
+            )
     }
 }
 

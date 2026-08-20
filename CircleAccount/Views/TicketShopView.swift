@@ -65,9 +65,8 @@ struct TicketShopView: View {
                 pointHeader
 
                 if isLoading {
-                    ProgressView("ショップを読み込み中...")
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
+                    SiriusLoadingStateView("ショップを読み込み中")
+                        .padding(.top, 28)
 
                 } else {
                     ticketList

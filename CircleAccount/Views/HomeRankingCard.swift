@@ -275,10 +275,10 @@ struct HomeRankingCard: View {
             alignment: .trailing,
             spacing: 4
         ) {
-            Text("\(currentMonthlyPoint)")
+            Text("\(currentMonthlyPoint)pt")
                 .font(
                     .system(
-                        size: 35,
+                        size: 31,
                         weight: .black,
                         design: .rounded
                     )
@@ -289,28 +289,16 @@ struct HomeRankingCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.70)
 
-            Text("POINT")
+            Text("今月獲得")
                 .font(
                     .system(
                         size: 9,
                         weight: .black
                     )
                 )
-                .tracking(1.3)
+                .tracking(0.8)
                 .foregroundStyle(
                     .white.opacity(0.47)
-                )
-
-            Text("THIS MONTH")
-                .font(
-                    .system(
-                        size: 8,
-                        weight: .black
-                    )
-                )
-                .tracking(1.1)
-                .foregroundStyle(
-                    rankAccentColor.opacity(0.86)
                 )
 
             Text("TOTAL \(currentTotalPoint)pt")
