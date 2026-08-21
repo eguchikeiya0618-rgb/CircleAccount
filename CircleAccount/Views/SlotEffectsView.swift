@@ -145,6 +145,7 @@ struct SlotEffectsView: View {
                         subtitle: resultSubtitle
                     )
                     .frame(width: 270, height: 330)
+                    .scaleEffect(0.87)
                     .offset(y: cardOffset)
                     .rotation3DEffect(
                         .degrees(cardRotation),

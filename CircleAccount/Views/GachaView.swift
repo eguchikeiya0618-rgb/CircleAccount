@@ -549,7 +549,7 @@ struct UltimateGachaResultView: View {
     @Binding var showResult: Bool
 
     @State private var contentVisible = false
-    @State private var iconScale: CGFloat = 0.85
+    @State private var iconScale: CGFloat = 0.96
     @State private var ringRotation = 0.0
     @State private var glowScale: CGFloat = 0.78
     @State private var flashVisible = true
@@ -625,10 +625,56 @@ struct UltimateGachaResultView: View {
 
     private var rarityLongName: String {
         switch prize.rarity {
-        case 5...: return "SSR PREMIUM"
+        case 5...: return "SUPER SUPER RARE"
         case 4: return "SUPER RARE"
         case 3: return "RARE"
         default: return "NORMAL"
+        }
+    }
+
+    private var premiumPrizeLabel: String {
+        switch prize.rarity {
+        case 5...: return "PREMIUM PRIZE"
+        case 4: return "SUPER RARE"
+        case 3: return "RARE REWARD"
+        default: return "REWARD"
+        }
+    }
+
+    private var premiumPrizeLabelStyle: AnyShapeStyle {
+        switch prize.rarity {
+        case 5...:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [.pink, .orange, .yellow, .cyan, .blue, .purple],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        case 4:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color.purple.opacity(0.78), .purple, Color.pink.opacity(0.76)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        case 3:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color.cyan.opacity(0.78), .blue],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        default:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.92), Color.gray.opacity(0.78)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
         }
     }
 
@@ -685,10 +731,17 @@ struct UltimateGachaResultView: View {
             VStack(spacing: 22) {
                 Spacer()
 
-                Text(isSSR ? "✨ JACKPOT ✨" : "PRIZE GET")
-                    .font(.headline.bold())
-                    .tracking(3)
-                    .foregroundStyle(.white)
+                Text(premiumPrizeLabel)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .tracking(3.4)
+                    .foregroundStyle(premiumPrizeLabelStyle)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
+                    .shadow(
+                        color: isSSR ? rarityColor.opacity(0.30) : Color.clear,
+                        radius: isSSR ? 7 : 0
+                    )
 
                 Text(rarityText)
                     .font(.system(size: 70, weight: .black, design: .rounded))
@@ -706,24 +759,34 @@ struct UltimateGachaResultView: View {
                             )
                             : AnyShapeStyle(rarityColor)
                     )
+                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 5)
                     .shadow(color: rarityColor, radius: 22)
 
                 Text(rarityLongName)
                     .font(.system(size: 11, weight: .light, design: .rounded))
                     .tracking(2.8)
                     .foregroundStyle(Color.white.opacity(0.90))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 3)
 
                 ZStack {
                     PremiumOwnedTicketArtworkView(
                         ticketField: prize.ticketField,
-                        iconGlowActive: true
+                        iconGlowActive: true,
+                        artworkSize: CGSize(
+                            width: PremiumOwnedTicketArtworkView.artworkWidth * 1.34,
+                            height: PremiumOwnedTicketArtworkView.artworkHeight * 1.16 * 0.73
+                        ),
+                        showsSerialNumber: false
                     )
-                    .scaleEffect(
-                        x: 1.40 * iconScale,
-                        y: 1.26 * iconScale,
-                        anchor: .center
+                    .scaleEffect(iconScale, anchor: .center)
+                    .frame(
+                        width: PremiumOwnedTicketArtworkView.artworkWidth * 1.34,
+                        height: PremiumOwnedTicketArtworkView.artworkHeight * 1.16 * 0.73
                     )
-                    .frame(width: 190, height: 100)
                     .shadow(
                         color: rarityColor.opacity(ticketGlowPulse ? 0.54 : 0.38),
                         radius: ticketGlowPulse ? 24 : 17,
@@ -782,7 +845,7 @@ struct UltimateGachaResultView: View {
                 }
                 .padding(.horizontal, 24)
                 .opacity(informationVisible ? 1 : 0)
-                .offset(y: informationVisible ? -44 : -38)
+                .offset(y: informationVisible ? -1 : 5)
 
                 Spacer()
 
@@ -835,7 +898,7 @@ struct UltimateGachaResultView: View {
             }
 
             withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
-                iconScale = 1.08
+                iconScale = 1.02
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {

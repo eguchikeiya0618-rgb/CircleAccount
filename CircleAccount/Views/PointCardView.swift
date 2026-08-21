@@ -711,6 +711,8 @@ import SwiftUI
 struct PremiumOwnedTicketArtworkView: View, Equatable {
     let ticketField: String
     let iconGlowActive: Bool
+    let artworkSize: CGSize
+    let showsSerialNumber: Bool
 
     @Environment(\.premiumTicketIsPressed) private var isPressed
 
@@ -720,11 +722,30 @@ struct PremiumOwnedTicketArtworkView: View, Equatable {
     init(ticketField: String, iconGlowActive: Bool) {
         self.ticketField = ticketField
         self.iconGlowActive = iconGlowActive
+        self.artworkSize = CGSize(
+            width: Self.artworkWidth,
+            height: Self.artworkHeight
+        )
+        self.showsSerialNumber = true
+    }
+
+    init(
+        ticketField: String,
+        iconGlowActive: Bool,
+        artworkSize: CGSize,
+        showsSerialNumber: Bool = true
+    ) {
+        self.ticketField = ticketField
+        self.iconGlowActive = iconGlowActive
+        self.artworkSize = artworkSize
+        self.showsSerialNumber = showsSerialNumber
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.ticketField == rhs.ticketField
         && lhs.iconGlowActive == rhs.iconGlowActive
+        && lhs.artworkSize == rhs.artworkSize
+        && lhs.showsSerialNumber == rhs.showsSerialNumber
     }
 
     private var theme: PremiumOwnedTicketTheme {
@@ -732,8 +753,8 @@ struct PremiumOwnedTicketArtworkView: View, Equatable {
     }
 
     var body: some View {
-        let width = Self.artworkWidth
-        let height = Self.artworkHeight
+        let width = artworkSize.width
+        let height = artworkSize.height
 
         return ZStack {
                 Rectangle()
@@ -840,10 +861,12 @@ struct PremiumOwnedTicketArtworkView: View, Equatable {
 
                 VStack {
                     HStack {
-                        Text(theme.serialNumber)
-                            .font(.system(size: 6.8, weight: .bold, design: .monospaced))
-                            .tracking(0.35)
-                            .foregroundStyle(Color.white.opacity(0.45))
+                        if showsSerialNumber {
+                            Text(theme.serialNumber)
+                                .font(.system(size: 6.8, weight: .bold, design: .monospaced))
+                                .tracking(0.35)
+                                .foregroundStyle(Color.white.opacity(0.45))
+                        }
 
                         Spacer()
 
